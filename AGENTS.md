@@ -17,7 +17,15 @@ Sistem Manajemen KPI untuk Toko & Servis HP. PRD lengkap: `PRD_Sistem_KPI_Toko_S
 backend/                  # Laravel + Filament
   app/Models/             # Eloquent models
   app/Modules/            # Approval, Assessment, Calculation, Import, Period, Review
-  app/Filament/           # Resources & Widgets (admin panel)
+  app/Modules/Assessment/ # Sync services tiap subsistem KPI:
+                          #   OperationalKpiSyncService (composite — tiket + absensi +
+                          #   inventory + admin work-log + komplain + coaching + agregasi tim),
+                          #   AttendanceKpiSyncService, InventoryKpiSyncService,
+                          #   StockOpnameService, AdminWorkLogKpiSyncService,
+                          #   ComplaintKpiSyncService, CoachingKpiSyncService,
+                          #   TeamAggregationKpiSyncService
+  app/Filament/           # Resources & Widgets (admin panel); group 'Operasional Harian':
+                          #   Absensi, Stock Opname, Work-Log Admin, Komplain, Coaching
   routes/                 # web.php / api.php
 mobile/                   # Flutter — clean architecture
   lib/app/                # app-level setup

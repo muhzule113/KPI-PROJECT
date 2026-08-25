@@ -21,7 +21,8 @@ class OperationalKpiSyncService
         protected InventoryKpiSyncService $inventorySync,
         protected AdminWorkLogKpiSyncService $adminWorkLogSync,
         protected ComplaintKpiSyncService $complaintSync,
-        protected CoachingKpiSyncService $coachingSync
+        protected CoachingKpiSyncService $coachingSync,
+        protected TeamAggregationKpiSyncService $teamAggregationSync
     ) {}
 
     public function syncPeriodOperationalData(KpiPeriod $period): array
@@ -57,12 +58,13 @@ class OperationalKpiSyncService
             });
         }
 
-        // Sub-sistem lain: absensi, inventory (gudang), admin work-log, komplain, coaching
+        // Sub-sistem lain: absensi, inventory (gudang), admin work-log, komplain, coaching, agregasi tim
         $attendanceRes = $this->attendanceSync->syncPeriodAttendanceData($period);
         $inventoryRes = $this->inventorySync->syncPeriodInventoryData($period);
         $adminRes = $this->adminWorkLogSync->syncPeriodWorkLogData($period);
         $complaintRes = $this->complaintSync->syncPeriodComplaintData($period);
         $coachingRes = $this->coachingSync->syncPeriodCoachingData($period);
+        $teamRes = $this->teamAggregationSync->syncPeriodTeamAggregation($period);
 
         return [
             'success' => true,
@@ -71,13 +73,15 @@ class OperationalKpiSyncService
                 . "{$inventoryRes['updated_items']} indikator (inventory), "
                 . "{$adminRes['updated_items']} indikator (admin work-log), "
                 . "{$complaintRes['updated_items']} indikator (komplain), "
-                . "{$coachingRes['updated_items']} indikator (coaching).",
+                . "{$coachingRes['updated_items']} indikator (coaching), "
+                . "{$teamRes['updated_items']} indikator (agregasi tim).",
             'updated_count' => $updatedEmployees,
             'attendance' => $attendanceRes,
             'inventory' => $inventoryRes,
             'admin_work_log' => $adminRes,
             'complaint' => $complaintRes,
             'coaching' => $coachingRes,
+            'team_aggregation' => $teamRes,
         ];
     }
 
