@@ -276,4 +276,32 @@ class ApprovalService
             );
         });
     }
+
+    public function rejectCorrection(
+        KpiCorrectionRequest $request,
+        ?int $rejectorId = null,
+        ?string $rejectionReason = null
+    ): void {
+        if ($request->status !== 'pending') {
+            throw new Exception("Permintaan koreksi sudah tidak berstatus pending.");
+        }
+
+        $rejectorUser = $rejectorId ?? auth()->id();
+
+        DB::transaction(function () use ($request, $rejectorUser, $rejectionReason) {
+            $request->status = 'rejected';
+            $request->approved_by = $rejectorUser;
+            $request->save();
+
+            AuditEvent::log(
+                action: 'reject_kpi_correction',
+                subjectType: 'KpiCorrectionRequest',
+                subjectId: (string) $request->id,
+                before: ['status' => 'pending'],
+                after: ['status' => 'rejected'],
+                reason: $rejectionReason ?? $request->reason,
+                actorId: $rejectorUser
+            );
+        });
+    }
 }

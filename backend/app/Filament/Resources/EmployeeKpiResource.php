@@ -174,6 +174,65 @@ class EmployeeKpiResource extends Resource
                                 ->send();
                         }
                     }),
+
+                Tables\Actions\Action::make('requestCorrection')
+                    ->label('Ajukan Koreksi')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('warning')
+                    ->visible(fn(EmployeeKpi $record) => in_array($record->status, ['approved', 'locked']))
+                    ->modalHeading('Ajukan Koreksi Data KPI')
+                    ->modalDescription('Koreksi resmi untuk KPI yang sudah dikunci. Perlu persetujuan pihak lain (dual authorization).')
+                    ->form(fn(EmployeeKpi $record) => [
+                        Forms\Components\Textarea::make('reason')
+                            ->label('Alasan Koreksi (Wajib)')
+                            ->required()
+                            ->rows(3)
+                            ->placeholder('mis. Nilai aktual TEK-01 salah input karena tiket masuk di luar periode'),
+                        Forms\Components\Repeater::make('items')
+                            ->label('Perbaiki Nilai Aktual')
+                            ->schema([
+                                Forms\Components\Hidden::make('id'),
+                                Forms\Components\TextInput::make('code')
+                                    ->label('Indikator')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                Forms\Components\TextInput::make('actual')
+                                    ->label('Nilai Aktual Baru')
+                                    ->numeric()
+                                    ->required(),
+                            ])
+                            ->default(fn(EmployeeKpi $record) => $record->items->map(fn($i) => [
+                                'id' => $i->id,
+                                'code' => "{$i->definition_code_snapshot} · {$i->name_snapshot}",
+                                'actual' => $i->actual_decimal,
+                            ])->all())
+                            ->columns(2)
+                            ->reorderable(false)
+                            ->deletable(false)
+                            ->addable(false)
+                            ->collapsible(),
+                    ])
+                    ->action(function (EmployeeKpi $record, array $data, ApprovalService $approvalService) {
+                        try {
+                            $approvalService->requestCorrection(
+                                kpi: $record,
+                                reason: $data['reason'],
+                                afterData: ['items' => $data['items']],
+                                requesterId: auth()->id(),
+                            );
+                            Notification::make()
+                                ->title('Permintaan Koreksi Diajukan')
+                                ->body('Menunggu persetujuan pihak lain (Manager).')
+                                ->success()
+                                ->send();
+                        } catch (Exception $e) {
+                            Notification::make()
+                                ->title('Gagal Mengajukan Koreksi')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ]);
     }
 
