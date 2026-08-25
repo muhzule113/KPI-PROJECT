@@ -19,7 +19,9 @@ class OperationalKpiSyncService
         protected KpiCalculationEngine $calculationEngine,
         protected AttendanceKpiSyncService $attendanceSync,
         protected InventoryKpiSyncService $inventorySync,
-        protected AdminWorkLogKpiSyncService $adminWorkLogSync
+        protected AdminWorkLogKpiSyncService $adminWorkLogSync,
+        protected ComplaintKpiSyncService $complaintSync,
+        protected CoachingKpiSyncService $coachingSync
     ) {}
 
     public function syncPeriodOperationalData(KpiPeriod $period): array
@@ -55,21 +57,27 @@ class OperationalKpiSyncService
             });
         }
 
-        // Sub-sistem lain: absensi, inventory (gudang), admin work-log
+        // Sub-sistem lain: absensi, inventory (gudang), admin work-log, komplain, coaching
         $attendanceRes = $this->attendanceSync->syncPeriodAttendanceData($period);
         $inventoryRes = $this->inventorySync->syncPeriodInventoryData($period);
         $adminRes = $this->adminWorkLogSync->syncPeriodWorkLogData($period);
+        $complaintRes = $this->complaintSync->syncPeriodComplaintData($period);
+        $coachingRes = $this->coachingSync->syncPeriodCoachingData($period);
 
         return [
             'success' => true,
             'message' => "Sinkronisasi KPI selesai: {$updatedEmployees} karyawan (operasional), "
                 . "{$attendanceRes['updated_items']} indikator (absensi), "
                 . "{$inventoryRes['updated_items']} indikator (inventory), "
-                . "{$adminRes['updated_items']} indikator (admin work-log).",
+                . "{$adminRes['updated_items']} indikator (admin work-log), "
+                . "{$complaintRes['updated_items']} indikator (komplain), "
+                . "{$coachingRes['updated_items']} indikator (coaching).",
             'updated_count' => $updatedEmployees,
             'attendance' => $attendanceRes,
             'inventory' => $inventoryRes,
             'admin_work_log' => $adminRes,
+            'complaint' => $complaintRes,
+            'coaching' => $coachingRes,
         ];
     }
 
