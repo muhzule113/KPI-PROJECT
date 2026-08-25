@@ -25,7 +25,11 @@ class SupervisorReviewResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->hasAnyRole(['supervisor', 'super_admin']) ?? false;
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['supervisor', 'super_admin'],
+            []
+        );
     }
 
     public static function getEloquentQuery(): Builder

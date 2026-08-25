@@ -8,6 +8,7 @@ import '../imports/cashier_upload_screen.dart';
 import '../my_kpi/my_kpi_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../operational/tickets_list_screen.dart';
+import '../operational/sparepart_screen.dart';
 import '../profile/profile_screen.dart';
 import '../review/supervisor_queue_screen.dart';
 
@@ -58,7 +59,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Tabs based on roles
     final List<Widget> tabs = [
       _buildHomeTab(auth, employee),
-      const TicketsListScreen(),
+      if (auth.isTeknisi || auth.isCs || auth.isGudang) const TicketsListScreen(),
+      if (auth.isGudang) const SparepartScreen(),
       const MyKpiScreen(),
       if (auth.isSupervisor) const SupervisorQueueScreen(),
       if (auth.isManager) const ManagerApprovalScreen(),
@@ -68,7 +70,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final List<BottomNavigationBarItem> navItems = [
       const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: 'Beranda'),
-      const BottomNavigationBarItem(icon: Icon(Icons.build_circle_rounded), label: 'Tiket Servis'),
+      if (auth.isTeknisi || auth.isCs || auth.isGudang)
+        const BottomNavigationBarItem(icon: Icon(Icons.build_circle_rounded), label: 'Tiket Servis'),
+      if (auth.isGudang)
+        const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Inventory'),
       const BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_rounded), label: 'KPI Saya'),
       if (auth.isSupervisor)
         const BottomNavigationBarItem(icon: Icon(Icons.rate_review_rounded), label: 'Review Tim'),

@@ -28,6 +28,15 @@ class AttendanceResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['owner_manager'],
+            ['POS-ADM']
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

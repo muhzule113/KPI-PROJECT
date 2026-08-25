@@ -28,6 +28,15 @@ class ServiceTicketResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            [],
+            ['POS-TEK', 'POS-CS', 'POS-GUD']
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

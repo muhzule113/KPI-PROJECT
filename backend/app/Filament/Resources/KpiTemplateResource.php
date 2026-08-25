@@ -29,6 +29,15 @@ class KpiTemplateResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['super_admin'],
+            []
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

@@ -24,6 +24,15 @@ class AuditEventResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['super_admin'],
+            []
+        );
+    }
+
     public static function table(Table $table): Table
     {
         return $table

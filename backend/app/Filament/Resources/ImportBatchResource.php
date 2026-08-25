@@ -28,6 +28,15 @@ class ImportBatchResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            [],
+            ['POS-KSR']
+        );
+    }
+
     public static function table(Table $table): Table
     {
         return $table

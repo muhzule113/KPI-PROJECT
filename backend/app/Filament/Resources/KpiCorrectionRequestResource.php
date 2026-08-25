@@ -29,7 +29,11 @@ class KpiCorrectionRequestResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']) ?? false;
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['owner_manager', 'super_admin'],
+            []
+        );
     }
 
     public static function infolist(Infolist $infolist): Infolist

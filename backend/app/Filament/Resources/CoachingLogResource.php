@@ -28,6 +28,15 @@ class CoachingLogResource extends Resource
 
     protected static ?int $navigationSort = 5;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['supervisor'],
+            []
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

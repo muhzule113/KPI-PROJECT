@@ -25,6 +25,15 @@ class SparepartResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            [],
+            ['POS-GUD']
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

@@ -299,6 +299,36 @@ class ServiceTicketApiController extends Controller
         ]);
     }
 
+    public function sparepartRequests(): JsonResponse
+    {
+        $requests = SparepartRequest::with(['sparepart', 'ticket', 'technician'])
+            ->where('status', 'pending')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $requests->map(fn($r) => [
+                'id' => $r->id,
+                'quantity' => $r->quantity,
+                'status' => $r->status,
+                'sparepart' => $r->sparepart ? [
+                    'id' => $r->sparepart->id,
+                    'name' => $r->sparepart->name,
+                    'code' => $r->sparepart->code,
+                ] : null,
+                'ticket' => $r->ticket ? [
+                    'id' => $r->ticket->id,
+                    'ticket_number' => $r->ticket->ticket_number,
+                ] : null,
+                'requested_by' => $r->technician ? [
+                    'name' => $r->technician->name,
+                ] : null,
+                'created_at' => $r->created_at?->toISOString(),
+            ]),
+        ]);
+    }
+
     public function requestSparepart(Request $request): JsonResponse
     {
         $request->validate([

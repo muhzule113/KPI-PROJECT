@@ -28,6 +28,15 @@ class EmployeeKpiResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['owner_manager', 'super_admin'],
+            []
+        );
+    }
+
     public static function table(Table $table): Table
     {
         return $table

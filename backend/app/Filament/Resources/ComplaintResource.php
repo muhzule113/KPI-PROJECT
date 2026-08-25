@@ -27,6 +27,15 @@ class ComplaintResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    public static function canViewAny(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['owner_manager', 'supervisor'],
+            []
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

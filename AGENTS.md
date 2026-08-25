@@ -26,6 +26,7 @@ backend/                  # Laravel + Filament
                           #   TeamAggregationKpiSyncService
   app/Filament/           # Resources & Widgets (admin panel); group 'Operasional Harian':
                           #   Absensi, Stock Opname, Work-Log Admin, Komplain, Coaching
+                          #   Akses menu per role via App\Support\MenuAccess (Spatie role + position_code)
   routes/                 # web.php / api.php
 mobile/                   # Flutter — clean architecture
   lib/app/                # app-level setup

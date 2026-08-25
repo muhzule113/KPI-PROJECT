@@ -34,6 +34,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/operational/tickets/{id}/complete', [ServiceTicketApiController::class, 'complete']);
         Route::post('/operational/tickets/{id}/feedback', [ServiceTicketApiController::class, 'pickupAndFeedback']);
         Route::get('/operational/spareparts', [ServiceTicketApiController::class, 'spareparts']);
+        Route::get('/operational/sparepart-requests', [ServiceTicketApiController::class, 'sparepartRequests']);
         Route::post('/operational/spareparts/request', [ServiceTicketApiController::class, 'requestSparepart']);
         Route::post('/operational/spareparts/fulfill/{id}', [ServiceTicketApiController::class, 'fulfillSparepart']);
         Route::post('/operational/sync-kpi', [ServiceTicketApiController::class, 'syncKpi']);
