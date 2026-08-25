@@ -19,6 +19,7 @@ Route::prefix('v1')->group(function () {
         // Auth profile
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+        Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index']);

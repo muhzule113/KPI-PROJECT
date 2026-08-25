@@ -97,4 +97,29 @@ class AuthController extends Controller
             'message' => 'Logout berhasil.',
         ]);
     }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kata sandi saat ini salah.',
+            ], 422);
+        }
+
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kata sandi berhasil diperbarui.',
+        ]);
+    }
 }

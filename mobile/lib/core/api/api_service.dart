@@ -19,6 +19,9 @@ class ApiService {
     }
   }
 
+  /// Injectable HTTP client — bisa diganti MockClient di test.
+  static http.Client client = http.Client();
+
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('auth_token');
@@ -35,13 +38,13 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final response = await http.get(uri, headers: await _headers());
+    final response = await client.get(uri, headers: await _headers());
     return _handleResponse(response);
   }
 
   static Future<dynamic> post(String endpoint, [Map<String, dynamic>? body]) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final response = await http.post(
+    final response = await client.post(
       uri,
       headers: await _headers(),
       body: body != null ? jsonEncode(body) : null,
@@ -77,7 +80,7 @@ class ApiService {
       throw Exception('filePath atau fileBytes+fileName wajib diisi.');
     }
 
-    final streamed = await request.send();
+    final streamed = await client.send(request);
     final response = await http.Response.fromStream(streamed);
     return _handleResponse(response);
   }
