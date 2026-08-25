@@ -22,6 +22,9 @@ class ApiService {
   /// Injectable HTTP client — bisa diganti MockClient di test.
   static http.Client client = http.Client();
 
+  /// Batas waktu default tiap request (detik).
+  static const Duration requestTimeout = Duration(seconds: 30);
+
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('auth_token');
@@ -38,7 +41,7 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final response = await client.get(uri, headers: await _headers());
+    final response = await client.get(uri, headers: await _headers()).timeout(requestTimeout);
     return _handleResponse(response);
   }
 
@@ -48,7 +51,7 @@ class ApiService {
       uri,
       headers: await _headers(),
       body: body != null ? jsonEncode(body) : null,
-    );
+    ).timeout(requestTimeout);
     return _handleResponse(response);
   }
 
@@ -80,7 +83,7 @@ class ApiService {
       throw Exception('filePath atau fileBytes+fileName wajib diisi.');
     }
 
-    final streamed = await client.send(request);
+    final streamed = await client.send(request).timeout(requestTimeout);
     final response = await http.Response.fromStream(streamed);
     return _handleResponse(response);
   }

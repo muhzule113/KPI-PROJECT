@@ -17,8 +17,31 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
   bool _isConfirming = false;
   Map<String, dynamic>? _previewData;
   String? _errorMessage;
+  List<dynamic> _periods = [];
+  String? _selectedPeriodId;
 
   static final _rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPeriods();
+  }
+
+  Future<void> _loadPeriods() async {
+    try {
+      final res = await ApiService.get('/periods');
+      if (!mounted) return;
+      final periods = (res['data'] as List<dynamic>?) ?? [];
+      setState(() {
+        _periods = periods;
+        final open = periods.where((p) => p['status'] == 'OPEN').firstOrNull;
+        _selectedPeriodId = (open ?? periods.firstOrNull)?['id']?.toString();
+      });
+    } catch (_) {
+      // Gagal load periode — upload tetap jalan (backend default ke periode OPEN)
+    }
+  }
 
   Future<void> _pickAndUpload() async {
     try {
@@ -40,6 +63,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
         filePath: file.path,
         fileBytes: file.bytes,
         fileName: file.name,
+        fields: {'period_id': ?_selectedPeriodId},
       );
 
       if (!mounted) return;
@@ -103,7 +127,27 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
             'Unggah file laporan penjualan (XLSX/CSV) untuk menghitung otomatis metrik KPI Kasir.',
             style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // Pilih Periode KPI
+          if (_periods.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _selectedPeriodId,
+              decoration: const InputDecoration(
+                labelText: 'Periode KPI',
+                prefixIcon: Icon(Icons.calendar_month_rounded, size: 20),
+              ),
+              items: _periods.map((p) {
+                return DropdownMenuItem(
+                  value: p['id'].toString(),
+                  child: Text('${p['name']} — ${_statusLabel(p['status'])}'),
+                );
+              }).toList(),
+              onChanged: (val) => setState(() => _selectedPeriodId = val),
+            ),
+            const SizedBox(height: 16),
+          ],
+          const SizedBox(height: 8),
 
           // Upload Area
           Container(
@@ -310,6 +354,21 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
   }
 
   List<dynamic> get _issues => (_previewData?['issues'] as List<dynamic>?) ?? [];
+
+  String _statusLabel(String? status) {
+    switch (status) {
+      case 'OPEN': return 'Aktif';
+      case 'DRAFT': return 'Draft';
+      case 'READY': return 'Siap';
+      case 'SUBMISSION_CLOSED': return 'Pengisian Ditutup';
+      case 'IN_REVIEW': return 'Sedang Direview';
+      case 'WAITING_APPROVAL': return 'Menunggu Approval';
+      case 'PUBLISHED': return 'Diterbitkan';
+      case 'LOCKED': return 'Terkunci';
+      case 'CANCELLED': return 'Dibatalkan';
+      default: return status ?? '-';
+    }
+  }
 
   Widget _summaryRow(String label, String value) {
     return Row(

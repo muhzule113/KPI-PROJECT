@@ -171,6 +171,19 @@ class KpiPeriodResource extends Resource
                         }
                     }),
 
+                Tables\Actions\Action::make('closeSubmission')
+                    ->label('Tutup Pengisian (Submit)')
+                    ->icon('heroicon-o-lock-closed')
+                    ->color('warning')
+                    ->visible(fn(KpiPeriod $record) => $record->status === 'OPEN')
+                    ->requiresConfirmation()
+                    ->modalHeading('Tutup Pengisian Periode')
+                    ->modalDescription('Input nilai dari karyawan akan ditutup. Karyawan tidak bisa lagi mengirim/mengubah data. Lanjutkan?')
+                    ->action(function (KpiPeriod $record, PeriodService $periodService) {
+                        $periodService->closeSubmission($record);
+                        Notification::make()->title('Pengisian Periode Ditutup (SUBMISSION_CLOSED).')->success()->send();
+                    }),
+
                 Tables\Actions\Action::make('publishPeriod')
                     ->label('Publish Hasil')
                     ->icon('heroicon-o-megaphone')

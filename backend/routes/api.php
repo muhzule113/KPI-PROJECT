@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\ManagerApprovalController;
 use App\Http\Controllers\Api\V1\MyKpiController;
 use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\PeriodApiController;
 use App\Http\Controllers\Api\V1\ServiceTicketApiController;
 use App\Http\Controllers\Api\V1\SupervisorReviewController;
 use Illuminate\Support\Facades\Route;
@@ -45,23 +46,30 @@ Route::prefix('v1')->group(function () {
         Route::post('/my-kpi/submit', [MyKpiController::class, 'submit']);
         Route::get('/my-kpi/history', [MyKpiController::class, 'history']);
 
-        // Supervisor: Review Queue
-        Route::get('/supervisor/queue', [SupervisorReviewController::class, 'queue']);
-        Route::get('/supervisor/review/{kpiId}', [SupervisorReviewController::class, 'detail']);
-        Route::post('/supervisor/review/{kpiId}/items/{itemId}/verify', [SupervisorReviewController::class, 'verifyItem']);
-        Route::post('/supervisor/review/{kpiId}/items/{itemId}/rubric', [SupervisorReviewController::class, 'submitRubric']);
-        Route::post('/supervisor/review/{kpiId}/request-revision', [SupervisorReviewController::class, 'requestRevision']);
-        Route::post('/supervisor/review/{kpiId}/forward', [SupervisorReviewController::class, 'forward']);
+        // Supervisor: Review Queue (hanya supervisor & super_admin)
+        Route::middleware('role.require:supervisor|super_admin')->group(function () {
+            Route::get('/supervisor/queue', [SupervisorReviewController::class, 'queue']);
+            Route::get('/supervisor/review/{kpiId}', [SupervisorReviewController::class, 'detail']);
+            Route::post('/supervisor/review/{kpiId}/items/{itemId}/verify', [SupervisorReviewController::class, 'verifyItem']);
+            Route::post('/supervisor/review/{kpiId}/items/{itemId}/rubric', [SupervisorReviewController::class, 'submitRubric']);
+            Route::post('/supervisor/review/{kpiId}/request-revision', [SupervisorReviewController::class, 'requestRevision']);
+            Route::post('/supervisor/review/{kpiId}/forward', [SupervisorReviewController::class, 'forward']);
+        });
 
-        // Manager / Owner: Approval Queue
-        Route::get('/manager/queue', [ManagerApprovalController::class, 'queue']);
-        Route::get('/manager/approval/{kpiId}', [ManagerApprovalController::class, 'detail']);
-        Route::post('/manager/approval/{kpiId}/approve', [ManagerApprovalController::class, 'approve']);
-        Route::post('/manager/approval/{kpiId}/return', [ManagerApprovalController::class, 'return']);
+        // Manager / Owner: Approval Queue (hanya owner_manager & super_admin)
+        Route::middleware('role.require:owner_manager|super_admin')->group(function () {
+            Route::get('/manager/queue', [ManagerApprovalController::class, 'queue']);
+            Route::get('/manager/approval/{kpiId}', [ManagerApprovalController::class, 'detail']);
+            Route::post('/manager/approval/{kpiId}/approve', [ManagerApprovalController::class, 'approve']);
+            Route::post('/manager/approval/{kpiId}/return', [ManagerApprovalController::class, 'return']);
+        });
 
         // Cashier Report Import
         Route::post('/cashier/import', [CashierApiController::class, 'upload']);
         Route::post('/cashier/import/{batchId}/confirm', [CashierApiController::class, 'confirm']);
+
+        // Periode KPI (untuk picker di mobile)
+        Route::get('/periods', [PeriodApiController::class, 'index']);
 
         // Notifications
         Route::get('/notifications', [NotificationController::class, 'index']);
