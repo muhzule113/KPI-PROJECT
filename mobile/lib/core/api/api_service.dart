@@ -49,6 +49,39 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  /// Multipart upload — dipakai untuk upload file (import kasir, evidence, dll).
+  /// Kirim [filePath] (mobile/desktop) ATAU [fileBytes]+[fileName] (web).
+  /// [fieldName] nama field di backend (default 'file'); [fields] field tambahan (mis. period_id).
+  static Future<dynamic> uploadFile(
+    String endpoint, {
+    String? filePath,
+    Uint8List? fileBytes,
+    String? fileName,
+    String fieldName = 'file',
+    Map<String, String>? fields,
+  }) async {
+    final uri = Uri.parse('$baseUrl$endpoint');
+    final request = http.MultipartRequest('POST', uri);
+
+    final token = await getToken();
+    request.headers['Accept'] = 'application/json';
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+
+    fields?.forEach((k, v) => request.fields[k] = v);
+
+    if (filePath != null) {
+      request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+    } else if (fileBytes != null && fileName != null) {
+      request.files.add(http.MultipartFile.fromBytes(fieldName, fileBytes, filename: fileName));
+    } else {
+      throw Exception('filePath atau fileBytes+fileName wajib diisi.');
+    }
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    return _handleResponse(response);
+  }
+
   static dynamic _handleResponse(http.Response response) {
     final body = jsonDecode(response.body);
     if (response.statusCode >= 200 && response.statusCode < 300) {

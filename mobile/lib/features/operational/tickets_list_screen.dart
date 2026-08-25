@@ -69,8 +69,8 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final isTeknisi = auth.employee?['position_code'] == 'POS-TEK';
-    final isCs = auth.employee?['position_code'] == 'POS-CS';
+    final isTeknisi = auth.isTeknisi;
+    final isCs = auth.isCs;
 
     return Scaffold(
       appBar: AppBar(

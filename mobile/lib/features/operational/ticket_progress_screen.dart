@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../app/theme/app_theme.dart';
 import '../../core/api/api_service.dart';
+import '../../core/auth/auth_provider.dart';
 
 class TicketProgressScreen extends StatefulWidget {
   final String ticketId;
@@ -144,14 +147,174 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     }
   }
 
+  Future<void> _openSparepartRequest() async {
+    List<dynamic> parts;
+    try {
+      final res = await ApiService.get('/operational/spareparts');
+      parts = (res['data'] as List<dynamic>?) ?? [];
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+      );
+      return;
+    }
+
+    if (parts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Belum ada sparepart yang terdaftar.')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    String? selectedId = parts.first['id'].toString();
+    final qtyController = TextEditingController(text: '1');
+    final notesController = TextEditingController();
+
+    final submitted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Request Sparepart ke Gudang',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedId,
+                    decoration: const InputDecoration(labelText: 'Pilih Sparepart'),
+                    items: parts.map((p) {
+                      final stock = (p['stock'] as num?)?.toInt() ?? 0;
+                      return DropdownMenuItem(
+                        value: p['id'].toString(),
+                        child: Text('${p['name']} (${p['code']}) — stok $stock'),
+                      );
+                    }).toList(),
+                    onChanged: (val) => setSheetState(() => selectedId = val),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: qtyController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Jumlah', suffixText: 'pcs'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Catatan (Opsional)',
+                      hintText: 'mis. butuh LCD untuk Galaxy A52',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(sheetCtx, true),
+                      child: const Text('Kirim Request'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (submitted != true || selectedId == null) return;
+
+    final qty = int.tryParse(qtyController.text.trim()) ?? 1;
+    await _requestSparepart(selectedId!, qty < 1 ? 1 : qty, notesController.text.trim());
+  }
+
+  Future<void> _requestSparepart(String sparepartId, int quantity, String notes) async {
+    try {
+      final res = await ApiService.post('/operational/spareparts/request', {
+        'service_ticket_id': widget.ticketId,
+        'sparepart_id': sparepartId,
+        'quantity': quantity,
+        'notes': notes,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Permintaan sparepart terkirim ke Gudang.'),
+          backgroundColor: AppTheme.primary,
+        ),
+      );
+      _loadTicket();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+      );
+    }
+  }
+
+  Future<void> _fulfillSparepart(String requestId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Serahkan Sparepart?'),
+        content: const Text('Sparepart akan ditandai diserahkan ke teknisi dan stok gudang terpotong.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
+            child: const Text('Serahkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final res = await ApiService.post('/operational/spareparts/fulfill/$requestId');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Sparepart berhasil diserahkan.'),
+          backgroundColor: AppTheme.primary,
+        ),
+      );
+      _loadTicket();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final auth = context.watch<AuthProvider>();
     final ticket = _ticket!;
     final isDone = ticket['status'] == 'completed' || ticket['status'] == 'delivered';
+    final sparepartRequests = (ticket['sparepart_requests'] as List<dynamic>?) ?? [];
 
     return Scaffold(
       appBar: AppBar(
@@ -213,8 +376,8 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Action Status Buttons
-          if (!isDone) ...[
+          // Action Status Buttons (hanya Teknisi)
+          if (!isDone && auth.isTeknisi) ...[
             Row(
               children: [
                 Expanded(
@@ -239,6 +402,61 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
             const SizedBox(height: 20),
           ],
 
+          // Sparepart Request (Teknisi) + Status Permintaan (Gudang/Teknisi)
+          if (!isDone && auth.isTeknisi) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.handyman_outlined, size: 18),
+                label: const Text('Request Sparepart ke Gudang'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42)),
+                onPressed: _openSparepartRequest,
+              ),
+            ),
+          ],
+          if (sparepartRequests.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Text(
+              'Permintaan Sparepart',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: sparepartRequests.map((r) {
+                  final isPending = r['status'] == 'pending';
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(
+                      Icons.inventory_2_outlined,
+                      color: isPending ? AppTheme.statusRevision : AppTheme.primary,
+                    ),
+                    title: Text('${r['part_name']} × ${r['quantity']}'),
+                    subtitle: Text(r['part_code'] ?? ''),
+                    trailing: isPending
+                        ? (auth.isGudang
+                            ? FilledButton(
+                                onPressed: () => _fulfillSparepart(r['id'].toString()),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size(0, 34),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                ),
+                                child: const Text('Serahkan'),
+                              )
+                            : const Text(
+                                'Menunggu Gudang',
+                                style: TextStyle(fontSize: 12, color: AppTheme.statusRevision),
+                              ))
+                        : const Text(
+                            'Diserahkan',
+                            style: TextStyle(fontSize: 12, color: AppTheme.primary),
+                          ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+
           // Diagnosis & Actions
           const Text(
             'Catatan Diagnosa & Tindakan Teknisi',
@@ -247,7 +465,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _diagnosisController,
-            enabled: !isDone,
+            enabled: !isDone && auth.isTeknisi,
             maxLines: 2,
             decoration: const InputDecoration(
               labelText: 'Hasil Diagnosa Kerusakan *',
@@ -257,7 +475,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _actionController,
-            enabled: !isDone,
+            enabled: !isDone && auth.isTeknisi,
             maxLines: 2,
             decoration: const InputDecoration(
               labelText: 'Tindakan Servis yang Dilakukan *',
@@ -267,7 +485,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _costController,
-            enabled: !isDone,
+            enabled: !isDone && auth.isTeknisi,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Biaya Final Servis (Rp)',
@@ -295,7 +513,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                 children: _qcChecks.keys.map((key) {
                   return CheckboxListTile(
                     value: _qcChecks[key] ?? false,
-                    onChanged: isDone
+                    onChanged: (isDone || !auth.isTeknisi)
                         ? null
                         : (val) => setState(() => _qcChecks[key] = val ?? false),
                     title: Text(_qcLabels[key] ?? key, style: const TextStyle(fontSize: 13)),
@@ -309,7 +527,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           ),
           const SizedBox(height: 20),
 
-          if (!isDone) ...[
+          if (!isDone && auth.isTeknisi) ...[
             const Text('Hasil Akhir Servis:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
