@@ -27,6 +27,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/operational/tickets', [ServiceTicketApiController::class, 'index']);
         Route::post('/operational/tickets', [ServiceTicketApiController::class, 'store']);
         Route::get('/operational/tickets/{id}', [ServiceTicketApiController::class, 'show']);
+        Route::post('/operational/tickets/{id}/assign', [ServiceTicketApiController::class, 'assignTechnician']);
         Route::post('/operational/tickets/{id}/update-progress', [ServiceTicketApiController::class, 'updateProgress']);
         Route::post('/operational/tickets/{id}/complete', [ServiceTicketApiController::class, 'complete']);
         Route::post('/operational/tickets/{id}/feedback', [ServiceTicketApiController::class, 'pickupAndFeedback']);

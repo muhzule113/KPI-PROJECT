@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
 import '../../core/api/api_service.dart';
+import 'approval_detail_screen.dart';
 
 class ManagerApprovalScreen extends StatefulWidget {
   const ManagerApprovalScreen({super.key});
@@ -237,7 +238,24 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                           '${emp['position']} • ${emp['branch']}',
                           style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.visibility_outlined, size: 16),
+                            label: const Text('Lihat Detail & Eviden'),
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+                            onPressed: () async {
+                              final changed = await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ApprovalDetailScreen(kpiId: kpi['id'].toString()),
+                                ),
+                              );
+                              if (changed == true) _loadQueue();
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(

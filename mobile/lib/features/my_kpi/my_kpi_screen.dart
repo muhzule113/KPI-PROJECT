@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
 import '../../core/api/api_service.dart';
 import 'kpi_item_detail_screen.dart';
+import 'kpi_history_screen.dart';
 
 class MyKpiScreen extends StatefulWidget {
   const MyKpiScreen({super.key});
@@ -120,6 +121,15 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                   ),
                   Row(
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.history_rounded, color: AppTheme.primary),
+                        tooltip: 'Riwayat KPI',
+                        onPressed: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const KpiHistoryScreen()),
+                          );
+                        },
+                      ),
                       IconButton(
                         icon: const Icon(Icons.sync_rounded, color: AppTheme.primary),
                         tooltip: 'Perbarui Data dari Aktivitas (Tiket Servis)',

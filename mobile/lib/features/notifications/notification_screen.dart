@@ -37,6 +37,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
     _loadNotifications();
   }
 
+  Future<void> _markRead(int index) async {
+    final notif = _notifications[index];
+    if (notif['is_read'] == true) return;
+
+    try {
+      await ApiService.post('/notifications/${notif['id']}/read');
+    } catch (_) {
+      // gagal mark read — tetap buka isi notifikasi
+    }
+    setState(() {
+      _notifications[index] = {...notif, 'is_read': true};
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,6 +85,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     final isRead = notif['is_read'] == true;
 
                     return ListTile(
+                      onTap: () => _markRead(index),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       leading: CircleAvatar(
                         backgroundColor: isRead ? Colors.grey[200] : AppTheme.primary.withValues(alpha: 0.15),

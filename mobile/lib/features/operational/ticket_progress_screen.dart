@@ -147,6 +147,25 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     }
   }
 
+  Future<void> _claimTicket() async {
+    try {
+      final res = await ApiService.post('/operational/tickets/${widget.ticketId}/assign');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Tiket berhasil diambil.'),
+          backgroundColor: AppTheme.primary,
+        ),
+      );
+      _loadTicket();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+      );
+    }
+  }
+
   Future<void> _openSparepartRequest() async {
     List<dynamic> parts;
     try {
@@ -359,6 +378,15 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                   "Pelanggan: ${ticket['customer_name']} • ${ticket['customer_phone']}",
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  "Teknisi: ${ticket['technician_name'] ?? 'Belum Ditugaskan'}",
+                  style: TextStyle(
+                    color: ticket['technician_employee_id'] == null ? AppTheme.statusRevision : AppTheme.textMuted,
+                    fontSize: 13,
+                    fontWeight: ticket['technician_employee_id'] == null ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -374,6 +402,19 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
               ],
             ),
           ),
+          // Claim button — teknisi mengambil tiket yang belum ditugaskan
+          if (!isDone && auth.isTeknisi && ticket['technician_employee_id'] == null) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.handyman_rounded),
+                label: const Text('Ambil Tiket Ini'),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 44)),
+                onPressed: _claimTicket,
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           // Action Status Buttons (hanya Teknisi)

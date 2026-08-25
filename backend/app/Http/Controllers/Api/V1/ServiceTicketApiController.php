@@ -128,6 +128,43 @@ class ServiceTicketApiController extends Controller
         ]);
     }
 
+    public function assignTechnician(Request $request, string $id): JsonResponse
+    {
+        $ticket = ServiceTicket::where('id', $id)->first();
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Tiket tidak ditemukan.'], 404);
+        }
+
+        if (in_array($ticket->status, ['completed', 'delivered'])) {
+            return response()->json(['success' => false, 'message' => 'Tiket sudah selesai, tidak bisa diubah teknisi.'], 422);
+        }
+
+        // Teknisi bisa claim sendiri; CS/supervisor bisa assign teknisi lain via technician_employee_id
+        $employee = $request->user()->employee;
+        $technicianId = $request->input('technician_employee_id') ?? $employee?->id;
+
+        if (!$technicianId) {
+            return response()->json(['success' => false, 'message' => 'Teknisi tidak ditemukan pada akun Anda.'], 422);
+        }
+
+        $technician = Employee::where('id', $technicianId)
+            ->whereHas('position', fn($q) => $q->where('code', 'POS-TEK'))
+            ->first();
+
+        if (!$technician) {
+            return response()->json(['success' => false, 'message' => 'Karyawan terpilih bukan Teknisi.'], 422);
+        }
+
+        $ticket->technician_employee_id = $technician->id;
+        $ticket->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Tiket {$ticket->ticket_number} ditugaskan ke {$technician->name}.",
+            'data' => $this->formatTicket($ticket->fresh(['technicianEmployee', 'intakeEmployee'])),
+        ]);
+    }
+
     public function updateProgress(Request $request, string $id): JsonResponse
     {
         $request->validate([
@@ -348,6 +385,7 @@ class ServiceTicketApiController extends Controller
             'status' => $t->status,
             'result_status' => $t->result_status,
             'technician_name' => $t->technicianEmployee?->name ?? 'Belum Ditugaskan',
+            'technician_employee_id' => $t->technician_employee_id,
             'created_at' => $t->created_at->toIso8601String(),
             'completed_at' => $t->completed_at?->toIso8601String(),
         ];
