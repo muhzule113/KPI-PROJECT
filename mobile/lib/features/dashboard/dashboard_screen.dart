@@ -396,7 +396,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _formatStatus(String status) {
     switch (status) {
-      case 'draft': return 'Draft (Belum Submit)';
+      case 'draft': return 'Draft (Menunggu Data)';
       case 'submitted': return 'Menunggu Review';
       case 'under_review': return 'Sedang Direview';
       case 'revision_required': return 'Perlu Revisi';

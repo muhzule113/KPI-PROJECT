@@ -4,12 +4,10 @@ import '../../core/api/api_service.dart';
 
 class KpiItemDetailScreen extends StatefulWidget {
   final String itemId;
-  final bool isEditable;
 
   const KpiItemDetailScreen({
     super.key,
     required this.itemId,
-    required this.isEditable,
   });
 
   @override
@@ -19,9 +17,6 @@ class KpiItemDetailScreen extends StatefulWidget {
 class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _item;
-  final _actualController = TextEditingController();
-  final _notesController = TextEditingController();
-  bool _isSaving = false;
 
   @override
   void initState() {
@@ -35,9 +30,6 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
       final res = await ApiService.get('/my-kpi/items/${widget.itemId}');
       setState(() {
         _item = res['data'];
-        if (_item?['actual_decimal'] != null) {
-          _actualController.text = _item!['actual_decimal'].toString();
-        }
         _isLoading = false;
       });
     } catch (e) {
@@ -50,39 +42,6 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
     }
   }
 
-  Future<void> _saveDraft() async {
-    if (_actualController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harap masukkan angka nilai aktual.')),
-      );
-      return;
-    }
-
-    setState(() => _isSaving = true);
-    try {
-      final val = double.tryParse(_actualController.text.trim());
-      await ApiService.post('/my-kpi/items/${widget.itemId}/draft', {
-        'actual_decimal': val,
-        'notes': _notesController.text.trim(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Draft berhasil disimpan!'), backgroundColor: AppTheme.primary),
-        );
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -92,6 +51,10 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
     final item = _item!;
     final rubric = item['rubric'];
     final latestReview = item['latest_review'];
+    final actual = item['actual_decimal'];
+    final achievement = item['achievement_percentage'];
+    final weightedScore = item['weighted_score'];
+    final sourceType = item['source_type'];
 
     return Scaffold(
       appBar: AppBar(
@@ -122,7 +85,7 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
                   ),
                 ),
                 Text(
-                  'Sumber: ${_formatSource(item['source_type'])}',
+                  'Sumber: ${_formatSource(sourceType)}',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
                 ),
               ],
@@ -160,6 +123,76 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
               ),
             ),
 
+            const SizedBox(height: 16),
+
+            // Nilai Aktual card — read-only, sumber nilai otomatis/supervisor
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nilai Aktual',
+                    style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                  ),
+                  const SizedBox(height: 6),
+                  if (actual != null) ...[
+                    Text(
+                      '$actual ${item['target_unit']}',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                    if (achievement != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            'Pencapaian: ${achievement.toStringAsFixed(1)}%',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          if (weightedScore != null) ...[
+                            const SizedBox(width: 12),
+                            Text(
+                              'Skor: ${weightedScore.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ] else ...[
+                    Text(
+                      _emptyActualLabel(sourceType),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textMuted),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 16, color: AppTheme.textMuted),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _sourceExplanation(sourceType),
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
             if (latestReview != null && latestReview['reason'] != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -189,7 +222,7 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
               ),
             ],
 
-            // Rubric Criteria Preview if applicable
+            // Rubric Criteria Preview — apa yang dinilai Supervisor
             if (rubric != null && rubric['criteria'] != null) ...[
               const SizedBox(height: 24),
               const Text(
@@ -216,47 +249,34 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
                 );
               })),
             ],
-
-            const SizedBox(height: 24),
-            const Text(
-              'Input Nilai Aktual',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 10),
-
-            TextField(
-              controller: _actualController,
-              enabled: widget.isEditable,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Nilai Aktual (${item['target_unit']})',
-                hintText: 'Contoh: 85',
-                suffixText: item['target_unit'],
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _notesController,
-              enabled: widget.isEditable,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Catatan Penjelasan (Opsional)',
-                hintText: 'Tuliskan rincian pencapaian...',
-              ),
-            ),
-
-            const SizedBox(height: 24),
-            if (widget.isEditable)
-              ElevatedButton(
-                onPressed: _isSaving ? null : _saveDraft,
-                child: _isSaving
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Simpan Draft Nilai'),
-              ),
           ],
         ),
       ),
     );
+  }
+
+  String _emptyActualLabel(String? source) {
+    switch (source) {
+      case 'supervisor':
+        return 'Menunggu penilaian Supervisor';
+      case 'cross_role':
+        return 'Menunggu penilaian rekan kerja';
+      default:
+        return 'Belum ada data';
+    }
+  }
+
+  String _sourceExplanation(String? source) {
+    switch (source) {
+      case 'supervisor':
+        return 'Nilai ditentukan oleh Supervisor melalui observasi dan checklist — tidak diisi oleh karyawan.';
+      case 'cross_role':
+        return 'Nilai dinilai oleh rekan kerja terkait melalui proses review.';
+      case 'import':
+        return 'Dihitung otomatis oleh sistem dari laporan kasir yang diimport.';
+      default:
+        return 'Dihitung otomatis oleh sistem dari aktivitas Anda di aplikasi (mis. tiket servis).';
+    }
   }
 
   String _formatSource(String? source) {

@@ -41,47 +41,22 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
     }
   }
 
-  Future<void> _submitKpi() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Konfirmasi Submisi KPI'),
-        content: const Text(
-          'Setelah disubmit, data aktual Anda akan dikunci dan diteruskan ke Supervisor untuk direview. Lanjutkan?',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
-            child: const Text('Ya, Submit'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
+  Future<void> _syncOperationalData() async {
     try {
-      final res = await ApiService.post('/my-kpi/submit');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'KPI berhasil disubmit!'),
-            backgroundColor: AppTheme.primary,
-          ),
-        );
-        _loadMyKpi();
-      }
+      final res = await ApiService.post('/operational/sync-kpi');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Data operasional berhasil disinkronkan!'),
+          backgroundColor: AppTheme.primary,
+        ),
+      );
+      _loadMyKpi();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppTheme.statusDanger,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+      );
     }
   }
 
@@ -111,7 +86,6 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
 
     final items = (_kpiData?['items'] as List<dynamic>?) ?? [];
     final status = _kpiData?['status'] ?? 'draft';
-    final isEditable = status == 'draft' || status == 'revision_required';
 
     return Scaffold(
       body: RefreshIndicator(
@@ -148,27 +122,8 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.sync_rounded, color: AppTheme.primary),
-                        tooltip: 'Tarik Data dari Tiket Servis',
-                        onPressed: () async {
-                          try {
-                            final res = await ApiService.post('/operational/sync-kpi');
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(res['message'] ?? 'Data operasional berhasil disinkronkan!'),
-                                  backgroundColor: AppTheme.primary,
-                                ),
-                              );
-                              _loadMyKpi();
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
-                              );
-                            }
-                          }
-                        },
+                        tooltip: 'Perbarui Data dari Aktivitas (Tiket Servis)',
+                        onPressed: _syncOperationalData,
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -190,6 +145,33 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                 ],
               ),
             ),
+
+            // Info banner: nilai datang otomatis, bukan isian manual
+            if (status == 'draft' || status == 'revision_required') ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.auto_awesome_rounded, color: AppTheme.primary, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Nilai KPI dihitung otomatis oleh sistem dari aktivitas Anda di aplikasi '
+                        '(mis. tiket servis) dan penilaian Supervisor — tidak ada isian manual.',
+                        style: TextStyle(fontSize: 12.5, color: AppTheme.textInk),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 20),
             Row(
@@ -219,10 +201,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                   onTap: () async {
                     final updated = await Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => KpiItemDetailScreen(
-                          itemId: item['id'],
-                          isEditable: isEditable && (status != 'revision_required' || isRevision),
-                        ),
+                        builder: (_) => KpiItemDetailScreen(itemId: item['id']),
                       ),
                     );
                     if (updated == true) _loadMyKpi();
@@ -282,9 +261,9 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Aktual Terisi', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                                const Text('Nilai Aktual', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                                 Text(
-                                  isFilled ? '${item['actual_decimal']} ${item['target_unit']}' : 'Belum diisi',
+                                  _actualLabel(item),
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
@@ -327,16 +306,33 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
             }),
 
             const SizedBox(height: 20),
-            if (isEditable)
-              ElevatedButton(
-                onPressed: _submitKpi,
-                child: const Text('Kirim KPI ke Supervisor (Submit)'),
+            const Center(
+              child: Text(
+                'Hasil akhir akan diumumkan setelah periode ditutup dan disetujui.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
               ),
+            ),
             const SizedBox(height: 30),
           ],
         ),
       ),
     );
+  }
+
+  String _actualLabel(Map<String, dynamic> item) {
+    final isFilled = item['actual_decimal'] != null || item['actual_json'] != null;
+    if (isFilled) {
+      return '${item['actual_decimal']} ${item['target_unit']}';
+    }
+    switch (item['source_type']) {
+      case 'supervisor':
+        return 'Menunggu penilaian Supervisor';
+      case 'cross_role':
+        return 'Dinilai rekan kerja';
+      default:
+        return 'Otomatis dari sistem';
+    }
   }
 
   String _formatStatus(String status) {
