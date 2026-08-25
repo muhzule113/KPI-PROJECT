@@ -6,6 +6,7 @@ use App\Filament\Resources\SparepartResource\Pages;
 use App\Models\Sparepart;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -130,6 +131,43 @@ class SparepartResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('restock')
+                    ->label('Restok')
+                    ->icon('heroicon-o-plus-circle')
+                    ->color('success')
+                    ->form([
+                        Forms\Components\TextInput::make('quantity')
+                            ->label('Jumlah Masuk')
+                            ->numeric()
+                            ->minValue(1)
+                            ->required(),
+                        Forms\Components\TextInput::make('note')
+                            ->label('Catatan (Opsional)')
+                            ->placeholder('mis. PO #INV-2026-001 dari supplier'),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $qty = (int) $data['quantity'];
+                        $before = $record->stock_quantity;
+
+                        \App\Models\StockMovement::create([
+                            'sparepart_id' => $record->id,
+                            'movement_type' => \App\Models\StockMovement::TYPE_RESTOCK_IN,
+                            'quantity' => $qty,
+                            'stock_before' => $before,
+                            'stock_after' => $before + $qty,
+                            'reference_type' => 'manual_restock',
+                            'note' => $data['note'] ?? null,
+                            'user_id' => auth()->id(),
+                        ]);
+
+                        $record->stock_quantity = $before + $qty;
+                        $record->save();
+
+                        Notification::make()
+                            ->title("Stok {$record->name} bertambah {$qty} (total {$record->stock_quantity}).")
+                            ->success()
+                            ->send();
+                    }),
             ]);
     }
 

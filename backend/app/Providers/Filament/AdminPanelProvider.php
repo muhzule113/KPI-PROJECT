@@ -41,6 +41,7 @@ class AdminPanelProvider extends PanelProvider
                 'Master KPI',
                 'Import & Rekonsiliasi',
                 'Organisasi',
+                'Operasional Harian',
                 'Sistem & Audit',
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')

@@ -13,6 +13,10 @@ use Tests\TestCase;
 
 class ServiceManagementAndKpiSyncTest extends TestCase
 {
+    use RefreshDatabase;
+
+    protected $seed = true;
+
     public function test_operational_service_tickets_auto_sync_to_kpi(): void
     {
         $userCs = User::where('email', 'cs@toko.com')->first();

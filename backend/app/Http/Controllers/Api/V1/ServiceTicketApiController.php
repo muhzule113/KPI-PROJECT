@@ -10,6 +10,7 @@ use App\Models\KpiPeriod;
 use App\Models\ServiceTicket;
 use App\Models\Sparepart;
 use App\Models\SparepartRequest;
+use App\Models\StockMovement;
 use App\Modules\Assessment\OperationalKpiSyncService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -342,7 +343,20 @@ class ServiceTicketApiController extends Controller
             $req->save();
 
             if ($req->sparepart && $req->sparepart->stock_quantity >= $req->quantity) {
+                $before = $req->sparepart->stock_quantity;
                 $req->sparepart->decrement('stock_quantity', $req->quantity);
+
+                StockMovement::create([
+                    'sparepart_id' => $req->sparepart->id,
+                    'movement_type' => StockMovement::TYPE_REQUEST_OUT,
+                    'quantity' => -1 * $req->quantity,
+                    'stock_before' => $before,
+                    'stock_after' => $req->sparepart->fresh()->stock_quantity,
+                    'reference_type' => 'sparepart_request',
+                    'reference_id' => $req->id,
+                    'note' => 'Penyerahan sparepart ke teknisi',
+                    'user_id' => $user->id,
+                ]);
             }
         });
 

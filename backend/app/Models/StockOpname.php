@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class StockOpname extends Model
+{
+    use HasFactory;
+
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_IN_PROGRESS = 'in_progress';
+    public const STATUS_COMPLETED = 'completed';
+
+    protected $fillable = [
+        'code',
+        'period_id',
+        'status',
+        'deadline',
+        'completed_at',
+        'created_by',
+    ];
+
+    protected $casts = [
+        'deadline' => 'date',
+        'completed_at' => 'datetime',
+    ];
+
+    public function period(): BelongsTo
+    {
+        return $this->belongsTo(KpiPeriod::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(StockOpnameItem::class);
+    }
+
+    public function countedItems(): HasMany
+    {
+        return $this->hasMany(StockOpnameItem::class)->where('is_counted', true);
+    }
+
+    public static function statusLabel(string $status): string
+    {
+        return match ($status) {
+            self::STATUS_DRAFT => 'Draft',
+            self::STATUS_IN_PROGRESS => 'Sedang Berjalan',
+            self::STATUS_COMPLETED => 'Selesai',
+            default => ucfirst($status),
+        };
+    }
+}

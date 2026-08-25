@@ -63,4 +63,9 @@ class Employee extends Model
     {
         return $this->hasMany(EmployeeKpi::class);
     }
+
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
+    }
 }

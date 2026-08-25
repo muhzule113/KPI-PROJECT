@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\DB;
 class OperationalKpiSyncService
 {
     public function __construct(
-        protected KpiCalculationEngine $calculationEngine
+        protected KpiCalculationEngine $calculationEngine,
+        protected AttendanceKpiSyncService $attendanceSync,
+        protected InventoryKpiSyncService $inventorySync
     ) {}
 
     public function syncPeriodOperationalData(KpiPeriod $period): array
@@ -52,10 +54,18 @@ class OperationalKpiSyncService
             });
         }
 
+        // Sub-sistem lain: absensi & inventory (gudang)
+        $attendanceRes = $this->attendanceSync->syncPeriodAttendanceData($period);
+        $inventoryRes = $this->inventorySync->syncPeriodInventoryData($period);
+
         return [
             'success' => true,
-            'message' => "Data operasional berhasil disinkronkan ke {$updatedEmployees} KPI karyawan aktif.",
+            'message' => "Sinkronisasi KPI selesai: {$updatedEmployees} karyawan (operasional), "
+                . "{$attendanceRes['updated_items']} indikator (absensi), "
+                . "{$inventoryRes['updated_items']} indikator (inventory).",
             'updated_count' => $updatedEmployees,
+            'attendance' => $attendanceRes,
+            'inventory' => $inventoryRes,
         ];
     }
 
