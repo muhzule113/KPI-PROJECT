@@ -136,39 +136,87 @@ class _SparepartScreenState extends State<SparepartScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      const Text(
-                        'Daftar Stok Sparepart',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textInk),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._spareparts.map((sp) => Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-                                child: const Icon(Icons.build_rounded, color: AppTheme.primary, size: 20),
+                      // Daftar stok dikelompokkan per jenis produk
+                      for (final group in _groupedProducts()) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12, bottom: 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                group.key,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary),
                               ),
-                              title: Text(sp['name'] ?? '-'),
-                              subtitle: Text(sp['sparepart_code'] ?? ''),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '${sp['stock'] ?? 0} pcs',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textInk),
-                                  ),
-                                  Text(
-                                    'Min: ${sp['min_stock'] ?? 0}',
-                                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                                  ),
-                                ],
+                              const SizedBox(width: 8),
+                              Text(
+                                '(${group.value.length})',
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                               ),
-                            ),
-                          )),
+                            ],
+                          ),
+                        ),
+                        ...group.value.map((sp) => Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
+                                  child: Icon(_productIcon(sp), color: AppTheme.primary, size: 20),
+                                ),
+                                title: Text(sp['name'] ?? '-'),
+                                subtitle: Text(sp['code'] ?? ''),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${sp['stock'] ?? 0} pcs',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textInk),
+                                    ),
+                                    Text(
+                                      'Min: ${sp['min_stock'] ?? 0}',
+                                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )),
+                      ]
+                      // akhir for-element produk
                     ],
                   ),
                 ),
     );
+  }
+
+  // Kelompokkan produk per jenis (Handset, Tablet, Sparepart, Aksesoris, dst)
+  List<MapEntry<String, List<dynamic>>> _groupedProducts() {
+    final Map<String, List<dynamic>> groups = {};
+    for (final sp in _spareparts) {
+      final label = (sp['product_type_label'] as String?) ?? 'Lainnya';
+      groups.putIfAbsent(label, () => []).add(sp);
+    }
+    // Urutan tetap: handset, tablet, sparepart, aksesoris, lalu lainnya
+    const order = ['Handset HP', 'Tablet / iPad', 'Sparepart', 'Aksesoris'];
+    final sorted = order
+        .where(groups.containsKey)
+        .map((o) => MapEntry(o, groups.remove(o)!))
+        .toList();
+    groups.forEach((k, v) => sorted.add(MapEntry(k, v)));
+
+    return sorted;
+  }
+
+  IconData _productIcon(dynamic sp) {
+    switch (sp['product_type']) {
+      case 'handset':
+        return Icons.smartphone_rounded;
+      case 'tablet':
+        return Icons.tablet_android_rounded;
+      case 'aksesoris':
+        return Icons.headphones_rounded;
+      case 'sparepart':
+        return Icons.build_rounded;
+      default:
+        return Icons.inventory_2_rounded;
+    }
   }
 }

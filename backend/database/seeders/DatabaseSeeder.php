@@ -535,6 +535,22 @@ class DatabaseSeeder extends Seeder
             $parts[$pd['code']] = \App\Models\Sparepart::firstOrCreate(['code' => $pd['code']], $pd);
         }
 
+        // 1b. Produk non-sparepart (handset, tablet/iPad, aksesoris) — katalog produk toko
+        $productsData = [
+            ['code' => 'HS-IP13-128', 'product_type' => 'handset', 'name' => 'Handset iPhone 13 128GB (Bekas)', 'category' => 'Handset', 'compatible_models' => 'iPhone 13', 'stock_quantity' => 3, 'min_stock_alert' => 1, 'purchase_price' => 6500000, 'selling_price' => 7500000, 'is_critical' => true],
+            ['code' => 'HS-SMA54-8', 'product_type' => 'handset', 'name' => 'Handset Samsung Galaxy A54 8/128 (Baru)', 'category' => 'Handset', 'compatible_models' => 'Samsung Galaxy A54', 'stock_quantity' => 5, 'min_stock_alert' => 2, 'purchase_price' => 3800000, 'selling_price' => 4500000, 'is_critical' => false],
+            ['code' => 'TB-IPAD9-64', 'product_type' => 'tablet', 'name' => 'iPad 9th Gen 64GB WiFi', 'category' => 'Tablet', 'compatible_models' => 'iPad 9', 'stock_quantity' => 2, 'min_stock_alert' => 1, 'purchase_price' => 4200000, 'selling_price' => 5200000, 'is_critical' => true],
+            ['code' => 'TB-SMTAB-A9', 'product_type' => 'tablet', 'name' => 'Samsung Galaxy Tab A9+ 4/64', 'category' => 'Tablet', 'compatible_models' => 'Tab A9+', 'stock_quantity' => 4, 'min_stock_alert' => 1, 'purchase_price' => 2300000, 'selling_price' => 2900000, 'is_critical' => false],
+            ['code' => 'ACC-TMPR-IP13', 'product_type' => 'aksesoris', 'name' => 'Tempered Glass iPhone 13', 'category' => 'Aksesoris', 'compatible_models' => 'iPhone 13', 'stock_quantity' => 50, 'min_stock_alert' => 10, 'purchase_price' => 15000, 'selling_price' => 35000, 'is_critical' => false],
+            ['code' => 'ACC-CASE-SMA54', 'product_type' => 'aksesoris', 'name' => 'Casing Silikon Samsung A54', 'category' => 'Aksesoris', 'compatible_models' => 'Samsung A54', 'stock_quantity' => 30, 'min_stock_alert' => 10, 'purchase_price' => 25000, 'selling_price' => 60000, 'is_critical' => false],
+            ['code' => 'ACC-CHG-20W', 'product_type' => 'aksesoris', 'name' => 'Charger Adaptor 20W USB-C', 'category' => 'Aksesoris', 'compatible_models' => 'Universal', 'stock_quantity' => 25, 'min_stock_alert' => 5, 'purchase_price' => 80000, 'selling_price' => 150000, 'is_critical' => false],
+            ['code' => 'ACC-KBL-USB', 'product_type' => 'aksesoris', 'name' => 'Kabel USB-C to Lightning 1m', 'category' => 'Aksesoris', 'compatible_models' => 'Universal', 'stock_quantity' => 40, 'min_stock_alert' => 10, 'purchase_price' => 30000, 'selling_price' => 75000, 'is_critical' => false],
+        ];
+
+        foreach ($productsData as $pd) {
+            \App\Models\Sparepart::firstOrCreate(['code' => $pd['code']], $pd);
+        }
+
         // 2. Demo Tickets (12 tickets)
         $ticketsData = [
             [

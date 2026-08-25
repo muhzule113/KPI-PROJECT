@@ -10,8 +10,23 @@ class Sparepart extends Model
 {
     use HasFactory;
 
+    public const TYPE_SPAREPART = 'sparepart';
+    public const TYPE_HANDSET = 'handset';
+    public const TYPE_TABLET = 'tablet';
+    public const TYPE_ACCESSORY = 'aksesoris';
+    public const TYPE_OTHER = 'lainnya';
+
+    public const TYPES = [
+        self::TYPE_SPAREPART => 'Sparepart',
+        self::TYPE_HANDSET => 'Handset HP',
+        self::TYPE_TABLET => 'Tablet / iPad',
+        self::TYPE_ACCESSORY => 'Aksesoris',
+        self::TYPE_OTHER => 'Lainnya',
+    ];
+
     protected $fillable = [
         'code',
+        'product_type',
         'name',
         'category',
         'compatible_models',

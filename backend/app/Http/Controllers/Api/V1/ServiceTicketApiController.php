@@ -283,16 +283,19 @@ class ServiceTicketApiController extends Controller
 
     public function spareparts(): JsonResponse
     {
-        $spareparts = Sparepart::orderBy('category')->orderBy('name')->get();
+        $spareparts = Sparepart::orderBy('product_type')->orderBy('category')->orderBy('name')->get();
 
         return response()->json([
             'success' => true,
             'data' => $spareparts->map(fn($p) => [
                 'id' => $p->id,
                 'code' => $p->code,
+                'product_type' => $p->product_type,
+                'product_type_label' => Sparepart::TYPES[$p->product_type] ?? ucfirst((string) $p->product_type),
                 'name' => $p->name,
                 'category' => $p->category,
                 'stock' => $p->stock_quantity,
+                'min_stock' => $p->min_stock_alert,
                 'selling_price' => (float) $p->selling_price,
                 'is_critical' => (bool) $p->is_critical,
             ]),

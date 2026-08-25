@@ -107,12 +107,14 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         ]);
         app(StockOpnameService::class)->snapshotItems($opname);
 
-        // Isi stok fisik: 2 item akurat, 1 item selisih (sistem 5 → fisik 3)
+        // Isi stok fisik: PRT-BAT (sistem 5) salah hitung → fisik 3, dua sisanya akurat
         $items = $opname->items->whereIn('sparepart_id', $parts->pluck('id'))->values();
         $this->assertCount(3, $items);
-        $items[0]->update(['physical_stock' => 10]);
-        $items[1]->update(['physical_stock' => 3]);
-        $items[2]->update(['physical_stock' => 8]);
+        foreach ($items as $it) {
+            $it->update(['physical_stock' => $it->system_stock]); // akurat dulu
+        }
+        $batItem = $items->firstWhere('sparepart_id', $parts[1]->id);
+        $batItem->update(['physical_stock' => 3]); // selisih: sistem 5 → fisik 3
 
         // Selesaikan opname via service (logika yang dipakai Filament action)
         $res = app(StockOpnameService::class)->complete($opname, $userGud->id);

@@ -15,13 +15,15 @@ class SparepartResource extends Resource
 {
     protected static ?string $model = Sparepart::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-cpu-chip';
+    protected static ?string $navigationIcon = 'heroicon-o-cube';
 
     protected static ?string $navigationGroup = 'Manajemen Servis & Operasional';
 
-    protected static ?string $navigationLabel = 'Katalog Sparepart & Stok';
+    protected static ?string $navigationLabel = 'Katalog Produk & Stok';
 
-    protected static ?string $modelLabel = 'Sparepart HP';
+    protected static ?string $modelLabel = 'Produk';
+
+    protected static ?string $pluralModelLabel = 'Produk';
 
     protected static ?int $navigationSort = 2;
 
@@ -38,32 +40,47 @@ class SparepartResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Informasi Suku Cadang')
+                Forms\Components\Section::make('Informasi Produk')
                     ->schema([
-                        Forms\Components\TextInput::make('code')
-                            ->label('Kode Part')
-                            ->required()
-                            ->unique(ignoreRecord: true)
-                            ->placeholder('e.g. PRT-LCD-IP13'),
+                        Forms\Components\Grid::make(2)->schema([
+                            Forms\Components\TextInput::make('code')
+                                ->label('Kode Produk')
+                                ->required()
+                                ->unique(ignoreRecord: true)
+                                ->placeholder('e.g. PRT-LCD-IP13 / HS-IP13-128'),
+                            Forms\Components\Select::make('product_type')
+                                ->label('Jenis Produk')
+                                ->options(Sparepart::TYPES)
+                                ->default(Sparepart::TYPE_SPAREPART)
+                                ->required()
+                                ->live(),
+                        ]),
                         Forms\Components\TextInput::make('name')
-                            ->label('Nama Sparepart')
+                            ->label('Nama Produk')
                             ->required()
                             ->placeholder('e.g. LCD Screen Assembly iPhone 13 Original OEM'),
                         Forms\Components\Select::make('category')
-                            ->label('Kategori Part')
-                            ->options([
-                                'LCD' => 'LCD & Layar Sentuh',
-                                'Baterai' => 'Baterai',
-                                'IC' => 'Komponen IC / Chipset',
-                                'Fleksibel' => 'Kabel Fleksibel (Flex Cable)',
-                                'Kamera' => 'Modul Kamera',
-                                'Speaker' => 'Speaker / Buzzer / Mic',
-                                'Housing' => 'Housing & Backdoor',
-                                'Port' => 'Port Charger / Lightning',
-                            ])
+                            ->label('Kategori')
+                            ->options(fn(Forms\Get $get) => $get('product_type') === Sparepart::TYPE_SPAREPART
+                                ? [
+                                    'LCD' => 'LCD & Layar Sentuh',
+                                    'Baterai' => 'Baterai',
+                                    'IC' => 'Komponen IC / Chipset',
+                                    'Fleksibel' => 'Kabel Fleksibel (Flex Cable)',
+                                    'Kamera' => 'Modul Kamera',
+                                    'Speaker' => 'Speaker / Buzzer / Mic',
+                                    'Housing' => 'Housing & Backdoor',
+                                    'Port' => 'Port Charger / Lightning',
+                                ]
+                                : [
+                                    'Handset' => 'Handset HP',
+                                    'Tablet' => 'Tablet / iPad',
+                                    'Aksesoris' => 'Aksesoris',
+                                    'Lainnya' => 'Lainnya',
+                                ])
                             ->required(),
                         Forms\Components\TextInput::make('compatible_models')
-                            ->label('Model HP Kompatibel')
+                            ->label('Model Kompatibel (Opsional)')
                             ->placeholder('e.g. iPhone 13, iPhone 13 Pro'),
                         Forms\Components\Grid::make(3)->schema([
                             Forms\Components\TextInput::make('stock_quantity')
@@ -77,7 +94,7 @@ class SparepartResource extends Resource
                                 ->default(5)
                                 ->required(),
                             Forms\Components\Toggle::make('is_critical')
-                                ->label('Komponen Kritis (Wajib Tersedia)')
+                                ->label('Produk Kritis (Wajib Tersedia)')
                                 ->default(false),
                         ]),
                         Forms\Components\Grid::make(2)->schema([
@@ -87,7 +104,7 @@ class SparepartResource extends Resource
                                 ->prefix('Rp')
                                 ->default(0),
                             Forms\Components\TextInput::make('selling_price')
-                                ->label('Harga Jual Servis (Rp)')
+                                ->label('Harga Jual (Rp)')
                                 ->numeric()
                                 ->prefix('Rp')
                                 ->default(0),
@@ -106,9 +123,19 @@ class SparepartResource extends Resource
                     ->sortable()
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nama Sparepart')
+                    ->label('Nama Produk')
                     ->searchable()
                     ->description(fn($record) => $record->compatible_models),
+                Tables\Columns\TextColumn::make('product_type')
+                    ->label('Jenis')
+                    ->badge()
+                    ->formatStateUsing(fn($state) => Sparepart::TYPES[$state] ?? ucfirst($state))
+                    ->color(fn($state) => match ($state) {
+                        Sparepart::TYPE_HANDSET => 'primary',
+                        Sparepart::TYPE_TABLET => 'info',
+                        Sparepart::TYPE_ACCESSORY => 'warning',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('category')
                     ->label('Kategori')
                     ->badge()
@@ -122,11 +149,14 @@ class SparepartResource extends Resource
                     ->label('Kritis')
                     ->boolean(),
                 Tables\Columns\TextColumn::make('selling_price')
-                    ->label('Harga Servis')
+                    ->label('Harga Jual')
                     ->money('IDR')
                     ->sortable(),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('product_type')
+                    ->label('Jenis Produk')
+                    ->options(Sparepart::TYPES),
                 Tables\Filters\SelectFilter::make('category')
                     ->options([
                         'LCD' => 'LCD',
@@ -134,9 +164,12 @@ class SparepartResource extends Resource
                         'IC' => 'IC / Chipset',
                         'Fleksibel' => 'Fleksibel',
                         'Kamera' => 'Kamera',
+                        'Handset' => 'Handset HP',
+                        'Tablet' => 'Tablet / iPad',
+                        'Aksesoris' => 'Aksesoris',
                     ]),
                 Tables\Filters\TernaryFilter::make('is_critical')
-                    ->label('Komponen Kritis'),
+                    ->label('Produk Kritis'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
