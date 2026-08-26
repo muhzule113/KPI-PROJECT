@@ -127,4 +127,34 @@ class TechnicianTicketAccessTest extends TestCase
 
         $this->assertEquals($userTek->employee->id, $ticket->fresh()->technician_employee_id);
     }
+
+    public function test_technician_cannot_create_ticket(): void
+    {
+        $userTek = User::where('email', 'teknisi@toko.com')->first();
+
+        $this->actingAs($userTek, 'sanctum')
+            ->postJson('/api/v1/operational/tickets', [
+                'customer_name' => 'Test',
+                'customer_phone' => '08123456789',
+                'device_brand' => 'Apple',
+                'device_model' => 'iPhone 13',
+                'initial_complaint' => 'Layar retak',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_cs_can_create_ticket(): void
+    {
+        $userCs = User::where('email', 'cs@toko.com')->first();
+
+        $this->actingAs($userCs, 'sanctum')
+            ->postJson('/api/v1/operational/tickets', [
+                'customer_name' => 'Pelanggan Baru',
+                'customer_phone' => '081298765432',
+                'device_brand' => 'Samsung',
+                'device_model' => 'Galaxy A54',
+                'initial_complaint' => 'Baterai cepat habis',
+            ])
+            ->assertCreated();
+    }
 }

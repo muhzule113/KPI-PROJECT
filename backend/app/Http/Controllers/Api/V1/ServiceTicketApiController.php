@@ -71,6 +71,18 @@ class ServiceTicketApiController extends Controller
 
         $user = $request->user()->loadMissing('employee');
         $employee = $user->employee;
+
+        // Hanya CS (intake) atau manager yang boleh membuat tiket servis.
+        // Teknisi/gudang/kasir/admin tidak bisa create tiket (mencegah inflasi KPI).
+        $isCs = $employee?->position?->code === 'POS-CS';
+        $isIntakeAuthorized = $isCs || $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
+        if (!$isIntakeAuthorized) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya CS (Customer Service) yang dapat membuat tiket servis baru.',
+            ], 403);
+        }
+
         $activePeriod = KpiPeriod::where('status', 'OPEN')->orderByDesc('id')->first();
 
         $ticketCount = ServiceTicket::whereYear('created_at', date('Y'))->whereMonth('created_at', date('m'))->count() + 1;
