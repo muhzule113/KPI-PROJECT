@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import 'review_detail_screen.dart';
 
@@ -126,20 +127,10 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
                                 emp['name'] ?? 'Karyawan',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(status).withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  _formatStatus(status),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: _getStatusColor(status),
-                                  ),
-                                ),
+                              KpiStatusPill(
+                                label: _formatStatus(status),
+                                color: _getStatusColor(status),
+                                icon: _getStatusIcon(status),
                               ),
                             ],
                           ),
@@ -179,6 +170,10 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
       case 'verified': return 'Terverifikasi';
       default: return status;
     }
+  }
+
+  IconData _getStatusIcon(String status) {
+    return kpiStatusPresentation(status)['icon'] as IconData;
   }
 
   Color _getStatusColor(String status) {

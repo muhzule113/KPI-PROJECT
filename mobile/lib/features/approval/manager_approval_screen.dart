@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import 'approval_detail_screen.dart';
 
@@ -216,20 +217,10 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                               emp['name'] ?? 'Karyawan',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '${kpi['rating_label'] ?? 'Baik'} (${finalScore ?? '-'})',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primary,
-                                ),
-                              ),
+                            KpiStatusPill(
+                              label: '${kpi['rating_label'] ?? 'Baik'} (${finalScore ?? '-'})',
+                              color: AppTheme.statusApproved,
+                              icon: Icons.verified_rounded,
                             ),
                           ],
                         ),

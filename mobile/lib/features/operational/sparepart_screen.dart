@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 
@@ -112,10 +113,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                     children: [
                       // Permintaan sparepart menunggu fulfillment (Gudang)
                       if (auth.isGudang && _requests.isNotEmpty) ...[
-                        const Text(
-                          'Permintaan Menunggu Diserahkan',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textInk),
-                        ),
+                        const KpiSectionHeader(title: 'Permintaan menunggu diserahkan'),
                         const SizedBox(height: 8),
                         ..._requests.map((req) => Card(
                               margin: const EdgeInsets.only(bottom: 8),

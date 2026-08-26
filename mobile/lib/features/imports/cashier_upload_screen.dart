@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 
 class CashierUploadScreen extends StatefulWidget {
@@ -227,10 +228,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
 
           if (_previewData != null) ...[
             const SizedBox(height: 24),
-            const Text(
-              'Hasil Preview Analisis File:',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
-            ),
+            const KpiSectionHeader(title: 'Hasil preview analisis file'),
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -247,20 +245,10 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (_hasErrors ? AppTheme.statusDanger : AppTheme.primary).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            _hasErrors ? 'PERLU DIPERBAIKI' : 'READY TO COMMIT',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: _hasErrors ? AppTheme.statusDanger : AppTheme.primary,
-                            ),
-                          ),
+                        KpiStatusPill(
+                          label: _hasErrors ? 'Perlu diperbaiki' : 'Siap diproses',
+                          color: _hasErrors ? AppTheme.statusDanger : AppTheme.statusApproved,
+                          icon: _hasErrors ? Icons.error_outline_rounded : Icons.check_circle_rounded,
                         ),
                       ],
                     ),
