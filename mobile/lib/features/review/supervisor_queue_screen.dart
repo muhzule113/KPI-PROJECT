@@ -83,20 +83,10 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
             const SizedBox(height: 14),
 
             if (_queue.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                alignment: Alignment.center,
-                child: const Column(
-                  children: [
-                    Icon(Icons.check_circle_outline_rounded, color: AppTheme.primary, size: 48),
-                    SizedBox(height: 12),
-                    Text(
-                      'Tidak ada submission yang perlu direview saat ini.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.textMuted),
-                    ),
-                  ],
-                ),
+              const KpiEmptyState(
+                icon: Icons.check_circle_outline_rounded,
+                title: 'Review sudah beres',
+                message: 'Tidak ada submission yang perlu direview saat ini.',
               )
             else
               ..._queue.map((kpi) {

@@ -183,20 +183,10 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
             const SizedBox(height: 14),
 
             if (_queue.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                alignment: Alignment.center,
-                child: const Column(
-                  children: [
-                    Icon(Icons.verified_rounded, color: AppTheme.primary, size: 48),
-                    SizedBox(height: 12),
-                    Text(
-                      'Semua pengajuan KPI telah disetujui.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.textMuted),
-                    ),
-                  ],
-                ),
+              const KpiEmptyState(
+                icon: Icons.verified_rounded,
+                title: 'Approval sudah beres',
+                message: 'Semua pengajuan KPI telah disetujui.',
               )
             else
               ..._queue.map((kpi) {
