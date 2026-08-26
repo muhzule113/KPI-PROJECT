@@ -8,7 +8,6 @@ import '../imports/cashier_upload_screen.dart';
 import '../my_kpi/my_kpi_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../operational/tickets_list_screen.dart';
-import '../operational/sparepart_screen.dart';
 import '../profile/profile_screen.dart';
 import '../review/supervisor_queue_screen.dart';
 
@@ -58,20 +57,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // Bottom nav utama — max 5 item (rule bottom-nav-limit).
       // Item sekunder (Review/Approval/Laporan Kasir) dipindah ke overflow menu di AppBar.
+      final hasOperations = auth.isTeknisi || auth.isCs || auth.isGudang;
       final List<Widget> tabs = [
         _buildHomeTab(auth, employee),
-        if (auth.isTeknisi || auth.isCs || auth.isGudang) const TicketsListScreen(),
-        if (auth.isGudang) const SparepartScreen(),
+        if (hasOperations) const TicketsListScreen(),
         const MyKpiScreen(),
         const ProfileScreen(),
       ];
 
+      // Empat area utama ala referensi: Beranda, Operasional, KPI Saya, Profil.
+      // Inventory Gudang dibuka dari area Operasional; menu supervisor/manager/kasir
+      // tetap tersedia melalui overflow AppBar.
       final List<BottomNavigationBarItem> navItems = [
         const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: 'Beranda'),
-        if (auth.isTeknisi || auth.isCs || auth.isGudang)
-          const BottomNavigationBarItem(icon: Icon(Icons.build_circle_rounded), label: 'Tiket Servis'),
-        if (auth.isGudang)
-          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Inventory'),
+        if (hasOperations)
+          const BottomNavigationBarItem(icon: Icon(Icons.build_circle_rounded), label: 'Operasional'),
         const BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_rounded), label: 'KPI Saya'),
         const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profil'),
       ];
@@ -132,7 +132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           type: BottomNavigationBarType.fixed,
           selectedItemColor: AppTheme.primary,
           unselectedItemColor: AppTheme.textMuted,
-          backgroundColor: Colors.white,
+          backgroundColor: AppTheme.surface,
           elevation: 8,
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
@@ -294,7 +294,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Text(
                               activePeriod['name'],
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: AppTheme.surface,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
@@ -313,7 +313,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(
                       activePeriod['submission_deadline'].toString().split('T')[0],
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppTheme.surface,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
@@ -482,7 +482,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppTheme.border),
         ),

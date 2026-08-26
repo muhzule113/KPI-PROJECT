@@ -5,6 +5,7 @@ import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 import 'create_ticket_screen.dart';
 import 'customer_pickup_screen.dart';
+import 'sparepart_screen.dart';
 import 'ticket_progress_screen.dart';
 
 class TicketsListScreen extends StatefulWidget {
@@ -76,6 +77,16 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
       appBar: AppBar(
         title: const Text('Tiket Servis HP Operasional'),
         actions: [
+          if (auth.isGudang)
+            IconButton(
+              icon: const Icon(Icons.inventory_2_rounded),
+              tooltip: 'Inventory',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SparepartScreen()),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.sync_rounded),
             tooltip: 'Sync ke KPI',
@@ -113,7 +124,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               },
               backgroundColor: AppTheme.primary,
               icon: const Icon(Icons.add_rounded, color: Colors.white),
-              label: const Text('Tiket Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              label: const Text('Tiket Baru', style: TextStyle(color: AppTheme.surface, fontWeight: FontWeight.bold)),
             )
           : null,
       body: RefreshIndicator(

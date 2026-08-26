@@ -98,7 +98,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppTheme.border),
               ),

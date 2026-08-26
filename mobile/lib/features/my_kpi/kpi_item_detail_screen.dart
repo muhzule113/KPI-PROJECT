@@ -130,7 +130,7 @@ class _KpiItemDetailScreenState extends State<KpiItemDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppTheme.border),
               ),

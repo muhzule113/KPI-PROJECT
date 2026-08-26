@@ -153,7 +153,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppTheme.border, style: BorderStyle.solid),
             ),
@@ -185,7 +185,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(color: AppTheme.surface, strokeWidth: 2),
                         )
                       : const Text('Pilih & Upload File'),
                 ),
@@ -338,7 +338,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                child: CircularProgressIndicator(color: AppTheme.surface, strokeWidth: 2),
                               )
                             : const Text('Konfirmasi & Terapkan ke KPI Kasir'),
                       ),

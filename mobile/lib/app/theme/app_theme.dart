@@ -117,7 +117,57 @@ class AppTheme {
         labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textInk),
         labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textMuted),
       ),
-      // ElevatedButton pressed state — pakai primaryPressed biar ada depth
+      // Shared Material 3 components — berlaku untuk semua role/screen.
+      chipTheme: ChipThemeData(
+        backgroundColor: surface,
+        selectedColor: primary.withValues(alpha: 0.12),
+        disabledColor: border.withValues(alpha: 0.5),
+        side: const BorderSide(color: border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textInk),
+        secondaryLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: primary),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surface,
+        elevation: 3,
+        height: 72,
+        indicatorColor: primary.withValues(alpha: 0.12),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? primary : textMuted,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(color: selected ? primary : textMuted, size: 24);
+        }),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: surface,
+        elevation: 3,
+        selectedItemColor: primary,
+        unselectedItemColor: textMuted,
+        selectedLabelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusLg)),
+        titleTextStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textInk),
+        contentTextStyle: const TextStyle(fontSize: 14, height: 1.5, color: textInk),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMd)),
+        contentTextStyle: const TextStyle(fontSize: 14, color: Colors.white),
+        insetPadding: const EdgeInsets.all(spaceLg),
+      ),
+      dividerTheme: const DividerThemeData(color: border, thickness: 1, space: 1),
       splashFactory: InkRipple.splashFactory,
     );
   }

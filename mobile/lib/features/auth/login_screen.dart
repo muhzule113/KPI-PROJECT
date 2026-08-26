@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: const Icon(
                     Icons.assessment_rounded,
-                    color: Colors.white,
+                    color: AppTheme.surface,
                     size: 36,
                   ),
                 ),
@@ -185,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: color,
       ),
       label: Text(label, style: const TextStyle(fontSize: 12)),
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: const BorderSide(color: AppTheme.border),

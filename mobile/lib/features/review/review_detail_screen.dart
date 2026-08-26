@@ -110,7 +110,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -247,7 +247,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppTheme.border),
             ),
