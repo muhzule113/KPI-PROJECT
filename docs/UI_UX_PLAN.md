@@ -157,8 +157,16 @@ Sebelum deliver, cek:
 - **Login:** brand header gradient + badge "Mode Demo"
 
 ### Belum dikerjakan (backlog)
-- [ ] Fase 4 — Design DNA (screenshot → DNA JSON → refine ke referensi premium) — opsional, kalau mau
+- [x] Fase 4 — Design DNA (docs/design-dna-mobile.json) — ✅ SELESAI
 - [ ] Uji manual visual di device (perlu emulator/device)
+- [ ] Skeleton shimmer loading untuk data-heavy screens (sesuai mobile-principles) — enhancement lanjutan
+
+### Fase 4 — Design DNA (selesai)
+- **Output:** `docs/design-dna-mobile.json` (valid, JSON) — profil 3 dimensi:
+  - **design_system:** tokens persis dari AppTheme — primary #047857, spacing 4/8/12/16/24/32, radius 8/12/16/20, text scale, motion 250ms ease-out
+  - **design_style:** emerald "health check" aesthetic, corporate SaaS internal tool, profesional-tapi-ramah
+  - **visual_effects:** subtle-accent, native Flutter (no WebGL/particle), reduced-motion respected
+- DNA bisa dipakai ulang untuk refresh web (Filament) atau referensi proyek lain
 
 ---
 
