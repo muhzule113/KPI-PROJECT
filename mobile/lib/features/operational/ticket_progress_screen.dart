@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 
@@ -324,6 +325,51 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     }
   }
 
+  String _ticketStatusLabel(String status) {
+    const labels = {
+      'intake': 'Intake',
+      'diagnosing': 'Diagnosa',
+      'waiting_sparepart': 'Menunggu part',
+      'in_progress': 'Dikerjakan',
+      'qc_ready': 'Siap QC',
+      'completed': 'Selesai',
+      'delivered': 'Diserahkan',
+    };
+    return labels[status] ?? status;
+  }
+
+  Color _ticketStatusColor(String status) {
+    switch (status) {
+      case 'completed':
+      case 'delivered':
+        return AppTheme.statusApproved;
+      case 'waiting_sparepart':
+        return AppTheme.statusRevision;
+      case 'in_progress':
+      case 'diagnosing':
+      case 'qc_ready':
+        return AppTheme.statusSubmitted;
+      default:
+        return AppTheme.statusDraft;
+    }
+  }
+
+  IconData _ticketStatusIcon(String status) {
+    switch (status) {
+      case 'completed':
+      case 'delivered':
+        return Icons.check_circle_rounded;
+      case 'waiting_sparepart':
+        return Icons.inventory_2_rounded;
+      case 'in_progress':
+      case 'diagnosing':
+      case 'qc_ready':
+        return Icons.build_circle_rounded;
+      default:
+        return Icons.assignment_rounded;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -360,16 +406,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                       "${ticket['device_brand']} ${ticket['device_model']}",
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textInk),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        ticket['status'].toString().toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.primary),
-                      ),
+                    KpiStatusPill(
+                      label: _ticketStatusLabel(ticket['status'].toString()),
+                      color: _ticketStatusColor(ticket['status'].toString()),
+                      icon: _ticketStatusIcon(ticket['status'].toString()),
                     ),
                   ],
                 ),
