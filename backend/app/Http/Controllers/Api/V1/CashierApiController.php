@@ -23,6 +23,15 @@ class CashierApiController extends Controller
             'period_id' => 'nullable|integer',
         ]);
 
+        // Import laporan kasir hanya boleh dilakukan Kasir / manager / supervisor.
+        $user = $request->user()->loadMissing('employee');
+        if (!$this->isCashierAuthorized($user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya Kasir yang dapat mengunggah laporan kasir.',
+            ], 403);
+        }
+
         $period = $request->period_id 
             ? KpiPeriod::find($request->period_id) 
             : KpiPeriod::where('status', 'OPEN')->orderByDesc('id')->first();
@@ -66,6 +75,24 @@ class CashierApiController extends Controller
             return response()->json(['success' => false, 'message' => 'Batch import tidak ditemukan.'], 404);
         }
 
+        $user = $request->user()->loadMissing('employee');
+        if (!$this->isCashierAuthorized($user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya Kasir yang dapat mengonfirmasi import laporan kasir.',
+            ], 403);
+        }
+
+        // Ownership: kasir hanya bisa konfirmasi batch yang dia unggah sendiri.
+        // Manager / supervisor boleh konfirmasi batch siapa pun (fallback operasional).
+        $isManagerial = $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
+        if (!$isManagerial && $batch->uploader_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Batch import ini bukan milik Anda.',
+            ], 403);
+        }
+
         try {
             $result = $this->importService->confirmAndCommit($batch, $request->user()->id);
             return response()->json([
@@ -80,5 +107,22 @@ class CashierApiController extends Controller
         } catch (Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
+    }
+
+    /**
+     * Akses import laporan kasir: hanya Kasir (POS-KSR) / manager / supervisor.
+     */
+    private function isCashierAuthorized($user): bool
+    {
+        if ($user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor'])) {
+            return true;
+        }
+
+        $employee = $user->employee;
+        if (!$employee || !$employee->position) {
+            return false;
+        }
+
+        return $employee->position->code === 'POS-KSR';
     }
 }

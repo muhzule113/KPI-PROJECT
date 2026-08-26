@@ -293,6 +293,18 @@ class ServiceTicketApiController extends Controller
 
         $user = $request->user()->loadMissing('employee');
 
+        // Serah terima & CSAT hanya boleh dilakukan CS (intake) / manager / supervisor.
+        // Teknisi tidak boleh deliver + mengisi rating kepuasan untuk pekerjaannya sendiri (mencegah inflasi CSAT/KPI).
+        $positionCode = $user->employee?->position?->code;
+        $isCs = $positionCode === 'POS-CS';
+        $isManagerial = $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
+        if (!$isCs && !$isManagerial) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya CS (Customer Service) yang dapat melakukan serah terima dan mencatat CSAT.',
+            ], 403);
+        }
+
         DB::transaction(function () use ($ticket, $request, $user) {
             $ticket->status = 'delivered';
             $ticket->delivered_at = now();
@@ -345,8 +357,18 @@ class ServiceTicketApiController extends Controller
         ]);
     }
 
-    public function sparepartRequests(): JsonResponse
+    public function sparepartRequests(Request $request): JsonResponse
     {
+        $user = $request->user()->loadMissing('employee');
+
+        // Daftar permintaan pending hanya untuk Gudang / manager / supervisor.
+        if (!$this->isWarehouseAuthorized($user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya Gudang yang dapat melihat daftar permintaan sparepart.',
+            ], 403);
+        }
+
         $requests = SparepartRequest::with(['sparepart', 'ticket', 'technician'])
             ->where('status', 'pending')
             ->orderByDesc('created_at')
@@ -386,6 +408,16 @@ class ServiceTicketApiController extends Controller
 
         $user = $request->user()->loadMissing('employee');
 
+        $ticket = ServiceTicket::where('id', $request->service_ticket_id)->first();
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Tiket tidak ditemukan.'], 404);
+        }
+
+        // Teknisi hanya boleh request sparepart untuk tiket miliknya (ownership check).
+        if (!$this->authorizeTicketAccess($ticket)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses ke tiket ini.'], 403);
+        }
+
         $req = SparepartRequest::create([
             'service_ticket_id' => $request->service_ticket_id,
             'sparepart_id' => $request->sparepart_id,
@@ -411,6 +443,14 @@ class ServiceTicketApiController extends Controller
         }
 
         $user = $request->user()->loadMissing('employee');
+
+        // Penyerahan sparepart hanya boleh dilakukan Gudang / manager / supervisor.
+        if (!$this->isWarehouseAuthorized($user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya Gudang yang dapat menyerahkan sparepart.',
+            ], 403);
+        }
 
         DB::transaction(function () use ($req, $user) {
             $req->status = 'fulfilled';
@@ -535,5 +575,22 @@ class ServiceTicketApiController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Akses warehouse (sparepart): hanya Gudang / manager / supervisor yang berwenang.
+     */
+    private function isWarehouseAuthorized($user): bool
+    {
+        if ($user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor'])) {
+            return true;
+        }
+
+        $employee = $user->employee;
+        if (!$employee || !$employee->position) {
+            return false;
+        }
+
+        return $employee->position->code === 'POS-GUD';
     }
 }
