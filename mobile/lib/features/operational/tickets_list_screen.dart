@@ -131,6 +131,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear_rounded),
+                        tooltip: 'Bersihkan pencarian',
                         onPressed: () => setState(() => _searchController.clear()),
                       )
                     : null,
@@ -257,7 +258,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                                 ),
                                 child: Text(
                                   _formatStatus(status),
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _getStatusColor(status)),
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _getStatusColor(status)),
                                 ),
                               ),
                             ],

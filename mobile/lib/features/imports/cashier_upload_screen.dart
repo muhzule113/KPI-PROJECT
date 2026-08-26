@@ -256,7 +256,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                           child: Text(
                             _hasErrors ? 'PERLU DIPERBAIKI' : 'READY TO COMMIT',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: _hasErrors ? AppTheme.statusDanger : AppTheme.primary,
                             ),
@@ -321,7 +321,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                               Expanded(
                                 child: Text(
                                   'Baris ${issue['row']}: ${issue['message']}',
-                                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textInk),
+                                  style: const TextStyle(fontSize: 12, color: AppTheme.textInk),
                                 ),
                               ),
                             ],
@@ -391,7 +391,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
         children: [
           Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: color)),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
         ],
       ),
     );

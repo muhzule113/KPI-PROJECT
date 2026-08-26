@@ -368,7 +368,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                       ),
                       child: Text(
                         ticket['status'].toString().toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.primary),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.primary),
                       ),
                     ),
                   ],
@@ -574,10 +574,37 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
             DropdownButtonFormField<String>(
               initialValue: _selectedResultStatus,
               decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-              items: const [
-                DropdownMenuItem(value: 'success', child: Text('✅ Berhasil Diperbaiki (Sukses)')),
-                DropdownMenuItem(value: 'unrepairable', child: Text('❌ Gagal / Tidak Dapat Diperbaiki')),
-                DropdownMenuItem(value: 'warranty_return', child: Text('⚠️ Retur Garansi')),
+              items: [
+                const DropdownMenuItem(
+                  value: 'success',
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: AppTheme.statusApproved, size: 18),
+                      SizedBox(width: 8),
+                      Text('Berhasil Diperbaiki (Sukses)', style: TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                ),
+                const DropdownMenuItem(
+                  value: 'unrepairable',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cancel_rounded, color: AppTheme.statusDanger, size: 18),
+                      SizedBox(width: 8),
+                      Text('Gagal / Tidak Dapat Diperbaiki', style: TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                ),
+                const DropdownMenuItem(
+                  value: 'warranty_return',
+                  child: Row(
+                    children: [
+                      Icon(Icons.autorenew_rounded, color: AppTheme.statusRevision, size: 18),
+                      SizedBox(width: 8),
+                      Text('Retur Garansi', style: TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                ),
               ],
               onChanged: (val) => setState(() => _selectedResultStatus = val ?? 'success'),
             ),

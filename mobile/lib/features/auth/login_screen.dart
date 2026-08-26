@@ -58,14 +58,25 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 // Brand Header
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.primary, Color(0xFF059669)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: const Icon(
                     Icons.assessment_rounded,
-                    color: AppTheme.primary,
+                    color: Colors.white,
                     size: 36,
                   ),
                 ),
@@ -87,7 +98,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppTheme.textMuted,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.statusRevision.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Mode Demo — gunakan akun di bawah',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.statusRevision),
+                  ),
+                ),
+                const SizedBox(height: 28),
 
                 // Form
                 TextField(
@@ -107,6 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      tooltip: _obscurePassword ? 'Tampilkan kata sandi' : 'Sembunyikan kata sandi',
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),

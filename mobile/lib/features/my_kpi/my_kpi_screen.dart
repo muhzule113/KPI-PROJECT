@@ -261,7 +261,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Target', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                                const Text('Target', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                                 Text(
                                   '${item['target_value']} ${item['target_unit']}',
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -271,7 +271,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Nilai Aktual', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                                const Text('Nilai Aktual', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                                 Text(
                                   _actualLabel(item),
                                   style: TextStyle(
@@ -284,6 +284,33 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             ),
                           ],
                         ),
+                        if (isFilled && _isPercentageMetric(item)) ...[
+                          const SizedBox(height: 12),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Stack(
+                              children: [
+                                Container(height: 8, color: AppTheme.border),
+                                AnimatedContainer(
+                                  duration: MediaQuery.disableAnimationsOf(context)
+                                      ? Duration.zero
+                                      : const Duration(milliseconds: 250),
+                                  curve: Curves.easeOut,
+                                  height: 8,
+                                  width: MediaQuery.sizeOf(context).width * _progressRatio(item),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [AppTheme.primary, Color(0xFF059669)],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         if (isRevision) ...[
                           const SizedBox(height: 10),
                           Container(
@@ -328,6 +355,22 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
         ),
       ),
     );
+  }
+
+  /// Hanya tampilkan progress bar untuk metrik rasio/persentase (punya target terukur 0-100).
+  bool _isPercentageMetric(Map<String, dynamic> item) {
+    final unit = (item['target_unit'] ?? '').toString().toLowerCase();
+    final metric = (item['metric_type'] ?? '').toString().toLowerCase();
+    // Persentase / rasio: tampilkan. Hitungan absolut (unit: servis, kali, dll): jangan.
+    return unit.contains('%') || metric.contains('percentage') || metric.contains('ratio');
+  }
+
+  /// Rasio pencapaian aktual vs target, di-clamp 0..1 (untuk progress bar).
+  double _progressRatio(Map<String, dynamic> item) {
+    final target = double.tryParse((item['target_value'] ?? '').toString()) ?? 0;
+    final actual = double.tryParse((item['actual_decimal'] ?? '').toString());
+    if (actual == null || target <= 0) return 0;
+    return (actual / target).clamp(0.0, 1.0);
   }
 
   String _actualLabel(Map<String, dynamic> item) {

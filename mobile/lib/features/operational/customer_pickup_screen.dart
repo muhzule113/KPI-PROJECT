@@ -105,6 +105,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
                 final starValue = index + 1;
                 return IconButton(
                   iconSize: 40,
+                  tooltip: 'Berikan $starValue bintang',
                   icon: Icon(
                     starValue <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
                     color: Colors.amber[700],
@@ -150,11 +151,11 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
 
   String _ratingLabel(int r) {
     switch (r) {
-      case 5: return '⭐⭐⭐⭐⭐ Sangat Puas (5/5)';
-      case 4: return '⭐⭐⭐⭐ Puas (4/5)';
-      case 3: return '⭐⭐⭐ Cukup (3/5)';
-      case 2: return '⭐⭐ Kurang Puas (2/5)';
-      default: return '⭐ Kecewa / Komplain (1/5)';
+      case 5: return 'Sangat Puas (5/5)';
+      case 4: return 'Puas (4/5)';
+      case 3: return 'Cukup (3/5)';
+      case 2: return 'Kurang Puas (2/5)';
+      default: return 'Kecewa / Komplain (1/5)';
     }
   }
 }

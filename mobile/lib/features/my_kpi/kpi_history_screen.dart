@@ -111,7 +111,7 @@ class _KpiHistoryScreenState extends State<KpiHistoryScreen> {
                 ),
                 Text(
                   h['rating_label'] ?? '',
-                  style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                 ),
               ],
             ),

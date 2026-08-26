@@ -135,7 +135,7 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
                                 child: Text(
                                   _formatStatus(status),
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: _getStatusColor(status),
                                   ),

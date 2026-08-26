@@ -135,7 +135,11 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                         'Checklist Rubrik: ${item['code']}',
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx, false)),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Tutup',
+                        onPressed: () => Navigator.pop(ctx, false),
+                      ),
                     ],
                   ),
                   const Text(
@@ -305,7 +309,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                           child: Text(
                             isVerified ? 'Terverifikasi' : 'Belum Diverifikasi',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: isVerified ? AppTheme.primary : AppTheme.statusRevision,
                             ),

@@ -110,7 +110,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           const SizedBox(height: 4),
                           Text(
                             notif['created_at'].toString().split('T')[0],
-                            style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                           ),
                         ],
                       ),

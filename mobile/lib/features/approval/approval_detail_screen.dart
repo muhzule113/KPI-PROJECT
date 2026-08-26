@@ -266,7 +266,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                           child: Text(
                             item['code'] ?? '',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.primary,
                             ),
@@ -274,7 +274,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                         ),
                         Text(
                           'Bobot ${item['weight']}%',
-                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                         ),
                       ],
                     ),
@@ -302,7 +302,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                               Expanded(
                                 child: Text(
                                   e['file_name'] ?? '',
-                                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -348,7 +348,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+        Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
       ],
     );

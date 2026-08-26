@@ -52,80 +52,122 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final employee = auth.employee;
+    Widget build(BuildContext context) {
+      final auth = context.watch<AuthProvider>();
+      final employee = auth.employee;
 
-    // Tabs based on roles
-    final List<Widget> tabs = [
-      _buildHomeTab(auth, employee),
-      if (auth.isTeknisi || auth.isCs || auth.isGudang) const TicketsListScreen(),
-      if (auth.isGudang) const SparepartScreen(),
-      const MyKpiScreen(),
-      if (auth.isSupervisor) const SupervisorQueueScreen(),
-      if (auth.isManager) const ManagerApprovalScreen(),
-      if (auth.isKasir) const CashierUploadScreen(),
-      const ProfileScreen(),
-    ];
+      // Bottom nav utama — max 5 item (rule bottom-nav-limit).
+      // Item sekunder (Review/Approval/Laporan Kasir) dipindah ke overflow menu di AppBar.
+      final List<Widget> tabs = [
+        _buildHomeTab(auth, employee),
+        if (auth.isTeknisi || auth.isCs || auth.isGudang) const TicketsListScreen(),
+        if (auth.isGudang) const SparepartScreen(),
+        const MyKpiScreen(),
+        const ProfileScreen(),
+      ];
 
-    final List<BottomNavigationBarItem> navItems = [
-      const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: 'Beranda'),
-      if (auth.isTeknisi || auth.isCs || auth.isGudang)
-        const BottomNavigationBarItem(icon: Icon(Icons.build_circle_rounded), label: 'Tiket Servis'),
-      if (auth.isGudang)
-        const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Inventory'),
-      const BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_rounded), label: 'KPI Saya'),
-      if (auth.isSupervisor)
-        const BottomNavigationBarItem(icon: Icon(Icons.rate_review_rounded), label: 'Review Tim'),
-      if (auth.isManager)
-        const BottomNavigationBarItem(icon: Icon(Icons.verified_user_rounded), label: 'Approval'),
-      if (auth.isKasir)
-        const BottomNavigationBarItem(icon: Icon(Icons.upload_file_rounded), label: 'Laporan Kasir'),
-      const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profil'),
-    ];
+      final List<BottomNavigationBarItem> navItems = [
+        const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: 'Beranda'),
+        if (auth.isTeknisi || auth.isCs || auth.isGudang)
+          const BottomNavigationBarItem(icon: Icon(Icons.build_circle_rounded), label: 'Tiket Servis'),
+        if (auth.isGudang)
+          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Inventory'),
+        const BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_rounded), label: 'KPI Saya'),
+        const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profil'),
+      ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
+      // Pastikan index aktif valid terhadap daftar yang berubah per role
+      if (_currentIndex >= tabs.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _currentIndex = 0);
+        });
+      }
+
+      return Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.assessment_rounded, color: AppTheme.primary, size: 20),
               ),
-              child: const Icon(Icons.assessment_rounded, color: AppTheme.primary, size: 20),
+              const SizedBox(width: 8),
+              const Text('Sistem KPI Toko HP'),
+            ],
+          ),
+          actions: [
+            if (auth.isSupervisor || auth.isManager || auth.isKasir)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded),
+                tooltip: 'Menu lainnya',
+                onSelected: _openSecondaryScreen,
+                itemBuilder: (context) => [
+                  if (auth.isSupervisor)
+                    PopupMenuItem(value: 'supervisor', child: _menuItem(Icons.rate_review_rounded, 'Review Tim')),
+                  if (auth.isManager)
+                    PopupMenuItem(value: 'manager', child: _menuItem(Icons.verified_user_rounded, 'Approval')),
+                  if (auth.isKasir)
+                    PopupMenuItem(value: 'cashier', child: _menuItem(Icons.upload_file_rounded, 'Laporan Kasir')),
+                ],
+              ),
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded),
+              tooltip: 'Notifikasi',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                );
+              },
             ),
-            const SizedBox(width: 8),
-            const Text('Sistem KPI Toko HP'),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const NotificationScreen()),
-              );
-            },
-          ),
+        body: _currentIndex < tabs.length ? tabs[_currentIndex] : tabs[0],
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentIndex >= navItems.length ? 0 : _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: AppTheme.primary,
+          unselectedItemColor: AppTheme.textMuted,
+          backgroundColor: Colors.white,
+          elevation: 8,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          items: navItems,
+        ),
+      );
+    }
+
+    void _openSecondaryScreen(String value) {
+      switch (value) {
+        case 'supervisor':
+          _pushScreen(const SupervisorQueueScreen());
+          break;
+        case 'manager':
+          _pushScreen(const ManagerApprovalScreen());
+          break;
+        case 'cashier':
+          _pushScreen(const CashierUploadScreen());
+          break;
+      }
+    }
+
+    void _pushScreen(Widget screen) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    }
+
+    Widget _menuItem(IconData icon, String label) {
+      return Row(
+        children: [
+          Icon(icon, size: 20, color: AppTheme.textInk),
+          const SizedBox(width: 10),
+          Text(label, style: const TextStyle(fontSize: 14)),
         ],
-      ),
-      body: _currentIndex < tabs.length ? tabs[_currentIndex] : tabs[0],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex >= navItems.length ? 0 : _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppTheme.primary,
-        unselectedItemColor: AppTheme.textMuted,
-        backgroundColor: Colors.white,
-        elevation: 8,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-        unselectedLabelStyle: const TextStyle(fontSize: 12),
-        items: navItems,
-      ),
-    );
-  }
+      );
+    }
 
   Widget _buildHomeTab(AuthProvider auth, Map<String, dynamic>? employee) {
     if (_isLoading) {
@@ -164,14 +206,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Greeting Banner
-            Text(
-              'Halo, ${employee?['name'] ?? 'Karyawan'} 👋',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.textInk),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${employee?['position'] ?? 'Staff'} • ${employee?['branch'] ?? 'Cabang Pusat'}',
-              style: const TextStyle(fontSize: 14, color: AppTheme.textMuted),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.4), width: 2),
+                  ),
+                  child: CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
+                    child: Text(
+                      (employee?['name'] ?? 'K').toString().isNotEmpty
+                          ? (employee?['name'] ?? 'K').toString()[0].toUpperCase()
+                          : 'K',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Halo, ${employee?['name'] ?? 'Karyawan'}',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${employee?['position'] ?? 'Staff'} • ${employee?['branch'] ?? 'Cabang Pusat'}',
+                        style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
 
@@ -211,7 +284,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               child: const Text(
                                 'PERIODE AKTIF',
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF14140F),
                                 ),
@@ -297,12 +370,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 14),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: (myKpi['progress_percentage'] as num) / 100.0,
-                          minHeight: 8,
-                          backgroundColor: AppTheme.border,
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                        child: Stack(
+                          children: [
+                            Container(
+                              height: 10,
+                              color: AppTheme.border,
+                            ),
+                            AnimatedContainer(
+                              duration: MediaQuery.disableAnimationsOf(context)
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 250),
+                              curve: Curves.easeOut,
+                              height: 10,
+                              width: MediaQuery.sizeOf(context).width * ((myKpi['progress_percentage'] as num) / 100.0),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppTheme.primary, Color(0xFF059669)],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${(myKpi['progress_percentage'] as num).toInt()}% terisi',
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            '${myKpi['filled_items']} / ${myKpi['total_items']} indikator',
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                          ),
+                        ],
                       ),
                       if (myKpi['final_score'] != null) ...[
                         const SizedBox(height: 16),
@@ -391,7 +496,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),
           ],
         ),

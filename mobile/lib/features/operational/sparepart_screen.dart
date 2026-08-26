@@ -173,7 +173,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                                     ),
                                     Text(
                                       'Min: ${sp['min_stock'] ?? 0}',
-                                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                      style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                                     ),
                                   ],
                                 ),
