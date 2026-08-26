@@ -123,6 +123,11 @@ class ServiceTicketApiController extends Controller
             return response()->json(['success' => false, 'message' => 'Tiket tidak ditemukan.'], 404);
         }
 
+        // Teknisi hanya boleh lihat tiket miliknya
+        if (!$this->authorizeTicketAccess($ticket)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses ke tiket ini.'], 403);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $this->formatTicket($ticket, true),
@@ -140,8 +145,24 @@ class ServiceTicketApiController extends Controller
             return response()->json(['success' => false, 'message' => 'Tiket sudah selesai, tidak bisa diubah teknisi.'], 422);
         }
 
-        // Teknisi bisa claim sendiri; CS/supervisor bisa assign teknisi lain via technician_employee_id
+        // Teknisi: hanya bisa claim tiket yang belum punya teknisi (atau tiket miliknya sendiri)
         $employee = $request->user()->employee;
+        $isTechnician = $employee?->position?->code === 'POS-TEK';
+
+        if ($isTechnician) {
+            $targetId = $request->input('technician_employee_id') ?? $employee->id;
+            // Teknisi tidak boleh mengubah penugasan tiket orang lain
+            if ($targetId !== $employee->id) {
+                return response()->json(['success' => false, 'message' => 'Teknisi hanya bisa mengambil tiket untuk dirinya sendiri.'], 403);
+            }
+            // Tidak boleh claim tiket yang sudah ditugaskan ke teknisi lain
+            if ($ticket->technician_employee_id !== null && $ticket->technician_employee_id !== $employee->id) {
+                return response()->json(['success' => false, 'message' => 'Tiket ini sudah ditugaskan ke teknisi lain.'], 403);
+            }
+        } elseif (!in_array($employee?->position?->code, ['POS-CS', 'POS-GUD']) && !$request->user()->hasAnyRole(['owner_manager', 'super_admin', 'supervisor'])) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak berhak menugaskan teknisi.'], 403);
+        }
+
         $technicianId = $request->input('technician_employee_id') ?? $employee?->id;
 
         if (!$technicianId) {
@@ -179,6 +200,11 @@ class ServiceTicketApiController extends Controller
             return response()->json(['success' => false, 'message' => 'Tiket tidak ditemukan.'], 404);
         }
 
+        // Teknisi hanya bisa update tiket miliknya
+        if (!$this->authorizeTicketAccess($ticket)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses ke tiket ini.'], 403);
+        }
+
         $ticket->diagnosis_notes = $request->diagnosis_notes ?? $ticket->diagnosis_notes;
         $ticket->action_notes = $request->action_notes ?? $ticket->action_notes;
         if ($request->status) {
@@ -211,6 +237,11 @@ class ServiceTicketApiController extends Controller
         $ticket = ServiceTicket::where('id', $id)->first();
         if (!$ticket) {
             return response()->json(['success' => false, 'message' => 'Tiket tidak ditemukan.'], 404);
+        }
+
+        // Teknisi hanya bisa complete tiket miliknya
+        if (!$this->authorizeTicketAccess($ticket)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak memiliki akses ke tiket ini.'], 403);
         }
 
         $ticket->status = 'completed';
@@ -460,5 +491,37 @@ class ServiceTicketApiController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Otentikasi akses tiket: teknisi hanya boleh akses tiket miliknya.
+     * CS (intake/feedback), Gudang (fulfill), manager & super admin boleh semua.
+     */
+    private function authorizeTicketAccess(ServiceTicket $ticket): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+
+        // Manager/supervisor/super_admin: full access
+        if ($user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor'])) {
+            return true;
+        }
+
+        $employee = $user->employee;
+        if (!$employee) return false;
+
+        $positionCode = $employee->position?->code;
+
+        // CS & Gudang: full access (mereka terlibat di intake/fulfill/feedback)
+        if (in_array($positionCode, ['POS-CS', 'POS-GUD'])) {
+            return true;
+        }
+
+        // Teknisi: hanya tiket miliknya (atau belum ditugaskan)
+        if ($positionCode === 'POS-TEK') {
+            return $ticket->technician_employee_id === null || $ticket->technician_employee_id === $employee->id;
+        }
+
+        return false;
     }
 }

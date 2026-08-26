@@ -32,8 +32,51 @@ class ServiceTicketResource extends Resource
     {
         return \App\Support\MenuAccess::can(
             auth()->user(),
-            [],
+            ['owner_manager', 'super_admin'],
             ['POS-TEK', 'POS-CS', 'POS-GUD']
+        );
+    }
+
+    /** Hanya CS (intake) & manager yang membuat tiket servis baru. */
+    public static function canCreate(): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['owner_manager', 'super_admin'],
+            ['POS-CS']
+        );
+    }
+
+    /** Teknisi boleh edit hanya tiket miliknya; CS/Gudang/manager boleh semua. */
+    public static function canEdit($record): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+
+        if ($user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor'])) return true;
+
+        $employee = $user->employee;
+        if (!$employee) return false;
+
+        $position = $employee->position?->code;
+
+        if (in_array($position, ['POS-CS', 'POS-GUD'])) return true;
+
+        // Teknisi: hanya tiket miliknya
+        if ($position === 'POS-TEK') {
+            return $record->technician_employee_id === $employee->id;
+        }
+
+        return false;
+    }
+
+    /** Hanya CS & manager yang boleh menghapus tiket. */
+    public static function canDelete($record): bool
+    {
+        return \App\Support\MenuAccess::can(
+            auth()->user(),
+            ['owner_manager', 'super_admin'],
+            ['POS-CS']
         );
     }
 
@@ -89,19 +132,11 @@ class ServiceTicketResource extends Resource
                             ->label('Teknisi yang Ditugaskan')
                             ->relationship('technicianEmployee', 'name', fn($q) => $q->whereHas('position', fn($p) => $p->where('code', 'POS-TEK')))
                             ->searchable()
-                            ->preload(),
+                            ->preload()
+                            ->disabled(fn() => auth()->user()?->employee?->position?->code === 'POS-TEK'),
                         Forms\Components\Select::make('status')
                             ->label('Status Pengerjaan')
-                            ->options([
-                                'intake' => 'Intake (Diterima CS)',
-                                'diagnosing' => 'Sedang Diagnosa',
-                                'waiting_sparepart' => 'Menunggu Sparepart',
-                                'in_progress' => 'Sedang Dikerjakan',
-                                'qc_ready' => 'Siap QC / Selesai Teknisi',
-                                'completed' => 'Selesai Sukses',
-                                'cancelled_unrepairable' => 'Batal / Tidak Dapat Diperbaiki',
-                                'delivered' => 'Unit Diserahkan ke Pelanggan',
-                            ])
+                            ->options(fn(?ServiceTicket $record) => static::statusOptions($record))
                             ->default('intake')
                             ->required(),
                         Forms\Components\Select::make('result_status')
@@ -228,6 +263,43 @@ class ServiceTicketResource extends Resource
                         }
                     }),
             ]);
+    }
+
+    /**
+     * Opsi status pengerjaan. Teknisi hanya bisa menggeser tiket lewat status
+     * pengerjaan (intake → diagnosing → dll → qc_ready); completed/delivered
+     * hanya CS & manager yang bisa set.
+     */
+    protected static function statusOptions(?ServiceTicket $record): array
+    {
+        $user = auth()->user();
+        if (!$user) return [];
+
+        $isManager = $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
+        $position = $user->employee?->position?->code;
+        $isTechnician = $position === 'POS-TEK';
+
+        if ($isManager || $isTechnician === false) {
+            // CS, Gudang, Manager: all status
+            return [
+                'intake' => 'Intake (Diterima CS)',
+                'diagnosing' => 'Sedang Diagnosa',
+                'waiting_sparepart' => 'Menunggu Sparepart',
+                'in_progress' => 'Sedang Dikerjakan',
+                'qc_ready' => 'Siap QC / Selesai Teknisi',
+                'completed' => 'Selesai Sukses',
+                'cancelled_unrepairable' => 'Batal / Tidak Dapat Diperbaiki',
+                'delivered' => 'Unit Diserahkan ke Pelanggan',
+            ];
+        }
+
+        // Teknisi: hanya status pengerjaan (tidak bisa langsung completed/delivered)
+        return [
+            'diagnosing' => 'Sedang Diagnosa',
+            'waiting_sparepart' => 'Menunggu Sparepart',
+            'in_progress' => 'Sedang Dikerjakan',
+            'qc_ready' => 'Siap QC / Selesai Teknisi',
+        ];
     }
 
     public static function getPages(): array
