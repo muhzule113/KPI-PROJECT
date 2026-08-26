@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import 'kpi_item_detail_screen.dart';
 import 'kpi_history_screen.dart';
@@ -141,13 +142,10 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                           color: _getStatusColor(status).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          _formatStatus(status),
-                          style: TextStyle(
-                            color: _getStatusColor(status),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
+                        child: KpiStatusPill(
+                          label: _formatStatus(status),
+                          color: _getStatusColor(status),
+                          icon: _getStatusIcon(status),
                         ),
                       ),
                     ],
@@ -400,6 +398,10 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
       case 'locked': return 'Terkunci';
       default: return status;
     }
+  }
+
+  IconData _getStatusIcon(String status) {
+    return kpiStatusPresentation(status)['icon'] as IconData;
   }
 
   Color _getStatusColor(String status) {

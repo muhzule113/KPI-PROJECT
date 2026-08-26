@@ -5,6 +5,9 @@ import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 import '../approval/manager_approval_screen.dart';
 import '../imports/cashier_upload_screen.dart';
+import '../operational/create_ticket_screen.dart';
+import '../operational/sparepart_screen.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../my_kpi/my_kpi_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../operational/tickets_list_screen.dart';
@@ -169,6 +172,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+  Widget _buildQuickActions(AuthProvider auth) {
+    final actions = <Widget>[];
+
+    if (auth.isCs) {
+      actions.add(KpiQuickAction(
+        icon: Icons.add_task_rounded,
+        label: 'Buat tiket',
+        onTap: () => _pushScreen(const CreateTicketScreen()),
+      ));
+    }
+    if (auth.isTeknisi || auth.isCs || auth.isGudang) {
+      actions.add(KpiQuickAction(
+        icon: Icons.build_circle_rounded,
+        label: 'Tiket servis',
+        onTap: () => setState(() => _currentIndex = 1),
+      ));
+    }
+    if (auth.isGudang) {
+      actions.add(KpiQuickAction(
+        icon: Icons.inventory_2_rounded,
+        label: 'Inventory',
+        color: AppTheme.statusVerified,
+        onTap: () => _pushScreen(const SparepartScreen()),
+      ));
+    }
+    if (auth.isKasir) {
+      actions.add(KpiQuickAction(
+        icon: Icons.upload_file_rounded,
+        label: 'Laporan kasir',
+        color: AppTheme.statusSubmitted,
+        onTap: () => _pushScreen(const CashierUploadScreen()),
+      ));
+    }
+    if (auth.isSupervisor) {
+      actions.add(KpiQuickAction(
+        icon: Icons.rate_review_rounded,
+        label: 'Review tim',
+        color: AppTheme.statusUnderReview,
+        onTap: () => _pushScreen(const SupervisorQueueScreen()),
+      ));
+    }
+    if (auth.isManager) {
+      actions.add(KpiQuickAction(
+        icon: Icons.verified_user_rounded,
+        label: 'Approval',
+        color: AppTheme.statusApproved,
+        onTap: () => _pushScreen(const ManagerApprovalScreen()),
+      ));
+    }
+
+    if (actions.isEmpty) {
+      actions.add(KpiQuickAction(
+        icon: Icons.assignment_turned_in_rounded,
+        label: 'Lihat KPI saya',
+        onTap: () => setState(() => _currentIndex = 2),
+      ));
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: actions.map((action) {
+        return SizedBox(width: (MediaQuery.sizeOf(context).width - 50) / 2, child: action);
+      }).toList(),
+    );
+  }
+
   Widget _buildHomeTab(AuthProvider auth, Map<String, dynamic>? employee) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -321,6 +391,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
+
+            const SizedBox(height: 24),
+
+            // Quick actions — role-aware, mengikuti pola shortcut pada referensi.
+            KpiSectionHeader(title: 'Akses cepat'),
+            const SizedBox(height: 12),
+            _buildQuickActions(auth),
 
             const SizedBox(height: 24),
 
