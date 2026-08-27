@@ -300,7 +300,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       trailing: const Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 14,
-                        color: AppTheme.textMuted,
                       ),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(

@@ -111,7 +111,6 @@ class AppSettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppTheme.spaceXl),
           OpsCard(
-            color: AppTheme.surfaceElevated,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

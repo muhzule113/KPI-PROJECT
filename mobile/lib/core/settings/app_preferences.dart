@@ -18,6 +18,7 @@ class AppPreferences extends ChangeNotifier {
     _themeMode = switch (themeName) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
+      'system' => ThemeMode.system,
       _ => ThemeMode.dark,
     };
     _reduceMotion = prefs.getBool(_reduceMotionKey) ?? false;

@@ -118,12 +118,15 @@ class OpsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = borderRadius ?? BorderRadius.circular(AppTheme.radiusLg);
     final surfaceColor =
-        color ?? (emphasized ? AppTheme.surfaceElevated : AppTheme.surface);
+        color ??
+        (emphasized
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : Theme.of(context).colorScheme.surface);
     final border =
         borderColor ??
         (emphasized
             ? AppTheme.primary.withValues(alpha: 0.36)
-            : AppTheme.border);
+            : Theme.of(context).dividerColor);
 
     final content = Container(
       margin: margin,
@@ -189,7 +192,10 @@ class _OpsTapScaleState extends State<OpsTapScale> {
 
   @override
   Widget build(BuildContext context) {
-    final scale = _pressed && !MediaQuery.disableAnimationsOf(context)
+    final scale =
+        _pressed &&
+            !AppTheme.reduceMotion &&
+            !MediaQuery.disableAnimationsOf(context)
         ? widget.pressedScale
         : 1.0;
 
@@ -251,7 +257,7 @@ class _OpsRevealState extends State<OpsReveal>
 
   void _scheduleStart() {
     if (!mounted) return;
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (AppTheme.reduceMotion || MediaQuery.disableAnimationsOf(context)) {
       _controller.value = 1;
       return;
     }
@@ -264,7 +270,7 @@ class _OpsRevealState extends State<OpsReveal>
 
   void _startNow() {
     if (!mounted) return;
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (AppTheme.reduceMotion || MediaQuery.disableAnimationsOf(context)) {
       _controller.value = 1;
       return;
     }
@@ -506,6 +512,9 @@ class OpsPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -515,8 +524,8 @@ class OpsPageHeader extends StatelessWidget {
             children: [
               Text(
                 eyebrow.toUpperCase(),
-                style: const TextStyle(
-                  color: AppTheme.primaryBright,
+                style: TextStyle(
+                  color: colors.primary,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.25,
@@ -528,11 +537,7 @@ class OpsPageHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle!,
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
                 ),
               ],
             ],
@@ -619,8 +624,11 @@ class OpsFormSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Material(
-      color: AppTheme.surfaceElevated,
+      color: colors.surfaceContainerHighest,
       borderRadius: const BorderRadius.vertical(
         top: Radius.circular(AppTheme.radiusXl),
       ),
@@ -651,7 +659,7 @@ class OpsFormSheet extends StatelessWidget {
                       width: 38,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: AppTheme.border,
+                        color: theme.dividerColor,
                         borderRadius: BorderRadius.circular(99),
                       ),
                     ),
@@ -659,8 +667,8 @@ class OpsFormSheet extends StatelessWidget {
                   const SizedBox(height: AppTheme.spaceLg),
                   Text(
                     eyebrow.toUpperCase(),
-                    style: const TextStyle(
-                      color: AppTheme.primaryBright,
+                    style: TextStyle(
+                      color: colors.primary,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.25,
@@ -687,11 +695,7 @@ class OpsFormSheet extends StatelessWidget {
                     const SizedBox(height: AppTheme.spaceXs),
                     Text(
                       subtitle!,
-                      style: const TextStyle(
-                        color: AppTheme.textMuted,
-                        fontSize: 13,
-                        height: 1.45,
-                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
                     ),
                   ],
                   const SizedBox(height: AppTheme.spaceXl),
@@ -1032,11 +1036,13 @@ class _OpsSelectionSheetState<T> extends State<_OpsSelectionSheet<T>> {
                   itemBuilder: (context, index) {
                     final option = filtered[index];
                     final selected = option.value == widget.selectedValue;
+                    final theme = Theme.of(context);
+                    final colors = theme.colorScheme;
                     return OpsTapScale(
                       child: Material(
                         color: selected
-                            ? AppTheme.primary.withValues(alpha: 0.14)
-                            : AppTheme.surface,
+                            ? colors.primary.withValues(alpha: 0.14)
+                            : colors.surface,
                         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(
@@ -1065,28 +1071,25 @@ class _OpsSelectionSheetState<T> extends State<_OpsSelectionSheet<T>> {
                                     children: [
                                       Text(
                                         option.label,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: AppTheme.textInk,
-                                        ),
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                       ),
                                       if (option.supportingText != null) ...[
                                         const SizedBox(height: 3),
                                         Text(
                                           option.supportingText!,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppTheme.textMuted,
-                                          ),
+                                          style: theme.textTheme.bodySmall,
                                         ),
                                       ],
                                     ],
                                   ),
                                 ),
                                 if (selected)
-                                  const Icon(
+                                  Icon(
                                     Icons.check_circle_rounded,
-                                    color: AppTheme.primaryBright,
+                                    color: colors.primary,
                                   ),
                               ],
                             ),
@@ -1120,11 +1123,13 @@ class OpsBottomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Material(
-        color: AppTheme.surface,
+        color: theme.colorScheme.surface,
         elevation: 10,
         shadowColor: AppTheme.shadow,
         shape: RoundedRectangleBorder(
@@ -1240,7 +1245,7 @@ class _OpsSkeletonState extends State<OpsSkeleton>
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (AppTheme.reduceMotion || MediaQuery.disableAnimationsOf(context)) {
       return Container(
         height: widget.height,
         width: widget.width,
