@@ -105,7 +105,8 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
       body: RefreshIndicator(
         onRefresh: _loadMyKpi,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          // Keep the last KPI card above the floating navigation surface.
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
           children: [
             // Status Header
             OpsReveal(

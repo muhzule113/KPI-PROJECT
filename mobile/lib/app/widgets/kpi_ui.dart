@@ -678,7 +678,7 @@ class OpsFormSheet extends StatelessWidget {
                       ),
                       IconButton(
                         tooltip: 'Tutup',
-                        onPressed: () => Navigator.of(context).pop(false),
+                        onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.close_rounded),
                       ),
                     ],

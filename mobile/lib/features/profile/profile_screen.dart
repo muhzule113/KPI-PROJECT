@@ -199,7 +199,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: RefreshIndicator(
         onRefresh: _loadProfile,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          // Keep the last account card above the floating navigation surface.
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
           children: [
             // Profile header
             OpsReveal(

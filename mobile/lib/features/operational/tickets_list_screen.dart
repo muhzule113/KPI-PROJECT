@@ -153,7 +153,8 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
       body: RefreshIndicator(
         onRefresh: _loadTickets,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          // Keep the last ticket card above the floating navigation surface.
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
             // Search & Filter
             TextField(

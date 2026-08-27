@@ -358,7 +358,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onRefresh: _loadDashboard,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        // Extra clearance for the floating bottom navigation on the shell.
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
