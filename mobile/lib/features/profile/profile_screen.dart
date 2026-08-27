@@ -5,6 +5,7 @@ import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 import '../auth/login_screen.dart';
+import '../settings/app_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -286,6 +287,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: EdgeInsets.zero,
                 child: Column(
                   children: [
+                    ListTile(
+                      leading: const Icon(Icons.tune_rounded),
+                      title: const Text(
+                        'Pengaturan aplikasi',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Tema dan preferensi tampilan',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: AppTheme.textMuted,
+                      ),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AppSettingsScreen(),
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
                     const ListTile(
                       leading: Icon(
                         Icons.info_outline_rounded,

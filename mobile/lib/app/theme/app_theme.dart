@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
+  static bool reduceMotion = false;
+
   // Ops Noir design tokens: graphite surfaces + satu aksen emerald.
   // Primary tetap Emerald 700 agar teks putih memenuhi WCAG AA.
   static const Color primary = Color(
@@ -40,7 +42,9 @@ class AppTheme {
   static const Curve motionState = Curves.easeInOutCubic;
 
   static Duration motion(BuildContext context, Duration duration) {
-    return MediaQuery.disableAnimationsOf(context) ? Duration.zero : duration;
+    return reduceMotion || MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : duration;
   }
 
   // Spacing tokens (8dp system)
@@ -58,6 +62,123 @@ class AppTheme {
   static const double radiusXl = 28;
 
   static ThemeData get lightTheme {
+    return ThemeData(
+      useMaterial3: true,
+      scaffoldBackgroundColor: const Color(0xFFF3F7F4),
+      canvasColor: const Color(0xFFF3F7F4),
+      fontFamily: 'Roboto',
+      brightness: Brightness.light,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primary,
+        primary: primary,
+        secondary: const Color(0xFF7AA22C),
+        surface: Colors.white,
+        brightness: Brightness.light,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFF3F7F4),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        foregroundColor: Color(0xFF10231A),
+        iconTheme: IconThemeData(color: Color(0xFF10231A)),
+        titleTextStyle: TextStyle(
+          color: Color(0xFF10231A),
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusLg),
+          side: const BorderSide(color: Color(0xFFC8D8CE)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: Color(0xFFC8D8CE)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: Color(0xFFC8D8CE)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: primary, width: 2),
+        ),
+        labelStyle: const TextStyle(color: Color(0xFF52675B)),
+        hintStyle: const TextStyle(color: Color(0xFF52675B)),
+        prefixIconColor: const Color(0xFF52675B),
+        suffixIconColor: const Color(0xFF52675B),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 52),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusLg),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primary,
+          minimumSize: const Size(double.infinity, 50),
+          side: const BorderSide(color: Color(0xFFC8D8CE)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusLg),
+          ),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white,
+        indicatorColor: primary.withValues(alpha: 0.15),
+        height: 72,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        modalBackgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusXl)),
+        ),
+      ),
+      textTheme: const TextTheme(
+        headlineMedium: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF10231A),
+        ),
+        titleLarge: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF10231A),
+        ),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF10231A),
+        ),
+        bodyMedium: TextStyle(fontSize: 14, color: Color(0xFF10231A)),
+        bodySmall: TextStyle(fontSize: 12, color: Color(0xFF52675B)),
+      ),
+    );
+  }
+
+  static ThemeData get darkTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: primary,
       primary: primary,
