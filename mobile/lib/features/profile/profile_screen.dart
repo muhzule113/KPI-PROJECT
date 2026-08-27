@@ -40,58 +40,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final currentController = TextEditingController();
     final newController = TextEditingController();
     final confirmController = TextEditingController();
+    var obscureCurrent = true;
+    var obscureNew = true;
+    var obscureConfirm = true;
 
-    final submitted = await showDialog<bool>(
+    final submitted = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ubah Kata Sandi'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: currentController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Kata Sandi Saat Ini',
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => OpsFormSheet(
+          eyebrow: 'Keamanan akun',
+          title: 'Ubah kata sandi',
+          subtitle:
+              'Gunakan kata sandi baru yang mudah kamu ingat, tetapi sulit ditebak.',
+          footer: ElevatedButton.icon(
+            onPressed: () => Navigator.of(sheetContext).pop(true),
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Simpan kata sandi'),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: currentController,
+                obscureText: obscureCurrent,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: 'Kata sandi saat ini',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: obscureCurrent
+                        ? 'Tampilkan kata sandi'
+                        : 'Sembunyikan kata sandi',
+                    onPressed: () =>
+                        setSheetState(() => obscureCurrent = !obscureCurrent),
+                    icon: Icon(
+                      obscureCurrent
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: newController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Kata Sandi Baru',
-                helperText: 'Minimal 8 karakter',
+              const SizedBox(height: AppTheme.spaceMd),
+              TextField(
+                controller: newController,
+                obscureText: obscureNew,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: 'Kata sandi baru',
+                  helperText: 'Minimal 8 karakter',
+                  prefixIcon: const Icon(Icons.key_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: obscureNew
+                        ? 'Tampilkan kata sandi'
+                        : 'Sembunyikan kata sandi',
+                    onPressed: () =>
+                        setSheetState(() => obscureNew = !obscureNew),
+                    icon: Icon(
+                      obscureNew
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: confirmController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Ulangi Kata Sandi Baru',
+              const SizedBox(height: AppTheme.spaceMd),
+              TextField(
+                controller: confirmController,
+                obscureText: obscureConfirm,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: 'Ulangi kata sandi baru',
+                  prefixIcon: const Icon(Icons.verified_user_outlined),
+                  suffixIcon: IconButton(
+                    tooltip: obscureConfirm
+                        ? 'Tampilkan kata sandi'
+                        : 'Sembunyikan kata sandi',
+                    onPressed: () =>
+                        setSheetState(() => obscureConfirm = !obscureConfirm),
+                    icon: Icon(
+                      obscureConfirm
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
-            child: const Text('Simpan'),
-          ),
-        ],
       ),
     );
+
+    final currentPassword = currentController.text;
+    final newPassword = newController.text;
+    final confirmPassword = confirmController.text;
+    currentController.dispose();
+    newController.dispose();
+    confirmController.dispose();
 
     if (submitted != true) return;
     if (!mounted) return;
 
-    if (newController.text.trim().length < 8) {
+    if (newPassword.trim().length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Kata sandi baru minimal 8 karakter.'),
@@ -100,7 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return;
     }
-    if (newController.text != confirmController.text) {
+    if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Konfirmasi kata sandi tidak cocok.'),
@@ -112,14 +166,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final res = await ApiService.post('/auth/change-password', {
-        'current_password': currentController.text,
-        'new_password': newController.text,
-        'new_password_confirmation': confirmController.text,
+        'current_password': currentPassword,
+        'new_password': newPassword,
+        'new_password_confirmation': confirmPassword,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Kata sandi berhasil diperbarui!'),
+          content: Text(res['message'] ?? 'Kata sandi berhasil diperbarui.'),
           backgroundColor: AppTheme.primary,
         ),
       );
@@ -145,7 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: RefreshIndicator(
         onRefresh: _loadProfile,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
           children: [
             // Profile header
             OpsReveal(

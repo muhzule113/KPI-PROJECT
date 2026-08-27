@@ -95,6 +95,7 @@ class KpiSectionHeader extends StatelessWidget {
 class OpsCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
   final VoidCallback? onTap;
   final Color? color;
   final Color? borderColor;
@@ -105,6 +106,7 @@ class OpsCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(AppTheme.spaceLg),
+    this.margin = const EdgeInsets.only(bottom: AppTheme.spaceMd),
     this.onTap,
     this.color,
     this.borderColor,
@@ -123,21 +125,24 @@ class OpsCard extends StatelessWidget {
             ? AppTheme.primary.withValues(alpha: 0.36)
             : AppTheme.border);
 
-    final content = Material(
-      color: surfaceColor,
-      borderRadius: radius,
-      clipBehavior: Clip.antiAlias,
-      elevation: emphasized ? 4 : 1,
-      shadowColor: emphasized
-          ? AppTheme.primary.withValues(alpha: 0.18)
-          : AppTheme.shadow,
-      child: Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          border: Border.all(color: border),
+    final content = Container(
+      margin: margin,
+      child: Material(
+        color: surfaceColor,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        elevation: emphasized ? 4 : 1,
+        shadowColor: emphasized
+            ? AppTheme.primary.withValues(alpha: 0.18)
+            : AppTheme.shadow,
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: border),
+          ),
+          child: child,
         ),
-        child: child,
       ),
     );
 
@@ -594,6 +599,174 @@ class OpsAdaptiveFieldRow extends StatelessWidget {
   }
 }
 
+/// Frame form premium yang terinspirasi pola Finvoice: handle, eyebrow,
+/// headline editorial, body scrollable, dan footer CTA yang aman terhadap IME.
+class OpsFormSheet extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+  final String? subtitle;
+  final Widget child;
+  final Widget? footer;
+
+  const OpsFormSheet({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    required this.child,
+    this.subtitle,
+    this.footer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.surfaceElevated,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppTheme.radiusXl),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppTheme.spaceXl,
+                AppTheme.spaceSm,
+                AppTheme.spaceXl,
+                AppTheme.spaceLg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.border,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spaceLg),
+                  Text(
+                    eyebrow.toUpperCase(),
+                    style: const TextStyle(
+                      color: AppTheme.primaryBright,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spaceSm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Tutup',
+                        onPressed: () => Navigator.of(context).pop(false),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: AppTheme.spaceXs),
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppTheme.spaceXl),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: child,
+                    ),
+                  ),
+                  if (footer != null) ...[
+                    const SizedBox(height: AppTheme.spaceLg),
+                    footer!,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Form teks satu langkah untuk catatan, alasan, atau keterangan operasional.
+/// Mengembalikan null saat dibatalkan dan teks apa adanya saat disimpan.
+Future<String?> showOpsTextInputSheet({
+  required BuildContext context,
+  required String eyebrow,
+  required String title,
+  required String label,
+  required String actionLabel,
+  String? subtitle,
+  String? hintText,
+  String? helperText,
+  int maxLines = 1,
+  Color? actionColor,
+}) async {
+  final controller = TextEditingController();
+  final result = await showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => OpsFormSheet(
+      eyebrow: eyebrow,
+      title: title,
+      subtitle: subtitle,
+      footer: ElevatedButton.icon(
+        onPressed: () => Navigator.of(sheetContext).pop(controller.text),
+        icon: const Icon(Icons.check_rounded),
+        label: Text(actionLabel),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: actionColor ?? AppTheme.primary,
+        ),
+      ),
+      child: TextField(
+        controller: controller,
+        autofocus: false,
+        maxLines: maxLines,
+        textInputAction: maxLines == 1
+            ? TextInputAction.done
+            : TextInputAction.newline,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hintText,
+          helperText: helperText,
+          alignLabelWithHint: maxLines > 1,
+        ),
+      ),
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
 class KpiQuickAction extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -950,23 +1123,25 @@ class OpsBottomNavigationBar extends StatelessWidget {
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
+      child: Material(
+        color: AppTheme.surface,
+        elevation: 10,
+        shadowColor: AppTheme.shadow,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusXl),
-          border: Border.all(color: AppTheme.border),
-          boxShadow: const [
-            BoxShadow(
-              color: AppTheme.shadow,
-              blurRadius: 24,
-              offset: Offset(0, -8),
-            ),
-          ],
+          side: const BorderSide(color: AppTheme.border),
         ),
-        child: NavigationBar(
-          selectedIndex: currentIndex,
-          onDestinationSelected: onTap,
-          destinations: destinations,
+        clipBehavior: Clip.antiAlias,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            selectedIndex: currentIndex,
+            onDestinationSelected: onTap,
+            destinations: destinations,
+          ),
         ),
       ),
     );

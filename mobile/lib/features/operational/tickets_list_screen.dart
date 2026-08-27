@@ -153,7 +153,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
       body: RefreshIndicator(
         onRefresh: _loadTickets,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             // Search & Filter
             TextField(

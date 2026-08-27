@@ -43,45 +43,22 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
   }
 
   Future<void> _approve(String kpiId, String empName) async {
-    final noteController = TextEditingController();
-    final confirm = await showDialog<bool>(
+    final note = await showOpsTextInputSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Approve KPI: $empName'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Dengan menyetujui, penilaian KPI ini akan dikunci (Locked) dan diterbitkan ke karyawan.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(
-                labelText: 'Catatan Approval (Opsional)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
-            child: const Text('Ya, Approve & Kunci'),
-          ),
-        ],
-      ),
+      eyebrow: 'Persetujuan KPI',
+      title: 'Approve KPI: $empName',
+      subtitle:
+          'Dengan menyetujui, penilaian KPI akan dikunci dan diterbitkan ke karyawan.',
+      label: 'Catatan approval (opsional)',
+      hintText: 'Tambahkan catatan jika diperlukan',
+      actionLabel: 'Approve & kunci',
+      maxLines: 3,
     );
-
-    if (confirm != true) return;
+    if (note == null) return;
 
     try {
       final res = await ApiService.post('/manager/approval/$kpiId/approve', {
-        'note': noteController.text.trim(),
+        'note': note.trim(),
       });
 
       if (mounted) {
@@ -106,41 +83,22 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
   }
 
   Future<void> _returnToSpv(String kpiId, String empName) async {
-    final reasonController = TextEditingController();
-    final confirm = await showDialog<bool>(
+    final reason = await showOpsTextInputSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Kembalikan KPI: $empName'),
-        content: TextField(
-          controller: reasonController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Alasan Pengembalian (Wajib)',
-            hintText: 'Jelaskan mengapa KPI perlu direview ulang...',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.statusDanger,
-              minimumSize: const Size(100, 40),
-            ),
-            child: const Text('Kembalikan'),
-          ),
-        ],
-      ),
+      eyebrow: 'Perlu ditinjau ulang',
+      title: 'Kembalikan KPI: $empName',
+      subtitle: 'Jelaskan bagian KPI yang perlu diperiksa dan diperbaiki.',
+      label: 'Alasan pengembalian (wajib)',
+      hintText: 'Jelaskan mengapa KPI perlu direview ulang...',
+      actionLabel: 'Kembalikan KPI',
+      actionColor: AppTheme.statusDanger,
+      maxLines: 4,
     );
-
-    if (confirm != true || reasonController.text.trim().isEmpty) return;
+    if (reason == null || reason.trim().isEmpty) return;
 
     try {
       final res = await ApiService.post('/manager/approval/$kpiId/return', {
-        'reason': reasonController.text.trim(),
+        'reason': reason.trim(),
       });
 
       if (mounted) {

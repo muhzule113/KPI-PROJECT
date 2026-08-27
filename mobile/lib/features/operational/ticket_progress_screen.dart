@@ -238,31 +238,25 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (sheetCtx, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+            return OpsFormSheet(
+              eyebrow: 'Permintaan gudang',
+              title: 'Request sparepart',
+              subtitle:
+                  'Pilih komponen yang dibutuhkan dan sertakan catatan untuk Gudang.',
+              footer: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(sheetCtx, true),
+                icon: const Icon(Icons.send_rounded),
+                label: const Text('Kirim request'),
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Request Sparepart ke Gudang',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textInk,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   OpsSelectionField<String>(
-                    label: 'Pilih Sparepart',
+                    label: 'Pilih sparepart',
                     hint: 'Pilih sparepart',
                     sheetTitle: 'Pilih sparepart',
                     searchable: true,
@@ -279,7 +273,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                     onChanged: (value) =>
                         setSheetState(() => selectedId = value),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppTheme.spaceMd),
                   TextField(
                     controller: qtyController,
                     keyboardType: TextInputType.number,
@@ -288,21 +282,13 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                       suffixText: 'pcs',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppTheme.spaceMd),
                   TextField(
                     controller: notesController,
                     maxLines: 2,
                     decoration: const InputDecoration(
-                      labelText: 'Catatan (Opsional)',
+                      labelText: 'Catatan (opsional)',
                       hintText: 'mis. butuh LCD untuk Galaxy A52',
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(sheetCtx, true),
-                      child: const Text('Kirim Request'),
                     ),
                   ),
                 ],

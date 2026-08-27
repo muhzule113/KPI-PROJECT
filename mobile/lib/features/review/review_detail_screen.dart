@@ -46,38 +46,20 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   Future<void> _verifyItem(String itemId, String decision) async {
     String? reason;
     if (decision == 'revision_required') {
-      final reasonController = TextEditingController();
-      final confirmed = await showDialog<bool>(
+      final revisionReason = await showOpsTextInputSheet(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Minta Revisi Indikator'),
-          content: TextField(
-            controller: reasonController,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Alasan Revisi (Wajib)',
-              hintText: 'Jelaskan data atau bukti apa yang belum sesuai...',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.statusRevision,
-                minimumSize: const Size(100, 40),
-              ),
-              child: const Text('Minta Revisi'),
-            ),
-          ],
-        ),
+        eyebrow: 'Review indikator',
+        title: 'Minta revisi indikator',
+        subtitle:
+            'Catat data atau bukti yang belum sesuai untuk ditindaklanjuti.',
+        label: 'Alasan revisi (wajib)',
+        hintText: 'Jelaskan data atau bukti apa yang belum sesuai...',
+        actionLabel: 'Minta revisi',
+        actionColor: AppTheme.statusRevision,
+        maxLines: 4,
       );
-
-      if (confirmed != true || reasonController.text.trim().isEmpty) return;
-      reason = reasonController.text.trim();
+      if (revisionReason == null || revisionReason.trim().isEmpty) return;
+      reason = revisionReason.trim();
     }
 
     try {
@@ -130,74 +112,43 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            return OpsFormSheet(
+              eyebrow: 'Penilaian supervisor',
+              title: 'Checklist rubrik: ${item['code']}',
+              subtitle:
+                  'Centang setiap kriteria yang dipenuhi berdasarkan observasi Anda.',
+              footer: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                icon: const Icon(Icons.calculate_rounded),
+                label: const Text('Simpan & hitung skor'),
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Checklist Rubrik: ${item['code']}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                children: criteria.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final c = entry.value;
+                  return CheckboxListTile(
+                    value: checked[idx] ?? false,
+                    onChanged: (val) =>
+                        setModalState(() => checked[idx] = val ?? false),
+                    title: Text(
+                      c['criterion_text'],
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      '${c['points']} Poin',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.primaryBright,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Tutup',
-                        onPressed: () => Navigator.pop(ctx, false),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    'Centang setiap kriteria yang dipenuhi oleh karyawan berdasarkan observasi Anda.',
-                    style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                  ),
-                  const SizedBox(height: 16),
-                  ...criteria.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final c = entry.value;
-                    return CheckboxListTile(
-                      value: checked[idx] ?? false,
-                      onChanged: (val) =>
-                          setModalState(() => checked[idx] = val ?? false),
-                      title: Text(
-                        c['criterion_text'],
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        '${c['points']} Poin',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                      activeColor: AppTheme.primary,
-                      contentPadding: EdgeInsets.zero,
-                    );
-                  }),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Simpan & Hitung Skor Rubrik'),
-                  ),
-                ],
+                    ),
+                    activeColor: AppTheme.primary,
+                    contentPadding: EdgeInsets.zero,
+                  );
+                }).toList(),
               ),
             );
           },

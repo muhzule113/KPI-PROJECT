@@ -100,7 +100,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
-      extendBody: true,
       appBar: AppBar(
         titleSpacing: 20,
         title: Row(
@@ -359,7 +358,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onRefresh: _loadDashboard,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

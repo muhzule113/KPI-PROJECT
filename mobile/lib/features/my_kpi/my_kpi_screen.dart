@@ -105,7 +105,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
       body: RefreshIndicator(
         onRefresh: _loadMyKpi,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
           children: [
             // Status Header
             OpsReveal(

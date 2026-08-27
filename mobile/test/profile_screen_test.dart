@@ -71,8 +71,8 @@ void main() {
       // Tile ubah password ada & bisa dibuka
       await tester.tap(find.text('Ubah Kata Sandi'));
       await tester.pumpAndSettle();
-      expect(find.text('Kata Sandi Saat Ini'), findsOneWidget);
-      expect(find.text('Kata Sandi Baru'), findsOneWidget);
+      expect(find.text('Kata sandi saat ini'), findsOneWidget);
+      expect(find.text('Kata sandi baru'), findsOneWidget);
     },
   );
 }
