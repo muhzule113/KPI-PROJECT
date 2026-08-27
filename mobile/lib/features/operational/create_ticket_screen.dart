@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 
 class CreateTicketScreen extends StatefulWidget {
@@ -81,9 +82,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Buat Tiket Servis Masuk (CS)'),
-      ),
+      appBar: AppBar(title: const Text('Buat Tiket Servis Masuk (CS)')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -91,7 +90,11 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           children: [
             const Text(
               'Informasi Pelanggan',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textInk,
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -101,7 +104,9 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 hintText: 'e.g. Budi Santoso',
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Nama pelanggan wajib diisi' : null,
+              validator: (v) => v == null || v.trim().isEmpty
+                  ? 'Nama pelanggan wajib diisi'
+                  : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -112,60 +117,58 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                 hintText: 'e.g. 081234567890',
                 prefixIcon: Icon(Icons.phone_outlined),
               ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Nomor HP/WA wajib diisi' : null,
+              validator: (v) => v == null || v.trim().isEmpty
+                  ? 'Nomor HP/WA wajib diisi'
+                  : null,
             ),
             const SizedBox(height: 24),
 
             const Text(
               'Informasi Perangkat HP',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textInk,
+              ),
             ),
             const SizedBox(height: 12),
-            Row(
+            OpsAdaptiveFieldRow(
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _brandController,
-                    decoration: const InputDecoration(
-                      labelText: 'Merek HP *',
-                      hintText: 'e.g. Apple / Samsung',
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                TextFormField(
+                  controller: _brandController,
+                  decoration: const InputDecoration(
+                    labelText: 'Merek HP *',
+                    hintText: 'e.g. Apple / Samsung',
                   ),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _modelController,
-                    decoration: const InputDecoration(
-                      labelText: 'Tipe / Model *',
-                      hintText: 'e.g. iPhone 13 Pro',
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                TextFormField(
+                  controller: _modelController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipe / Model *',
+                    hintText: 'e.g. iPhone 13 Pro',
                   ),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Row(
+            OpsAdaptiveFieldRow(
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _imeiController,
-                    decoration: const InputDecoration(
-                      labelText: 'IMEI / Serial (Opsional)',
-                      hintText: 'e.g. 3567890...',
-                    ),
+                TextFormField(
+                  controller: _imeiController,
+                  decoration: const InputDecoration(
+                    labelText: 'IMEI / Serial (Opsional)',
+                    hintText: 'e.g. 3567890...',
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _passcodeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Pola / PIN Layar',
-                      hintText: 'Jika diizinkan',
-                    ),
+                TextFormField(
+                  controller: _passcodeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Pola / PIN Layar',
+                    hintText: 'Jika diizinkan',
                   ),
                 ),
               ],
@@ -184,9 +187,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               maxLines: 3,
               decoration: const InputDecoration(
                 labelText: 'Keluhan Kerusakan Awal *',
-                hintText: 'Jelaskan gejala kerusakan (e.g. Layar mati total setelah jatuh, tidak respon saat dicas)...',
+                hintText:
+                    'Jelaskan gejala kerusakan (e.g. Layar mati total setelah jatuh, tidak respon saat dicas)...',
               ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Keluhan kerusakan wajib diisi' : null,
+              validator: (v) => v == null || v.trim().isEmpty
+                  ? 'Keluhan kerusakan wajib diisi'
+                  : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -199,11 +205,22 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             const SizedBox(height: 28),
 
-            ElevatedButton(
-              onPressed: _isSubmitting ? null : _submit,
-              child: _isSubmitting
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Buat Tiket Servis & Teruskan ke Teknisi'),
+            OpsReveal(
+              delay: const Duration(milliseconds: 80),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.arrow_forward_rounded),
+                onPressed: _isSubmitting ? null : _submit,
+                label: _isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Buat Tiket & Teruskan ke Teknisi'),
+              ),
             ),
             const SizedBox(height: 20),
           ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app/theme/app_theme.dart';
+import 'app/widgets/kpi_ui.dart';
 import 'core/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
@@ -13,9 +14,7 @@ void main() async {
 
   runApp(
     MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: authProvider),
-      ],
+      providers: [ChangeNotifierProvider.value(value: authProvider)],
       child: const KpiMobileApp(),
     ),
   );
@@ -32,7 +31,10 @@ class KpiMobileApp extends StatelessWidget {
       title: 'Sistem KPI Toko HP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: auth.isAuthenticated ? const DashboardScreen() : const LoginScreen(),
+      scrollBehavior: const OpsScrollBehavior(),
+      home: auth.isAuthenticated
+          ? const DashboardScreen()
+          : const LoginScreen(),
     );
   }
 }

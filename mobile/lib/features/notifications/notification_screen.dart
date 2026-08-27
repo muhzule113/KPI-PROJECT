@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -59,46 +60,58 @@ class _NotificationScreenState extends State<NotificationScreen> {
         actions: [
           TextButton(
             onPressed: _markAllRead,
-            child: const Text('Tandai Semua Dibaca', style: TextStyle(fontSize: 12, color: AppTheme.primary)),
+            child: const Text(
+              'Tandai Semua Dibaca',
+              style: TextStyle(fontSize: 12, color: AppTheme.primary),
+            ),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OpsScreenLoading(rows: 4)
           : _notifications.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.notifications_off_outlined, color: AppTheme.textMuted, size: 48),
-                      SizedBox(height: 12),
-                      Text('Belum ada notifikasi.', style: TextStyle(color: AppTheme.textMuted)),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _notifications.length,
-                  separatorBuilder: (_, index) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final notif = _notifications[index];
-                    final isRead = notif['is_read'] == true;
+          ? const KpiEmptyState(
+              icon: Icons.notifications_off_outlined,
+              title: 'Belum ada notifikasi',
+              message: 'Notifikasi aktivitas akun akan muncul di sini.',
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _notifications.length,
+              separatorBuilder: (_, index) => const Divider(),
+              itemBuilder: (context, index) {
+                final notif = _notifications[index];
+                final isRead = notif['is_read'] == true;
 
-                    return ListTile(
-                      onTap: () => _markRead(index),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      leading: CircleAvatar(
-                        backgroundColor: isRead ? Colors.grey[200] : AppTheme.primary.withValues(alpha: 0.15),
+                return OpsReveal(
+                  delay: Duration(milliseconds: 60 + (index * 35)),
+                  child: OpsCard(
+                    padding: EdgeInsets.zero,
+                    onTap: () => _markRead(index),
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isRead
+                              ? AppTheme.surfaceMuted
+                              : AppTheme.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
                         child: Icon(
                           Icons.notifications_active_rounded,
-                          color: isRead ? AppTheme.textMuted : AppTheme.primary,
+                          color: isRead
+                              ? AppTheme.textMuted
+                              : AppTheme.primaryBright,
                           size: 20,
                         ),
                       ),
                       title: Text(
                         notif['title'] ?? 'Notifikasi',
                         style: TextStyle(
-                          fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                          fontWeight: isRead
+                              ? FontWeight.normal
+                              : FontWeight.bold,
                           fontSize: 14,
                         ),
                       ),
@@ -106,17 +119,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 4),
-                          Text(notif['body'] ?? '', style: const TextStyle(fontSize: 12)),
+                          Text(
+                            notif['body'] ?? '',
+                            style: const TextStyle(fontSize: 12),
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             notif['created_at'].toString().split('T')[0],
-                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

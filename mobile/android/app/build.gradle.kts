@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.kpitoko.kpi_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // file_picker dependency requires Android API 36 or newer.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

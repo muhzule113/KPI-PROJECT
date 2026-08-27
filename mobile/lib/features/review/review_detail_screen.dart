@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 
 class ReviewDetailScreen extends StatefulWidget {
@@ -32,7 +33,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
         Navigator.pop(context);
       }
@@ -56,7 +60,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(
@@ -74,17 +81,26 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
 
     try {
-      await ApiService.post('/supervisor/review/${widget.kpiId}/items/$itemId/verify', {
-        'decision': decision,
-        'reason': reason,
-        'note': decision == 'valid' ? 'Data diverifikasi valid.' : null,
-      });
+      await ApiService.post(
+        '/supervisor/review/${widget.kpiId}/items/$itemId/verify',
+        {
+          'decision': decision,
+          'reason': reason,
+          'note': decision == 'valid' ? 'Data diverifikasi valid.' : null,
+        },
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(decision == 'valid' ? 'Indikator diverifikasi valid.' : 'Permintaan revisi dicatat.'),
-            backgroundColor: decision == 'valid' ? AppTheme.primary : AppTheme.statusRevision,
+            content: Text(
+              decision == 'valid'
+                  ? 'Indikator diverifikasi valid.'
+                  : 'Permintaan revisi dicatat.',
+            ),
+            backgroundColor: decision == 'valid'
+                ? AppTheme.primary
+                : AppTheme.statusRevision,
           ),
         );
         _loadDetail();
@@ -92,7 +108,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
       }
     }
@@ -110,6 +129,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -133,7 +153,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     children: [
                       Text(
                         'Checklist Rubrik: ${item['code']}',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -152,9 +175,19 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     final c = entry.value;
                     return CheckboxListTile(
                       value: checked[idx] ?? false,
-                      onChanged: (val) => setModalState(() => checked[idx] = val ?? false),
-                      title: Text(c['criterion_text'], style: const TextStyle(fontSize: 14)),
-                      subtitle: Text('${c['points']} Poin', style: const TextStyle(fontSize: 12, color: AppTheme.primary)),
+                      onChanged: (val) =>
+                          setModalState(() => checked[idx] = val ?? false),
+                      title: Text(
+                        c['criterion_text'],
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        '${c['points']} Poin',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.primary,
+                        ),
+                      ),
                       activeColor: AppTheme.primary,
                       contentPadding: EdgeInsets.zero,
                     );
@@ -186,20 +219,27 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }).toList();
 
     try {
-      await ApiService.post('/supervisor/review/${widget.kpiId}/items/${item['id']}/rubric', {
-        'answers': answers,
-      });
+      await ApiService.post(
+        '/supervisor/review/${widget.kpiId}/items/${item['id']}/rubric',
+        {'answers': answers},
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Penilaian rubrik checklist berhasil disimpan!'), backgroundColor: AppTheme.primary),
+          const SnackBar(
+            content: Text('Penilaian rubrik checklist berhasil disimpan!'),
+            backgroundColor: AppTheme.primary,
+          ),
         );
         _loadDetail();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
       }
     }
@@ -207,20 +247,29 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
   Future<void> _forwardToManager() async {
     try {
-      final res = await ApiService.post('/supervisor/review/${widget.kpiId}/forward', {
-        'notes': 'Semua indikator telah diverifikasi oleh Supervisor.',
-      });
+      final res = await ApiService.post(
+        '/supervisor/review/${widget.kpiId}/forward',
+        {'notes': 'Semua indikator telah diverifikasi oleh Supervisor.'},
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message'] ?? 'KPI berhasil diteruskan ke Manager!'), backgroundColor: AppTheme.primary),
+          SnackBar(
+            content: Text(
+              res['message'] ?? 'KPI berhasil diteruskan ke Manager!',
+            ),
+            backgroundColor: AppTheme.primary,
+          ),
         );
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
       }
     }
@@ -229,7 +278,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: OpsScreenLoading(rows: 5));
     }
 
     final detail = _detail!;
@@ -237,9 +286,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     final items = (detail['items'] as List<dynamic>?) ?? [];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Review: ${emp['name']}'),
-      ),
+      appBar: AppBar(title: Text('Review: ${emp['name']}')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -256,19 +303,34 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
               children: [
                 Text(
                   emp['name'] ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${emp['position']} • ${emp['branch']}',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Skor Sementara: ${detail['final_score'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text('Status: ${detail['status']}', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Skor Sementara: ${detail['final_score'] ?? '-'}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Status: ${detail['status']}',
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -278,7 +340,11 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
           const Text(
             'Verifikasi Indikator & Rubrik Observasi:',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textInk),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: AppTheme.textInk,
+            ),
           ),
           const SizedBox(height: 12),
 
@@ -286,86 +352,136 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             final isRubric = item['formula'] == 'rubric';
             final isVerified = item['status'] == 'verified';
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${item['code']} • Bobot ${item['weight']}%',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.primary),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: isVerified ? AppTheme.primary.withValues(alpha: 0.12) : AppTheme.statusRevision.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            isVerified ? 'Terverifikasi' : 'Belum Diverifikasi',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isVerified ? AppTheme.primary : AppTheme.statusRevision,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Target: ${item['target_value']} ${item['target_unit']}', style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-                        Text('Aktual: ${item['actual_decimal'] ?? '-'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Action buttons
-                    if (isRubric)
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.checklist_rounded, size: 18),
-                        label: const Text('Isi Checklist Rubrik SOP / Observasi'),
-                        onPressed: () => _openRubricChecklist(item),
-                      )
-                    else
+            return OpsReveal(
+              delay: Duration(milliseconds: 60 + (items.indexOf(item) * 35)),
+              child: OpsCard(
+                padding: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.check_rounded, size: 16),
-                              label: const Text('Valid'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isVerified ? AppTheme.primary : Colors.grey[200],
-                                foregroundColor: isVerified ? Colors.white : AppTheme.textInk,
-                                minimumSize: const Size(0, 38),
-                              ),
-                              onPressed: () => _verifyItem(item['id'], 'valid'),
+                          Text(
+                            '${item['code']} • Bobot ${item['weight']}%',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: AppTheme.primary,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.edit_note_rounded, size: 16),
-                              label: const Text('Minta Revisi'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.statusRevision,
-                                minimumSize: const Size(0, 38),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isVerified
+                                  ? AppTheme.primary.withValues(alpha: 0.12)
+                                  : AppTheme.statusRevision.withValues(
+                                      alpha: 0.12,
+                                    ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              isVerified
+                                  ? 'Terverifikasi'
+                                  : 'Belum Diverifikasi',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isVerified
+                                    ? AppTheme.primary
+                                    : AppTheme.statusRevision,
                               ),
-                              onPressed: () => _verifyItem(item['id'], 'revision_required'),
                             ),
                           ),
                         ],
                       ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        item['name'],
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 4,
+                        children: [
+                          Text(
+                            'Target: ${item['target_value']} ${item['target_unit']}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                          Text(
+                            'Aktual: ${item['actual_decimal'] ?? '-'}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Action buttons
+                      if (isRubric)
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.checklist_rounded, size: 18),
+                          label: const Text(
+                            'Isi Checklist Rubrik SOP / Observasi',
+                          ),
+                          onPressed: () => _openRubricChecklist(item),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.check_rounded, size: 16),
+                                label: const Text('Valid'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isVerified
+                                      ? AppTheme.primary
+                                      : Colors.grey[200],
+                                  foregroundColor: isVerified
+                                      ? Colors.white
+                                      : AppTheme.textInk,
+                                  minimumSize: const Size(0, 38),
+                                ),
+                                onPressed: () =>
+                                    _verifyItem(item['id'], 'valid'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(
+                                  Icons.edit_note_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text('Minta Revisi'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.statusRevision,
+                                  minimumSize: const Size(0, 38),
+                                ),
+                                onPressed: () => _verifyItem(
+                                  item['id'],
+                                  'revision_required',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
                 ),
               ),
             );

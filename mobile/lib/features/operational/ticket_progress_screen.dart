@@ -21,7 +21,8 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
   final _diagnosisController = TextEditingController();
   final _actionController = TextEditingController();
   final _costController = TextEditingController();
-  String _selectedResultStatus = 'success'; // success, unrepairable, warranty_return
+  String _selectedResultStatus =
+      'success'; // success, unrepairable, warranty_return
   bool _isSaving = false;
 
   final Map<String, bool> _qcChecks = {
@@ -55,13 +56,18 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
   Future<void> _loadTicket() async {
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.get('/operational/tickets/${widget.ticketId}');
+      final res = await ApiService.get(
+        '/operational/tickets/${widget.ticketId}',
+      );
       setState(() {
         _ticket = res['data'];
         _diagnosisController.text = _ticket?['diagnosis_notes'] ?? '';
         _actionController.text = _ticket?['action_notes'] ?? '';
-        _costController.text = (_ticket?['final_cost'] ?? _ticket?['estimated_cost'] ?? 0).toString();
-        if (_ticket?['result_status'] != null && _ticket!['result_status'] != 'pending') {
+        _costController.text =
+            (_ticket?['final_cost'] ?? _ticket?['estimated_cost'] ?? 0)
+                .toString();
+        if (_ticket?['result_status'] != null &&
+            _ticket!['result_status'] != 'pending') {
           _selectedResultStatus = _ticket!['result_status'];
         }
         if (_ticket?['qc_checklist'] != null) {
@@ -77,7 +83,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
         Navigator.pop(context);
       }
@@ -87,22 +96,31 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
   Future<void> _updateProgress(String status) async {
     setState(() => _isSaving = true);
     try {
-      await ApiService.post('/operational/tickets/${widget.ticketId}/update-progress', {
-        'status': status,
-        'diagnosis_notes': _diagnosisController.text.trim(),
-        'action_notes': _actionController.text.trim(),
-      });
+      await ApiService.post(
+        '/operational/tickets/${widget.ticketId}/update-progress',
+        {
+          'status': status,
+          'diagnosis_notes': _diagnosisController.text.trim(),
+          'action_notes': _actionController.text.trim(),
+        },
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Progress pengerjaan berhasil disimpan!'), backgroundColor: AppTheme.primary),
+          const SnackBar(
+            content: Text('Progress pengerjaan berhasil disimpan!'),
+            backgroundColor: AppTheme.primary,
+          ),
         );
         _loadTicket();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
       }
     } finally {
@@ -111,27 +129,38 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
   }
 
   Future<void> _completeTicket() async {
-    if (_diagnosisController.text.trim().isEmpty || _actionController.text.trim().isEmpty) {
+    if (_diagnosisController.text.trim().isEmpty ||
+        _actionController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Diagnosa dan tindakan servis wajib diisi untuk kelengkapan laporan KPI!')),
+        const SnackBar(
+          content: Text(
+            'Diagnosa dan tindakan servis wajib diisi untuk kelengkapan laporan KPI!',
+          ),
+        ),
       );
       return;
     }
 
     setState(() => _isSaving = true);
     try {
-      final res = await ApiService.post('/operational/tickets/${widget.ticketId}/complete', {
-        'result_status': _selectedResultStatus,
-        'diagnosis_notes': _diagnosisController.text.trim(),
-        'action_notes': _actionController.text.trim(),
-        'qc_checklist': _qcChecks,
-        'final_cost': double.tryParse(_costController.text.trim()) ?? 0,
-      });
+      final res = await ApiService.post(
+        '/operational/tickets/${widget.ticketId}/complete',
+        {
+          'result_status': _selectedResultStatus,
+          'diagnosis_notes': _diagnosisController.text.trim(),
+          'action_notes': _actionController.text.trim(),
+          'qc_checklist': _qcChecks,
+          'final_cost': double.tryParse(_costController.text.trim()) ?? 0,
+        },
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(res['message'] ?? 'Tiket berhasil diselesaikan dan dicatat ke KPI Teknisi!'),
+            content: Text(
+              res['message'] ??
+                  'Tiket berhasil diselesaikan dan dicatat ke KPI Teknisi!',
+            ),
             backgroundColor: AppTheme.primary,
           ),
         );
@@ -140,7 +169,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.statusDanger,
+          ),
         );
       }
     } finally {
@@ -150,7 +182,9 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
 
   Future<void> _claimTicket() async {
     try {
-      final res = await ApiService.post('/operational/tickets/${widget.ticketId}/assign');
+      final res = await ApiService.post(
+        '/operational/tickets/${widget.ticketId}/assign',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -162,7 +196,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -175,7 +212,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
       return;
     }
@@ -197,6 +237,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     final submitted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (sheetCtx, setSheetState) {
@@ -213,26 +254,39 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                 children: [
                   const Text(
                     'Request Sparepart ke Gudang',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textInk,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedId,
-                    decoration: const InputDecoration(labelText: 'Pilih Sparepart'),
-                    items: parts.map((p) {
+                  OpsSelectionField<String>(
+                    label: 'Pilih Sparepart',
+                    hint: 'Pilih sparepart',
+                    sheetTitle: 'Pilih sparepart',
+                    searchable: true,
+                    value: selectedId,
+                    options: parts.map((p) {
                       final stock = (p['stock'] as num?)?.toInt() ?? 0;
-                      return DropdownMenuItem(
+                      return OpsSelectionOption<String>(
                         value: p['id'].toString(),
-                        child: Text('${p['name']} (${p['code']}) — stok $stock'),
+                        label: p['name']?.toString() ?? 'Sparepart',
+                        supportingText: '${p['code'] ?? '-'} • Stok $stock pcs',
+                        icon: Icons.build_rounded,
                       );
                     }).toList(),
-                    onChanged: (val) => setSheetState(() => selectedId = val),
+                    onChanged: (value) =>
+                        setSheetState(() => selectedId = value),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: qtyController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Jumlah', suffixText: 'pcs'),
+                    decoration: const InputDecoration(
+                      labelText: 'Jumlah',
+                      suffixText: 'pcs',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -262,10 +316,18 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     if (submitted != true || selectedId == null) return;
 
     final qty = int.tryParse(qtyController.text.trim()) ?? 1;
-    await _requestSparepart(selectedId!, qty < 1 ? 1 : qty, notesController.text.trim());
+    await _requestSparepart(
+      selectedId!,
+      qty < 1 ? 1 : qty,
+      notesController.text.trim(),
+    );
   }
 
-  Future<void> _requestSparepart(String sparepartId, int quantity, String notes) async {
+  Future<void> _requestSparepart(
+    String sparepartId,
+    int quantity,
+    String notes,
+  ) async {
     try {
       final res = await ApiService.post('/operational/spareparts/request', {
         'service_ticket_id': widget.ticketId,
@@ -276,7 +338,9 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Permintaan sparepart terkirim ke Gudang.'),
+          content: Text(
+            res['message'] ?? 'Permintaan sparepart terkirim ke Gudang.',
+          ),
           backgroundColor: AppTheme.primary,
         ),
       );
@@ -284,7 +348,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -294,9 +361,14 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Serahkan Sparepart?'),
-        content: const Text('Sparepart akan ditandai diserahkan ke teknisi dan stok gudang terpotong.'),
+        content: const Text(
+          'Sparepart akan ditandai diserahkan ke teknisi dan stok gudang terpotong.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
@@ -308,7 +380,9 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     if (confirm != true) return;
 
     try {
-      final res = await ApiService.post('/operational/spareparts/fulfill/$requestId');
+      final res = await ApiService.post(
+        '/operational/spareparts/fulfill/$requestId',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -320,7 +394,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -378,8 +455,10 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
 
     final auth = context.watch<AuthProvider>();
     final ticket = _ticket!;
-    final isDone = ticket['status'] == 'completed' || ticket['status'] == 'delivered';
-    final sparepartRequests = (ticket['sparepart_requests'] as List<dynamic>?) ?? [];
+    final isDone =
+        ticket['status'] == 'completed' || ticket['status'] == 'delivered';
+    final sparepartRequests =
+        (ticket['sparepart_requests'] as List<dynamic>?) ?? [];
 
     return Scaffold(
       appBar: AppBar(
@@ -389,61 +468,98 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           // Device & Customer Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "${ticket['device_brand']} ${ticket['device_model']}",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textInk),
+          OpsReveal(
+            child: OpsHeroCard(
+              accent: _ticketStatusColor(ticket['status'].toString()),
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "${ticket['device_brand']} ${ticket['device_model']}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: AppTheme.textInk,
+                        ),
+                      ),
+                      KpiStatusPill(
+                        label: _ticketStatusLabel(ticket['status'].toString()),
+                        color: _ticketStatusColor(ticket['status'].toString()),
+                        icon: _ticketStatusIcon(ticket['status'].toString()),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Pelanggan: ${ticket['customer_name']} • ${ticket['customer_phone']}",
+                    style: const TextStyle(
+                      color: AppTheme.textMuted,
+                      fontSize: 13,
                     ),
-                    KpiStatusPill(
-                      label: _ticketStatusLabel(ticket['status'].toString()),
-                      color: _ticketStatusColor(ticket['status'].toString()),
-                      icon: _ticketStatusIcon(ticket['status'].toString()),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Teknisi: ${ticket['technician_name'] ?? 'Belum Ditugaskan'}",
+                    style: TextStyle(
+                      color: ticket['technician_employee_id'] == null
+                          ? AppTheme.statusRevision
+                          : AppTheme.textMuted,
+                      fontSize: 13,
+                      fontWeight: ticket['technician_employee_id'] == null
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Keluhan Kerusakan:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    ticket['initial_complaint'] ?? '-',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textInk,
+                    ),
+                  ),
+                  if (ticket['physical_condition'] != null) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Kondisi Fisik:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ticket['physical_condition'],
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textMuted,
+                      ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  "Pelanggan: ${ticket['customer_name']} • ${ticket['customer_phone']}",
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Teknisi: ${ticket['technician_name'] ?? 'Belum Ditugaskan'}",
-                  style: TextStyle(
-                    color: ticket['technician_employee_id'] == null ? AppTheme.statusRevision : AppTheme.textMuted,
-                    fontSize: 13,
-                    fontWeight: ticket['technician_employee_id'] == null ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 8),
-                const Text('Keluhan Kerusakan:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.textMuted)),
-                const SizedBox(height: 2),
-                Text(ticket['initial_complaint'] ?? '-', style: const TextStyle(fontSize: 14, color: AppTheme.textInk)),
-                if (ticket['physical_condition'] != null) ...[
-                  const SizedBox(height: 8),
-                  const Text('Kondisi Fisik:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.textMuted)),
-                  const SizedBox(height: 2),
-                  Text(ticket['physical_condition'], style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
                 ],
-              ],
+              ),
             ),
           ),
           // Claim button — teknisi mengambil tiket yang belum ditugaskan
-          if (!isDone && auth.isTeknisi && ticket['technician_employee_id'] == null) ...[
+          if (!isDone &&
+              auth.isTeknisi &&
+              ticket['technician_employee_id'] == null) ...[
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -465,16 +581,23 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.play_arrow_rounded, size: 18),
                     label: const Text('Mulai Servis'),
-                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 42)),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(0, 42),
+                    ),
                     onPressed: () => _updateProgress('in_progress'),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.pause_circle_outline_rounded, size: 18),
+                    icon: const Icon(
+                      Icons.pause_circle_outline_rounded,
+                      size: 18,
+                    ),
                     label: const Text('Tunggu Part'),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42)),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 42),
+                    ),
                     onPressed: () => _updateProgress('waiting_sparepart'),
                   ),
                 ),
@@ -499,10 +622,15 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
             const SizedBox(height: 20),
             const Text(
               'Permintaan Sparepart',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textInk,
+              ),
             ),
             const SizedBox(height: 8),
-            Card(
+            OpsCard(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: sparepartRequests.map((r) {
                   final isPending = r['status'] == 'pending';
@@ -510,27 +638,38 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                     dense: true,
                     leading: Icon(
                       Icons.inventory_2_outlined,
-                      color: isPending ? AppTheme.statusRevision : AppTheme.primary,
+                      color: isPending
+                          ? AppTheme.statusRevision
+                          : AppTheme.primary,
                     ),
                     title: Text('${r['part_name']} × ${r['quantity']}'),
                     subtitle: Text(r['part_code'] ?? ''),
                     trailing: isPending
                         ? (auth.isGudang
-                            ? FilledButton(
-                                onPressed: () => _fulfillSparepart(r['id'].toString()),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(0, 34),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                                ),
-                                child: const Text('Serahkan'),
-                              )
-                            : const Text(
-                                'Menunggu Gudang',
-                                style: TextStyle(fontSize: 12, color: AppTheme.statusRevision),
-                              ))
+                              ? FilledButton(
+                                  onPressed: () =>
+                                      _fulfillSparepart(r['id'].toString()),
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size(0, 34),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                  ),
+                                  child: const Text('Serahkan'),
+                                )
+                              : const Text(
+                                  'Menunggu Gudang',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.statusRevision,
+                                  ),
+                                ))
                         : const Text(
                             'Diserahkan',
-                            style: TextStyle(fontSize: 12, color: AppTheme.primary),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.primary,
+                            ),
                           ),
                   );
                 }).toList(),
@@ -541,7 +680,11 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           // Diagnosis & Actions
           const Text(
             'Catatan Diagnosa & Tindakan Teknisi',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textInk,
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
@@ -578,7 +721,11 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           // QC Checklist
           const Text(
             'Quality Control (QC) Checklist Pengujian HP',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textInk,
+            ),
           ),
           const SizedBox(height: 6),
           const Text(
@@ -587,7 +734,8 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           ),
           const SizedBox(height: 12),
 
-          Card(
+          OpsCard(
+            padding: EdgeInsets.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Column(
@@ -596,8 +744,12 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                     value: _qcChecks[key] ?? false,
                     onChanged: (isDone || !auth.isTeknisi)
                         ? null
-                        : (val) => setState(() => _qcChecks[key] = val ?? false),
-                    title: Text(_qcLabels[key] ?? key, style: const TextStyle(fontSize: 13)),
+                        : (val) =>
+                              setState(() => _qcChecks[key] = val ?? false),
+                    title: Text(
+                      _qcLabels[key] ?? key,
+                      style: const TextStyle(fontSize: 13),
+                    ),
                     activeColor: AppTheme.primary,
                     dense: true,
                     contentPadding: EdgeInsets.zero,
@@ -609,44 +761,41 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           const SizedBox(height: 20),
 
           if (!isDone && auth.isTeknisi) ...[
-            const Text('Hasil Akhir Servis:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              'Hasil Akhir Servis:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedResultStatus,
-              decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-              items: [
-                const DropdownMenuItem(
+            OpsSelectionField<String>(
+              label: 'Hasil servis',
+              hint: 'Pilih hasil akhir servis',
+              sheetTitle: 'Pilih hasil akhir servis',
+              value: _selectedResultStatus,
+              options: const [
+                OpsSelectionOption<String>(
                   value: 'success',
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: AppTheme.statusApproved, size: 18),
-                      SizedBox(width: 8),
-                      Text('Berhasil Diperbaiki (Sukses)', style: TextStyle(fontSize: 13)),
-                    ],
-                  ),
+                  label: 'Berhasil diperbaiki',
+                  supportingText: 'Unit dapat digunakan kembali',
+                  icon: Icons.check_circle_rounded,
+                  color: AppTheme.statusApproved,
                 ),
-                const DropdownMenuItem(
+                OpsSelectionOption<String>(
                   value: 'unrepairable',
-                  child: Row(
-                    children: [
-                      Icon(Icons.cancel_rounded, color: AppTheme.statusDanger, size: 18),
-                      SizedBox(width: 8),
-                      Text('Gagal / Tidak Dapat Diperbaiki', style: TextStyle(fontSize: 13)),
-                    ],
-                  ),
+                  label: 'Tidak dapat diperbaiki',
+                  supportingText: 'Servis tidak dapat dilanjutkan',
+                  icon: Icons.cancel_rounded,
+                  color: AppTheme.statusDanger,
                 ),
-                const DropdownMenuItem(
+                OpsSelectionOption<String>(
                   value: 'warranty_return',
-                  child: Row(
-                    children: [
-                      Icon(Icons.autorenew_rounded, color: AppTheme.statusRevision, size: 18),
-                      SizedBox(width: 8),
-                      Text('Retur Garansi', style: TextStyle(fontSize: 13)),
-                    ],
-                  ),
+                  label: 'Retur garansi',
+                  supportingText: 'Unit diarahkan ke proses garansi',
+                  icon: Icons.autorenew_rounded,
+                  color: AppTheme.statusRevision,
                 ),
               ],
-              onChanged: (val) => setState(() => _selectedResultStatus = val ?? 'success'),
+              onChanged: (value) =>
+                  setState(() => _selectedResultStatus = value),
             ),
             const SizedBox(height: 24),
 

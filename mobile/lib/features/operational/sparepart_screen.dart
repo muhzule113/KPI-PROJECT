@@ -54,9 +54,14 @@ class _SparepartScreenState extends State<SparepartScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Serahkan Sparepart?'),
-        content: Text('${request['sparepart']?['name'] ?? 'Sparepart'} x${request['quantity']} akan diserahkan dan stok gudang terpotong.'),
+        content: Text(
+          '${request['sparepart']?['name'] ?? 'Sparepart'} x${request['quantity']} akan diserahkan dan stok gudang terpotong.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
@@ -68,16 +73,24 @@ class _SparepartScreenState extends State<SparepartScreen> {
     if (confirmed != true) return;
 
     try {
-      final res = await ApiService.post('/operational/spareparts/fulfill/${request['id']}');
+      final res = await ApiService.post(
+        '/operational/spareparts/fulfill/${request['id']}',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res['message'] ?? 'Sparepart diserahkan.'), backgroundColor: AppTheme.primary),
+        SnackBar(
+          content: Text(res['message'] ?? 'Sparepart diserahkan.'),
+          backgroundColor: AppTheme.primary,
+        ),
       );
       _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -89,99 +102,150 @@ class _SparepartScreenState extends State<SparepartScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Inventory Sparepart')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OpsScreenLoading(rows: 4)
           : _errorMessage != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline_rounded, color: AppTheme.statusDanger, size: 48),
-                        const SizedBox(height: 12),
-                        Text(_errorMessage!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        ElevatedButton(onPressed: _loadData, child: const Text('Coba Lagi')),
-                      ],
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: AppTheme.statusDanger,
+                      size: 48,
                     ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      // Permintaan sparepart menunggu fulfillment (Gudang)
-                      if (auth.isGudang && _requests.isNotEmpty) ...[
-                        const KpiSectionHeader(title: 'Permintaan menunggu diserahkan'),
-                        const SizedBox(height: 8),
-                        ..._requests.map((req) => Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: const Icon(Icons.move_to_inbox_rounded, color: AppTheme.statusRevision),
-                                title: Text('${req['sparepart']?['name'] ?? '-'} x${req['quantity']}'),
-                                subtitle: Text('Dari: ${req['requested_by']?['name'] ?? '-'}\nTiket: ${req['ticket']?['ticket_number'] ?? '-'}'),
-                                isThreeLine: true,
-                                trailing: auth.isGudang
-                                    ? ElevatedButton(
-                                        onPressed: () => _fulfillRequest(req),
-                                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-                                        child: const Text('Serahkan'),
-                                      )
-                                    : null,
-                              ),
-                            )),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Daftar stok dikelompokkan per jenis produk
-                      for (final group in _groupedProducts()) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12, bottom: 8),
-                          child: Row(
-                            children: [
-                              Text(
-                                group.key,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '(${group.value.length})',
-                                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                              ),
-                            ],
+                    const SizedBox(height: 12),
+                    Text(_errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _loadData,
+                      child: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Permintaan sparepart menunggu fulfillment (Gudang)
+                  if (auth.isGudang && _requests.isNotEmpty) ...[
+                    const KpiSectionHeader(
+                      title: 'Permintaan menunggu diserahkan',
+                    ),
+                    const SizedBox(height: 8),
+                    ..._requests.asMap().entries.map((entry) {
+                      final req = entry.value;
+                      return OpsReveal(
+                        delay: Duration(milliseconds: 70 + (entry.key * 35)),
+                        child: OpsCard(
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.move_to_inbox_rounded,
+                              color: AppTheme.statusRevision,
+                            ),
+                            title: Text(
+                              '${req['sparepart']?['name'] ?? '-'} x${req['quantity']}',
+                            ),
+                            subtitle: Text(
+                              'Dari: ${req['requested_by']?['name'] ?? '-'}\nTiket: ${req['ticket']?['ticket_number'] ?? '-'}',
+                            ),
+                            isThreeLine: true,
+                            trailing: auth.isGudang
+                                ? ElevatedButton(
+                                    onPressed: () => _fulfillRequest(req),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppTheme.primary,
+                                    ),
+                                    child: const Text('Serahkan'),
+                                  )
+                                : null,
                           ),
                         ),
-                        ...group.value.map((sp) => Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
-                                  child: Icon(_productIcon(sp), color: AppTheme.primary, size: 20),
-                                ),
-                                title: Text(sp['name'] ?? '-'),
-                                subtitle: Text(sp['code'] ?? ''),
-                                trailing: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '${sp['stock'] ?? 0} pcs',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textInk),
-                                    ),
-                                    Text(
-                                      'Min: ${sp['min_stock'] ?? 0}',
-                                      style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                                    ),
-                                  ],
-                                ),
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Daftar stok dikelompokkan per jenis produk
+                  for (final group in _groupedProducts()) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            group.key,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '(${group.value.length})',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...group.value.map(
+                      (sp) => OpsReveal(
+                        delay: Duration(
+                          milliseconds: 60 + (group.value.indexOf(sp) * 30),
+                        ),
+                        child: OpsCard(
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppTheme.primary.withValues(
+                                alpha: 0.12,
                               ),
-                            )),
-                      ]
-                      // akhir for-element produk
-                    ],
-                  ),
-                ),
+                              child: Icon(
+                                _productIcon(sp),
+                                color: AppTheme.primary,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(sp['name'] ?? '-'),
+                            subtitle: Text(sp['code'] ?? ''),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${sp['stock'] ?? 0} pcs',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: AppTheme.textInk,
+                                  ),
+                                ),
+                                Text(
+                                  'Min: ${sp['min_stock'] ?? 0}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  // akhir for-element produk
+                ],
+              ),
+            ),
     );
   }
 

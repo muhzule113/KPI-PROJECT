@@ -20,15 +20,11 @@ void main() {
 
     await tester.pumpWidget(
       MultiProvider(
-        providers: [
-          ChangeNotifierProvider.value(value: authProvider),
-        ],
-        child: const MaterialApp(
-          home: LoginScreen(),
-        ),
+        providers: [ChangeNotifierProvider.value(value: authProvider)],
+        child: const MaterialApp(home: LoginScreen()),
       ),
     );
 
-    expect(find.text('Sistem KPI Toko HP'), findsOneWidget);
+    expect(find.text('KPI OPS'), findsOneWidget);
   });
 }

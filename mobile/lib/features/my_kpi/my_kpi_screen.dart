@@ -49,7 +49,9 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Data operasional berhasil disinkronkan!'),
+          content: Text(
+            res['message'] ?? 'Data operasional berhasil disinkronkan!',
+          ),
           backgroundColor: AppTheme.primary,
         ),
       );
@@ -57,7 +59,10 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -65,7 +70,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const OpsScreenLoading(rows: 4);
     }
 
     if (_errorMessage != null) {
@@ -75,11 +80,18 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.info_outline_rounded, color: AppTheme.textMuted, size: 48),
+              const Icon(
+                Icons.info_outline_rounded,
+                color: AppTheme.textMuted,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               Text(_errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _loadMyKpi, child: const Text('Muat Ulang')),
+              ElevatedButton(
+                onPressed: _loadMyKpi,
+                child: const Text('Muat Ulang'),
+              ),
             ],
           ),
         ),
@@ -96,87 +108,116 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             // Status Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _kpiData?['period']?['name'] ?? 'Periode Aktif',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            OpsReveal(
+              child: OpsHeroCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'PERFORMA SAYA',
+                            style: TextStyle(
+                              color: AppTheme.primaryBright,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _kpiData?['period']?['name'] ?? 'Periode Aktif',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 20,
+                              color: AppTheme.textInk,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'Supervisor: ${_kpiData?['supervisor'] ?? 'Atasan'}',
+                            style: const TextStyle(
+                              color: AppTheme.textMuted,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          KpiStatusPill(
+                            label: _formatStatus(status),
+                            color: _getStatusColor(status),
+                            icon: _getStatusIcon(status),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Supervisor: ${_kpiData?['supervisor'] ?? 'Atasan'}',
-                        style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.history_rounded, color: AppTheme.primary),
-                        tooltip: 'Riwayat KPI',
-                        onPressed: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const KpiHistoryScreen()),
-                          );
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.sync_rounded, color: AppTheme.primary),
-                        tooltip: 'Perbarui Data dari Aktivitas (Tiket Servis)',
-                        onPressed: _syncOperationalData,
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(status).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
+                    ),
+                    Column(
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.history_rounded,
+                            color: AppTheme.primaryBright,
+                          ),
+                          tooltip: 'Riwayat KPI',
+                          onPressed: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const KpiHistoryScreen(),
+                              ),
+                            );
+                          },
                         ),
-                        child: KpiStatusPill(
-                          label: _formatStatus(status),
-                          color: _getStatusColor(status),
-                          icon: _getStatusIcon(status),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.sync_rounded,
+                            color: AppTheme.primaryBright,
+                          ),
+                          tooltip: 'Perbarui data',
+                          onPressed: _syncOperationalData,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
 
             // Info banner: nilai datang otomatis, bukan isian manual
             if (status == 'draft' || status == 'revision_required') ...[
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                ),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.auto_awesome_rounded, color: AppTheme.primary, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Nilai KPI dihitung otomatis oleh sistem dari aktivitas Anda di aplikasi '
-                        '(mis. tiket servis) dan penilaian Supervisor — tidak ada isian manual.',
-                        style: TextStyle(fontSize: 12.5, color: AppTheme.textInk),
-                      ),
+              OpsReveal(
+                delay: const Duration(milliseconds: 55),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.3),
                     ),
-                  ],
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppTheme.primary,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Nilai KPI dihitung otomatis oleh sistem dari aktivitas Anda di aplikasi '
+                          '(mis. tiket servis) dan penilaian Supervisor — tidak ada isian manual.',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: AppTheme.textInk,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -187,25 +228,34 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
               children: [
                 const Text(
                   'Daftar Indikator KPI',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textInk,
+                  ),
                 ),
                 Text(
                   '${items.length} Indikator',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
             // Indicator list
-            ...items.map((item) {
-              final isFilled = item['actual_decimal'] != null || item['actual_json'] != null;
+            ...items.asMap().entries.map((entry) {
+              final item = entry.value;
+              final isFilled =
+                  item['actual_decimal'] != null || item['actual_json'] != null;
               final isRevision = item['status'] == 'revision_required';
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
+              return OpsReveal(
+                delay: Duration(milliseconds: 80 + (entry.key * 35)),
+                child: OpsCard(
+                  padding: EdgeInsets.zero,
                   onTap: () async {
                     final updated = await Navigator.of(context).push(
                       MaterialPageRoute(
@@ -223,7 +273,10 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppTheme.primary.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
@@ -250,7 +303,11 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                         const SizedBox(height: 10),
                         Text(
                           item['name'],
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textInk),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textInk,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -259,23 +316,40 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Target', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                const Text(
+                                  'Target',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
                                 Text(
                                   '${item['target_value']} ${item['target_unit']}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ],
                             ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Nilai Aktual', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                const Text(
+                                  'Nilai Aktual',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
                                 Text(
                                   _actualLabel(item),
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color: isFilled ? AppTheme.primary : AppTheme.textMuted,
+                                    color: isFilled
+                                        ? AppTheme.primary
+                                        : AppTheme.textMuted,
                                   ),
                                 ),
                               ],
@@ -284,42 +358,25 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                         ),
                         if (isFilled && _isPercentageMetric(item)) ...[
                           const SizedBox(height: 12),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: Stack(
-                              children: [
-                                Container(height: 8, color: AppTheme.border),
-                                AnimatedContainer(
-                                  duration: MediaQuery.disableAnimationsOf(context)
-                                      ? Duration.zero
-                                      : const Duration(milliseconds: 250),
-                                  curve: Curves.easeOut,
-                                  height: 8,
-                                  width: MediaQuery.sizeOf(context).width * _progressRatio(item),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [AppTheme.primary, Color(0xFF059669)],
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          KpiProgressBar(value: _progressRatio(item)),
                         ],
                         if (isRevision) ...[
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppTheme.statusRevision.withValues(alpha: 0.15),
+                              color: AppTheme.statusRevision.withValues(
+                                alpha: 0.15,
+                              ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Row(
                               children: [
-                                Icon(Icons.warning_amber_rounded, color: AppTheme.statusRevision, size: 18),
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: AppTheme.statusRevision,
+                                  size: 18,
+                                ),
                                 SizedBox(width: 6),
                                 Text(
                                   'Perlu Perbaikan / Revisi Data',
@@ -360,19 +417,23 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
     final unit = (item['target_unit'] ?? '').toString().toLowerCase();
     final metric = (item['metric_type'] ?? '').toString().toLowerCase();
     // Persentase / rasio: tampilkan. Hitungan absolut (unit: servis, kali, dll): jangan.
-    return unit.contains('%') || metric.contains('percentage') || metric.contains('ratio');
+    return unit.contains('%') ||
+        metric.contains('percentage') ||
+        metric.contains('ratio');
   }
 
   /// Rasio pencapaian aktual vs target, di-clamp 0..1 (untuk progress bar).
   double _progressRatio(Map<String, dynamic> item) {
-    final target = double.tryParse((item['target_value'] ?? '').toString()) ?? 0;
+    final target =
+        double.tryParse((item['target_value'] ?? '').toString()) ?? 0;
     final actual = double.tryParse((item['actual_decimal'] ?? '').toString());
     if (actual == null || target <= 0) return 0;
     return (actual / target).clamp(0.0, 1.0);
   }
 
   String _actualLabel(Map<String, dynamic> item) {
-    final isFilled = item['actual_decimal'] != null || item['actual_json'] != null;
+    final isFilled =
+        item['actual_decimal'] != null || item['actual_json'] != null;
     if (isFilled) {
       return '${item['actual_decimal']} ${item['target_unit']}';
     }
@@ -388,15 +449,24 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
 
   String _formatStatus(String status) {
     switch (status) {
-      case 'draft': return 'Draft';
-      case 'submitted': return 'Menunggu Review';
-      case 'under_review': return 'Sedang Direview';
-      case 'revision_required': return 'Perlu Revisi';
-      case 'verified': return 'Terverifikasi';
-      case 'pending_approval': return 'Menunggu Approval';
-      case 'approved': return 'Disetujui';
-      case 'locked': return 'Terkunci';
-      default: return status;
+      case 'draft':
+        return 'Draft';
+      case 'submitted':
+        return 'Menunggu Review';
+      case 'under_review':
+        return 'Sedang Direview';
+      case 'revision_required':
+        return 'Perlu Revisi';
+      case 'verified':
+        return 'Terverifikasi';
+      case 'pending_approval':
+        return 'Menunggu Approval';
+      case 'approved':
+        return 'Disetujui';
+      case 'locked':
+        return 'Terkunci';
+      default:
+        return status;
     }
   }
 
@@ -406,14 +476,21 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'draft': return AppTheme.statusDraft;
-      case 'submitted': return AppTheme.statusSubmitted;
-      case 'under_review': return AppTheme.statusUnderReview;
-      case 'revision_required': return AppTheme.statusRevision;
-      case 'verified': return AppTheme.statusVerified;
+      case 'draft':
+        return AppTheme.statusDraft;
+      case 'submitted':
+        return AppTheme.statusSubmitted;
+      case 'under_review':
+        return AppTheme.statusUnderReview;
+      case 'revision_required':
+        return AppTheme.statusRevision;
+      case 'verified':
+        return AppTheme.statusVerified;
       case 'approved':
-      case 'locked': return AppTheme.statusApproved;
-      default: return AppTheme.textMuted;
+      case 'locked':
+        return AppTheme.statusApproved;
+      default:
+        return AppTheme.textMuted;
     }
   }
 }

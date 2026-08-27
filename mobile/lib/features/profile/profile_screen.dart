@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 import '../auth/login_screen.dart';
@@ -50,7 +51,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextField(
               controller: currentController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Kata Sandi Saat Ini'),
+              decoration: const InputDecoration(
+                labelText: 'Kata Sandi Saat Ini',
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -65,12 +68,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextField(
               controller: confirmController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Ulangi Kata Sandi Baru'),
+              decoration: const InputDecoration(
+                labelText: 'Ulangi Kata Sandi Baru',
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
@@ -85,13 +93,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (newController.text.trim().length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kata sandi baru minimal 8 karakter.'), backgroundColor: AppTheme.statusDanger),
+        const SnackBar(
+          content: Text('Kata sandi baru minimal 8 karakter.'),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
       return;
     }
     if (newController.text != confirmController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Konfirmasi kata sandi tidak cocok.'), backgroundColor: AppTheme.statusDanger),
+        const SnackBar(
+          content: Text('Konfirmasi kata sandi tidak cocok.'),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
       return;
     }
@@ -104,12 +118,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res['message'] ?? 'Kata sandi berhasil diperbarui!'), backgroundColor: AppTheme.primary),
+        SnackBar(
+          content: Text(res['message'] ?? 'Kata sandi berhasil diperbarui!'),
+          backgroundColor: AppTheme.primary,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -128,46 +148,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             // Profile header
-            Center(
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
-                    child: Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.primary),
+            OpsReveal(
+              child: Center(
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primary,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    name,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textInk),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user?['email'] ?? '',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textInk,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user?['email'] ?? '',
+                      style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
 
             // Details Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _infoRow('NIK Karyawan', emp?['employee_number'] ?? '-'),
-                    const Divider(height: 20),
-                    _infoRow('Jabatan', emp?['position'] ?? '-'),
-                    const Divider(height: 20),
-                    _infoRow('Cabang Toko', emp?['branch'] ?? '-'),
-                    const Divider(height: 20),
-                    _infoRow('Status', emp?['status'] == 'active' ? 'Aktif' : (emp?['status'] ?? '-')),
-                  ],
+            OpsReveal(
+              delay: const Duration(milliseconds: 80),
+              child: OpsCard(
+                padding: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _infoRow('NIK Karyawan', emp?['employee_number'] ?? '-'),
+                      const Divider(height: 20),
+                      _infoRow('Jabatan', emp?['position'] ?? '-'),
+                      const Divider(height: 20),
+                      _infoRow('Cabang Toko', emp?['branch'] ?? '-'),
+                      const Divider(height: 20),
+                      _infoRow(
+                        'Status',
+                        emp?['status'] == 'active'
+                            ? 'Aktif'
+                            : (emp?['status'] ?? '-'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -175,26 +217,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
             const Text(
               'Pengaturan & Akun',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textMuted),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppTheme.textMuted,
+              ),
             ),
             const SizedBox(height: 8),
 
-            Card(
-              child: Column(
-                children: [
-                  const ListTile(
-                    leading: Icon(Icons.info_outline_rounded, color: AppTheme.textMuted),
-                    title: Text('Tentang Sistem KPI', style: TextStyle(fontSize: 14)),
-                    trailing: Text('v1.0.0', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.lock_reset_rounded, color: AppTheme.textMuted),
-                    title: const Text('Ubah Kata Sandi', style: TextStyle(fontSize: 14)),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                    onTap: _openChangePassword,
-                  ),
-                ],
+            OpsReveal(
+              delay: const Duration(milliseconds: 140),
+              child: OpsCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    const ListTile(
+                      leading: Icon(
+                        Icons.info_outline_rounded,
+                        color: AppTheme.textMuted,
+                      ),
+                      title: Text(
+                        'Tentang Sistem KPI',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      trailing: Text(
+                        'v1.0.0',
+                        style: TextStyle(
+                          color: AppTheme.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.lock_reset_rounded,
+                        color: AppTheme.textMuted,
+                      ),
+                      title: const Text(
+                        'Ubah Kata Sandi',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: AppTheme.textMuted,
+                      ),
+                      onTap: _openChangePassword,
+                    ),
+                  ],
+                ),
               ),
             ),
 
@@ -225,8 +297,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textInk)),
+        Text(
+          label,
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: AppTheme.textInk,
+          ),
+        ),
       ],
     );
   }

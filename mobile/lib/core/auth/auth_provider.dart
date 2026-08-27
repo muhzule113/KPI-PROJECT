@@ -18,7 +18,9 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isSupervisor => hasRole('supervisor') || hasRole('super_admin');
   bool get isManager => hasRole('owner_manager') || hasRole('super_admin');
-  bool get isKasir => _employee?['position_code'] == 'POS-KSR' || _employee?['position'] == 'Kasir';
+  bool get isKasir =>
+      _employee?['position_code'] == 'POS-KSR' ||
+      _employee?['position'] == 'Kasir';
   bool get isTeknisi => _employee?['position_code'] == 'POS-TEK';
   bool get isCs => _employee?['position_code'] == 'POS-CS';
   bool get isGudang => _employee?['position_code'] == 'POS-GUD';

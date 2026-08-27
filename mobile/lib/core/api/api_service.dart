@@ -4,11 +4,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // Default URL: localhost for web/desktop, 10.0.2.2 for android emulator
+  // Bisa dioverride saat run: --dart-define=API_BASE_URL=http://IP_LAPTOP:8000/api/v1
   static String get baseUrl {
+    const configuredUrl = String.fromEnvironment('API_BASE_URL');
+    if (configuredUrl.isNotEmpty) return configuredUrl;
     if (kIsWeb) return 'http://localhost:8000/api/v1';
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
+        // Default ini untuk Android Emulator. HP fisik wajib pakai IP laptop.
         return 'http://10.0.2.2:8000/api/v1';
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
@@ -41,17 +44,24 @@ class ApiService {
 
   static Future<dynamic> get(String endpoint) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final response = await client.get(uri, headers: await _headers()).timeout(requestTimeout);
+    final response = await client
+        .get(uri, headers: await _headers())
+        .timeout(requestTimeout);
     return _handleResponse(response);
   }
 
-  static Future<dynamic> post(String endpoint, [Map<String, dynamic>? body]) async {
+  static Future<dynamic> post(
+    String endpoint, [
+    Map<String, dynamic>? body,
+  ]) async {
     final uri = Uri.parse('$baseUrl$endpoint');
-    final response = await client.post(
-      uri,
-      headers: await _headers(),
-      body: body != null ? jsonEncode(body) : null,
-    ).timeout(requestTimeout);
+    final response = await client
+        .post(
+          uri,
+          headers: await _headers(),
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(requestTimeout);
     return _handleResponse(response);
   }
 
@@ -78,7 +88,9 @@ class ApiService {
     if (filePath != null) {
       request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
     } else if (fileBytes != null && fileName != null) {
-      request.files.add(http.MultipartFile.fromBytes(fieldName, fileBytes, filename: fileName));
+      request.files.add(
+        http.MultipartFile.fromBytes(fieldName, fileBytes, filename: fileName),
+      );
     } else {
       throw Exception('filePath atau fileBytes+fileName wajib diisi.');
     }
@@ -93,7 +105,9 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return body;
     } else {
-      final msg = body['message'] ?? 'Terjadi kesalahan pada server (${response.statusCode})';
+      final msg =
+          body['message'] ??
+          'Terjadi kesalahan pada server (${response.statusCode})';
       throw Exception(msg);
     }
   }

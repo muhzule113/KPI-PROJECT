@@ -21,7 +21,11 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
   List<dynamic> _periods = [];
   String? _selectedPeriodId;
 
-  static final _rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+  static final _rupiah = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  );
 
   @override
   void initState() {
@@ -46,14 +50,13 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
 
   Future<void> _pickAndUpload() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'csv', 'txt'],
-        withData: true,
       );
-      if (result == null || result.files.isEmpty) return; // user batal
+      if (file == null) return; // user batal
 
-      final file = result.files.single;
+      final fileBytes = await file.readAsBytes();
       setState(() {
         _isUploading = true;
         _errorMessage = null;
@@ -62,7 +65,7 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
       final res = await ApiService.uploadFile(
         '/cashier/import',
         filePath: file.path,
-        fileBytes: file.bytes,
+        fileBytes: fileBytes,
         fileName: file.name,
         fields: {'period_id': ?_selectedPeriodId},
       );
@@ -87,11 +90,16 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
 
     setState(() => _isConfirming = true);
     try {
-      final res = await ApiService.post('/cashier/import/${preview['batch_id']}/confirm');
+      final res = await ApiService.post(
+        '/cashier/import/${preview['batch_id']}/confirm',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Batch import berhasil dikonfirmasi dan diterapkan ke KPI Kasir!'),
+          content: Text(
+            res['message'] ??
+                'Batch import berhasil dikonfirmasi dan diterapkan ke KPI Kasir!',
+          ),
           backgroundColor: AppTheme.primary,
         ),
       );
@@ -103,7 +111,10 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
       if (!mounted) return;
       setState(() => _isConfirming = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppTheme.statusDanger),
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppTheme.statusDanger,
+        ),
       );
     }
   }
@@ -121,7 +132,11 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
         children: [
           const Text(
             'Import Laporan Kasir POS',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textInk,
+            ),
           ),
           const SizedBox(height: 6),
           const Text(
@@ -132,19 +147,20 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
 
           // Pilih Periode KPI
           if (_periods.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              initialValue: _selectedPeriodId,
-              decoration: const InputDecoration(
-                labelText: 'Periode KPI',
-                prefixIcon: Icon(Icons.calendar_month_rounded, size: 20),
-              ),
-              items: _periods.map((p) {
-                return DropdownMenuItem(
+            OpsSelectionField<String>(
+              label: 'Periode KPI',
+              hint: 'Pilih periode KPI',
+              sheetTitle: 'Pilih periode KPI',
+              value: _selectedPeriodId,
+              options: _periods.map((p) {
+                return OpsSelectionOption<String>(
                   value: p['id'].toString(),
-                  child: Text('${p['name']} — ${_statusLabel(p['status'])}'),
+                  label: p['name']?.toString() ?? 'Periode',
+                  supportingText: _statusLabel(p['status']),
+                  icon: Icons.calendar_month_rounded,
                 );
               }).toList(),
-              onChanged: (val) => setState(() => _selectedPeriodId = val),
+              onChanged: (value) => setState(() => _selectedPeriodId = value),
             ),
             const SizedBox(height: 16),
           ],
@@ -156,7 +172,10 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
             decoration: BoxDecoration(
               color: AppTheme.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.border, style: BorderStyle.solid),
+              border: Border.all(
+                color: AppTheme.border,
+                style: BorderStyle.solid,
+              ),
             ),
             child: Column(
               children: [
@@ -166,7 +185,11 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                     color: AppTheme.primary.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.cloud_upload_rounded, color: AppTheme.primary, size: 36),
+                  child: const Icon(
+                    Icons.cloud_upload_rounded,
+                    color: AppTheme.primary,
+                    size: 36,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -180,13 +203,18 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
-                  onPressed: _isUploading || _isConfirming ? null : _pickAndUpload,
+                  onPressed: _isUploading || _isConfirming
+                      ? null
+                      : _pickAndUpload,
                   icon: const Icon(Icons.file_open_rounded),
                   label: _isUploading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(color: AppTheme.surface, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            color: AppTheme.surface,
+                            strokeWidth: 2,
+                          ),
                         )
                       : const Text('Pilih & Upload File'),
                 ),
@@ -194,7 +222,11 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _previewData!['file_name'] ?? '',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textMuted),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textMuted,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -213,12 +245,19 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: AppTheme.statusDanger, size: 20),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: AppTheme.statusDanger,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(fontSize: 12.5, color: AppTheme.statusDanger),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppTheme.statusDanger,
+                      ),
                     ),
                   ),
                 ],
@@ -230,108 +269,187 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
             const SizedBox(height: 24),
             const KpiSectionHeader(title: 'Hasil preview analisis file'),
             const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _previewData!['file_name'] ?? 'File',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ),
-                        KpiStatusPill(
-                          label: _hasErrors ? 'Perlu diperbaiki' : 'Siap diproses',
-                          color: _hasErrors ? AppTheme.statusDanger : AppTheme.statusApproved,
-                          icon: _hasErrors ? Icons.error_outline_rounded : Icons.check_circle_rounded,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        _statBox('Total Baris', '${_previewData!['total_rows']}', AppTheme.textInk),
-                        _statBox('Valid', '${_previewData!['valid_rows']}', AppTheme.primary),
-                        _statBox('Warning', '${_previewData!['warning_rows']}', AppTheme.statusRevision),
-                        _statBox('Duplikat', '${_previewData!['duplicate_rows']}', AppTheme.textMuted),
-                        _statBox('Error', '${_previewData!['error_rows']}', AppTheme.statusDanger),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _summaryRow('Total Transaksi:', _formatAmount(_previewData!['summary']?['total_amount'])),
-                    const SizedBox(height: 4),
-                    _summaryRow('Total Selisih Kas:', _formatAmount(_previewData!['summary']?['total_difference'])),
-                    if (_hasErrors) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.statusDanger.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Terdapat baris error — perbaiki file lalu unggah ulang. Konfirmasi tidak bisa dilanjutkan.',
-                          style: TextStyle(fontSize: 12, color: AppTheme.statusDanger),
-                        ),
-                      ),
-                    ],
-                    if (_issues.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Catatan Analisis:',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMuted),
-                      ),
-                      const SizedBox(height: 6),
-                      ..._issues.map((issue) {
-                        final type = issue['type'] ?? 'warning';
-                        final color = type == 'error'
-                            ? AppTheme.statusDanger
-                            : type == 'duplicate'
-                                ? AppTheme.textMuted
-                                : AppTheme.statusRevision;
-                        final icon = type == 'error'
-                            ? Icons.cancel_rounded
-                            : type == 'duplicate'
-                                ? Icons.copy_rounded
-                                : Icons.warning_amber_rounded;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(icon, size: 15, color: color),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Baris ${issue['row']}: ${issue['message']}',
-                                  style: const TextStyle(fontSize: 12, color: AppTheme.textInk),
-                                ),
+            OpsReveal(
+              delay: const Duration(milliseconds: 80),
+              child: OpsCard(
+                padding: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _previewData!['file_name'] ?? 'File',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
-                            ],
+                            ),
                           ),
-                        );
-                      }),
-                    ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: (_hasErrors || _isConfirming) ? null : _confirmBatch,
-                        child: _isConfirming
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(color: AppTheme.surface, strokeWidth: 2),
-                              )
-                            : const Text('Konfirmasi & Terapkan ke KPI Kasir'),
+                          KpiStatusPill(
+                            label: _hasErrors
+                                ? 'Perlu diperbaiki'
+                                : 'Siap diproses',
+                            color: _hasErrors
+                                ? AppTheme.statusDanger
+                                : AppTheme.statusApproved,
+                            icon: _hasErrors
+                                ? Icons.error_outline_rounded
+                                : Icons.check_circle_rounded,
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          const gap = 8.0;
+                          final columns = constraints.maxWidth < 390 ? 2 : 5;
+                          final width =
+                              (constraints.maxWidth - (gap * (columns - 1))) /
+                              columns;
+                          final stats = [
+                            (
+                              'Total Baris',
+                              '${_previewData!['total_rows']}',
+                              AppTheme.textInk,
+                            ),
+                            (
+                              'Valid',
+                              '${_previewData!['valid_rows']}',
+                              AppTheme.primary,
+                            ),
+                            (
+                              'Warning',
+                              '${_previewData!['warning_rows']}',
+                              AppTheme.statusRevision,
+                            ),
+                            (
+                              'Duplikat',
+                              '${_previewData!['duplicate_rows']}',
+                              AppTheme.textMuted,
+                            ),
+                            (
+                              'Error',
+                              '${_previewData!['error_rows']}',
+                              AppTheme.statusDanger,
+                            ),
+                          ];
+                          return Wrap(
+                            spacing: gap,
+                            runSpacing: gap,
+                            children: stats
+                                .map(
+                                  (stat) => SizedBox(
+                                    width: width,
+                                    child: _statBox(stat.$1, stat.$2, stat.$3),
+                                  ),
+                                )
+                                .toList(),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _summaryRow(
+                        'Total Transaksi:',
+                        _formatAmount(
+                          _previewData!['summary']?['total_amount'],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      _summaryRow(
+                        'Total Selisih Kas:',
+                        _formatAmount(
+                          _previewData!['summary']?['total_difference'],
+                        ),
+                      ),
+                      if (_hasErrors) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.statusDanger.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Terdapat baris error — perbaiki file lalu unggah ulang. Konfirmasi tidak bisa dilanjutkan.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.statusDanger,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_issues.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Catatan Analisis:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        ..._issues.map((issue) {
+                          final type = issue['type'] ?? 'warning';
+                          final color = type == 'error'
+                              ? AppTheme.statusDanger
+                              : type == 'duplicate'
+                              ? AppTheme.textMuted
+                              : AppTheme.statusRevision;
+                          final icon = type == 'error'
+                              ? Icons.cancel_rounded
+                              : type == 'duplicate'
+                              ? Icons.copy_rounded
+                              : Icons.warning_amber_rounded;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(icon, size: 15, color: color),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Baris ${issue['row']}: ${issue['message']}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textInk,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: (_hasErrors || _isConfirming)
+                              ? null
+                              : _confirmBatch,
+                          child: _isConfirming
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: AppTheme.surface,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'Konfirmasi & Terapkan ke KPI Kasir',
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -341,20 +459,31 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
     );
   }
 
-  List<dynamic> get _issues => (_previewData?['issues'] as List<dynamic>?) ?? [];
+  List<dynamic> get _issues =>
+      (_previewData?['issues'] as List<dynamic>?) ?? [];
 
   String _statusLabel(String? status) {
     switch (status) {
-      case 'OPEN': return 'Aktif';
-      case 'DRAFT': return 'Draft';
-      case 'READY': return 'Siap';
-      case 'SUBMISSION_CLOSED': return 'Pengisian Ditutup';
-      case 'IN_REVIEW': return 'Sedang Direview';
-      case 'WAITING_APPROVAL': return 'Menunggu Approval';
-      case 'PUBLISHED': return 'Diterbitkan';
-      case 'LOCKED': return 'Terkunci';
-      case 'CANCELLED': return 'Dibatalkan';
-      default: return status ?? '-';
+      case 'OPEN':
+        return 'Aktif';
+      case 'DRAFT':
+        return 'Draft';
+      case 'READY':
+        return 'Siap';
+      case 'SUBMISSION_CLOSED':
+        return 'Pengisian Ditutup';
+      case 'IN_REVIEW':
+        return 'Sedang Direview';
+      case 'WAITING_APPROVAL':
+        return 'Menunggu Approval';
+      case 'PUBLISHED':
+        return 'Diterbitkan';
+      case 'LOCKED':
+        return 'Terkunci';
+      case 'CANCELLED':
+        return 'Dibatalkan';
+      default:
+        return status ?? '-';
     }
   }
 
@@ -363,7 +492,13 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: AppTheme.textMuted)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppTheme.primary,
+          ),
+        ),
       ],
     );
   }
@@ -377,9 +512,19 @@ class _CashierUploadScreenState extends State<CashierUploadScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+          ),
         ],
       ),
     );

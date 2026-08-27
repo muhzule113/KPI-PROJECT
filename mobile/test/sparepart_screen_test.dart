@@ -21,19 +21,31 @@ void main() {
             'success': true,
             'data': [
               {
-                'id': 1, 'code': 'HS-IP13-128', 'product_type': 'handset',
-                'product_type_label': 'Handset HP', 'name': 'Handset iPhone 13',
-                'stock': 3, 'min_stock': 1,
+                'id': 1,
+                'code': 'HS-IP13-128',
+                'product_type': 'handset',
+                'product_type_label': 'Handset HP',
+                'name': 'Handset iPhone 13',
+                'stock': 3,
+                'min_stock': 1,
               },
               {
-                'id': 2, 'code': 'TB-IPAD9-64', 'product_type': 'tablet',
-                'product_type_label': 'Tablet / iPad', 'name': 'iPad 9th Gen',
-                'stock': 2, 'min_stock': 1,
+                'id': 2,
+                'code': 'TB-IPAD9-64',
+                'product_type': 'tablet',
+                'product_type_label': 'Tablet / iPad',
+                'name': 'iPad 9th Gen',
+                'stock': 2,
+                'min_stock': 1,
               },
               {
-                'id': 3, 'code': 'PRT-LCD-IP13', 'product_type': 'sparepart',
-                'product_type_label': 'Sparepart', 'name': 'LCD iPhone 13',
-                'stock': 15, 'min_stock': 3,
+                'id': 3,
+                'code': 'PRT-LCD-IP13',
+                'product_type': 'sparepart',
+                'product_type_label': 'Sparepart',
+                'name': 'LCD iPhone 13',
+                'stock': 15,
+                'min_stock': 3,
               },
             ],
           }),
@@ -42,15 +54,23 @@ void main() {
         );
       }
       if (path.endsWith('/operational/sparepart-requests')) {
-        return http.Response(jsonEncode({'success': true, 'data': []}), 200,
-            headers: {'content-type': 'application/json'});
+        return http.Response(
+          jsonEncode({'success': true, 'data': []}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
       }
-      return http.Response(jsonEncode({'success': false, 'message': 'Not found'}), 404,
-          headers: {'content-type': 'application/json'});
+      return http.Response(
+        jsonEncode({'success': false, 'message': 'Not found'}),
+        404,
+        headers: {'content-type': 'application/json'},
+      );
     });
   });
 
-  testWidgets('Inventory menampilkan produk dikelompokkan per jenis', (tester) async {
+  testWidgets('Inventory menampilkan produk dikelompokkan per jenis', (
+    tester,
+  ) async {
     final authProvider = AuthProvider();
     await authProvider.init();
 

@@ -45,7 +45,7 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const OpsScreenLoading(rows: 4);
     }
 
     if (_errorMessage != null) {
@@ -55,7 +55,10 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
           children: [
             Text(_errorMessage!),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _loadQueue, child: const Text('Muat Ulang')),
+            ElevatedButton(
+              onPressed: _loadQueue,
+              child: const Text('Muat Ulang'),
+            ),
           ],
         ),
       );
@@ -72,11 +75,18 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
               children: [
                 const Text(
                   'Antrean Review Tim',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textInk),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textInk,
+                  ),
                 ),
                 Text(
                   '${_queue.length} Submission',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -93,54 +103,73 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
                 final emp = kpi['employee'];
                 final status = kpi['status'];
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () async {
-                      final updated = await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ReviewDetailScreen(kpiId: kpi['id']),
+                return OpsReveal(
+                  delay: Duration(
+                    milliseconds: 60 + (_queue.indexOf(kpi) * 35),
+                  ),
+                  child: OpsCard(
+                    padding: EdgeInsets.zero,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () async {
+                        final updated = await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ReviewDetailScreen(kpiId: kpi['id']),
+                          ),
+                        );
+                        if (updated == true) _loadQueue();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  emp['name'] ?? 'Karyawan',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                KpiStatusPill(
+                                  label: _formatStatus(status),
+                                  color: _getStatusColor(status),
+                                  icon: _getStatusIcon(status),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${emp['position']} • ${emp['employee_number']}',
+                              style: const TextStyle(
+                                color: AppTheme.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Verifikasi: ${kpi['verified_items']}/${kpi['total_items']} Indikator',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 14,
+                                  color: AppTheme.textMuted,
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      );
-                      if (updated == true) _loadQueue();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                emp['name'] ?? 'Karyawan',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                              KpiStatusPill(
-                                label: _formatStatus(status),
-                                color: _getStatusColor(status),
-                                icon: _getStatusIcon(status),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${emp['position']} • ${emp['employee_number']}',
-                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Verifikasi: ${kpi['verified_items']}/${kpi['total_items']} Indikator',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
-                            ],
-                          ),
-                        ],
                       ),
                     ),
                   ),
@@ -154,11 +183,16 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
 
   String _formatStatus(String status) {
     switch (status) {
-      case 'submitted': return 'Menunggu Review';
-      case 'under_review': return 'Sedang Direview';
-      case 'revision_required': return 'Perlu Revisi';
-      case 'verified': return 'Terverifikasi';
-      default: return status;
+      case 'submitted':
+        return 'Menunggu Review';
+      case 'under_review':
+        return 'Sedang Direview';
+      case 'revision_required':
+        return 'Perlu Revisi';
+      case 'verified':
+        return 'Terverifikasi';
+      default:
+        return status;
     }
   }
 
@@ -168,11 +202,16 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'submitted': return AppTheme.statusSubmitted;
-      case 'under_review': return AppTheme.statusUnderReview;
-      case 'revision_required': return AppTheme.statusRevision;
-      case 'verified': return AppTheme.statusVerified;
-      default: return AppTheme.textMuted;
+      case 'submitted':
+        return AppTheme.statusSubmitted;
+      case 'under_review':
+        return AppTheme.statusUnderReview;
+      case 'revision_required':
+        return AppTheme.statusRevision;
+      case 'verified':
+        return AppTheme.statusVerified;
+      default:
+        return AppTheme.textMuted;
     }
   }
 }
