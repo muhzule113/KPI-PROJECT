@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_service.dart';
+import '../realtime/realtime_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -33,16 +35,50 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('auth_token');
+    _token = await ApiService.getToken();
     final userStr = prefs.getString('user_data');
     final empStr = prefs.getString('employee_data');
 
-    if (_token != null && userStr != null) {
+    if (_token == null || userStr == null) return;
+
+    try {
+      _user = Map<String, dynamic>.from(jsonDecode(userStr) as Map);
+      if (empStr != null) {
+        _employee = Map<String, dynamic>.from(jsonDecode(empStr) as Map);
+      }
+      ApiService.onUnauthorized = clearSession;
+      final res = await ApiService.get('/auth/me');
+      final data = Map<String, dynamic>.from(res['data'] as Map);
+      _user = data['user'] is Map
+          ? Map<String, dynamic>.from(data['user'] as Map)
+          : _user;
+      _employee = data['employee'] is Map
+          ? Map<String, dynamic>.from(data['employee'] as Map)
+          : _employee;
+      await prefs.setString('user_data', jsonEncode(_user));
+      if (_employee != null) {
+        await prefs.setString('employee_data', jsonEncode(_employee));
+      }
       _isAuthenticated = true;
-      _user = jsonDecode(userStr);
-      if (empStr != null) _employee = jsonDecode(empStr);
       notifyListeners();
+      unawaited(RealtimeService.instance.connect());
+    } catch (_) {
+      await clearSession(notify: false);
     }
+  }
+
+  Future<void> clearSession({bool notify = true}) async {
+    await RealtimeService.instance.disconnect();
+    final prefs = await SharedPreferences.getInstance();
+    await ApiService.clearToken();
+    await prefs.remove('user_data');
+    await prefs.remove('employee_data');
+
+    _token = null;
+    _user = null;
+    _employee = null;
+    _isAuthenticated = false;
+    if (notify) notifyListeners();
   }
 
   Future<void> login(String email, String password) async {
@@ -60,9 +96,10 @@ class AuthProvider extends ChangeNotifier {
       _user = data['user'];
       _employee = data['employee'];
       _isAuthenticated = true;
+      ApiService.onUnauthorized = () => clearSession();
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', _token!);
+      await ApiService.saveToken(_token!);
       await prefs.setString('user_data', jsonEncode(_user));
       if (_employee != null) {
         await prefs.setString('employee_data', jsonEncode(_employee));
@@ -70,6 +107,7 @@ class AuthProvider extends ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
+      unawaited(RealtimeService.instance.connect());
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -82,15 +120,6 @@ class AuthProvider extends ChangeNotifier {
       await ApiService.post('/auth/logout');
     } catch (_) {}
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('user_data');
-    await prefs.remove('employee_data');
-
-    _token = null;
-    _user = null;
-    _employee = null;
-    _isAuthenticated = false;
-    notifyListeners();
+    await clearSession();
   }
 }

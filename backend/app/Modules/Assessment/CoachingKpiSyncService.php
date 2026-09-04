@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 
 /**
  * Subsistem Coaching Log → KPI Supervisor.
@@ -31,7 +32,7 @@ class CoachingKpiSyncService
 
         foreach ($kpis as $kpi) {
             $spv = $kpi->employee;
-            if (!$spv) continue;
+            if (!$spv || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
 
             $teamSize = Employee::where('supervisor_id', $spv->id)
                 ->where('status', 'active')

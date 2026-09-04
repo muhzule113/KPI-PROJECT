@@ -21,19 +21,18 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
   final _diagnosisController = TextEditingController();
   final _actionController = TextEditingController();
   final _costController = TextEditingController();
-  String _selectedResultStatus =
-      'success'; // success, unrepairable, warranty_return
+  String? _selectedResultStatus; // success, unrepairable, warranty_return
   bool _isSaving = false;
 
   final Map<String, bool> _qcChecks = {
-    'display': true,
-    'touch': true,
-    'camera': true,
-    'mic': true,
-    'speaker': true,
-    'cellular': true,
-    'charging': true,
-    'biometric': true,
+    'display': false,
+    'touch': false,
+    'camera': false,
+    'mic': false,
+    'speaker': false,
+    'cellular': false,
+    'charging': false,
+    'biometric': false,
   };
 
   final Map<String, String> _qcLabels = {
@@ -136,6 +135,22 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           content: Text(
             'Diagnosa dan tindakan servis wajib diisi untuk kelengkapan laporan KPI!',
           ),
+        ),
+      );
+      return;
+    }
+    if (_ticket?['status'] != 'qc_ready') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tandai tiket Siap QC sebelum menyelesaikan servis.'),
+        ),
+      );
+      return;
+    }
+    if (_selectedResultStatus == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pilih hasil akhir servis terlebih dahulu.'),
         ),
       );
       return;
@@ -342,6 +357,84 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
     }
   }
 
+  Widget _buildServiceField({
+    required String label,
+    required String hint,
+    required IconData icon,
+    required TextEditingController controller,
+    required bool enabled,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? prefixText,
+  }) {
+    final radius = BorderRadius.circular(AppTheme.radiusMd);
+    final border = OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: BorderSide(color: AppTheme.border),
+    );
+
+    return Semantics(
+      textField: true,
+      label: label,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppTheme.textMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: AppTheme.textInk,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            enabled: enabled,
+            maxLines: maxLines,
+            keyboardType: keyboardType,
+            textCapitalization: maxLines > 1
+                ? TextCapitalization.sentences
+                : TextCapitalization.none,
+            textInputAction: maxLines == 1
+                ? TextInputAction.done
+                : TextInputAction.newline,
+            cursorColor: AppTheme.primaryBright,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintMaxLines: maxLines > 1 ? maxLines : 1,
+              prefixText: prefixText,
+              prefixStyle: TextStyle(
+                color: AppTheme.textMuted,
+                fontWeight: FontWeight.w600,
+              ),
+              fillColor: AppTheme.surfaceElevated,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              border: border,
+              enabledBorder: border,
+              disabledBorder: border,
+              focusedBorder: OutlineInputBorder(
+                borderRadius: radius,
+                borderSide: BorderSide(color: AppTheme.primaryBright, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _fulfillSparepart(String requestId) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -466,7 +559,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                     children: [
                       Text(
                         "${ticket['device_brand']} ${ticket['device_model']}",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
                           color: AppTheme.textInk,
@@ -482,10 +575,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                   const SizedBox(height: 6),
                   Text(
                     "Pelanggan: ${ticket['customer_name']} • ${ticket['customer_phone']}",
-                    style: const TextStyle(
-                      color: AppTheme.textMuted,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -503,7 +593,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Keluhan Kerusakan:',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -514,14 +604,11 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                   const SizedBox(height: 2),
                   Text(
                     ticket['initial_complaint'] ?? '-',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textInk,
-                    ),
+                    style: TextStyle(fontSize: 14, color: AppTheme.textInk),
                   ),
                   if (ticket['physical_condition'] != null) ...[
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Kondisi Fisik:',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
@@ -532,10 +619,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                     const SizedBox(height: 2),
                     Text(
                       ticket['physical_condition'],
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.textMuted,
-                      ),
+                      style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
                     ),
                   ],
                 ],
@@ -560,17 +644,25 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           const SizedBox(height: 20),
 
           // Action Status Buttons (hanya Teknisi)
-          if (!isDone && auth.isTeknisi) ...[
+          if (!isDone && auth.isTeknisi && ticket['status'] != 'qc_ready') ...[
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: const Text('Mulai Servis'),
+                    label: Text(
+                      ticket['status'] == 'intake'
+                          ? 'Mulai Diagnosa'
+                          : 'Mulai Servis',
+                    ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(0, 42),
                     ),
-                    onPressed: () => _updateProgress('in_progress'),
+                    onPressed: () => _updateProgress(
+                      ticket['status'] == 'intake'
+                          ? 'diagnosing'
+                          : 'in_progress',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -590,6 +682,20 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
               ],
             ),
             const SizedBox(height: 20),
+            if (ticket['status'] == 'in_progress') ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.fact_check_outlined, size: 18),
+                  label: const Text('Tandai Siap QC'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                  ),
+                  onPressed: () => _updateProgress('qc_ready'),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ],
 
           // Sparepart Request (Teknisi) + Status Permintaan (Gudang/Teknisi)
@@ -606,7 +712,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           ],
           if (sparepartRequests.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Permintaan Sparepart',
               style: TextStyle(
                 fontSize: 16,
@@ -643,7 +749,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
                                   ),
                                   child: const Text('Serahkan'),
                                 )
-                              : const Text(
+                              : Text(
                                   'Menunggu Gudang',
                                   style: TextStyle(
                                     fontSize: 12,
@@ -664,48 +770,92 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
           ],
 
           // Diagnosis & Actions
-          const Text(
-            'Catatan Diagnosa & Tindakan Teknisi',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textInk,
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _diagnosisController,
-            enabled: !isDone && auth.isTeknisi,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Hasil Diagnosa Kerusakan *',
-              hintText: 'e.g. Panel OLED rusak benturan, IC charger normal',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _actionController,
-            enabled: !isDone && auth.isTeknisi,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Tindakan Servis yang Dilakukan *',
-              hintText: 'e.g. Ganti modul LCD assembly dan pasang segel baru',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _costController,
-            enabled: !isDone && auth.isTeknisi,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Biaya Final Servis (Rp)',
-              prefixText: 'Rp ',
+          OpsCard(
+            margin: EdgeInsets.zero,
+            padding: const EdgeInsets.all(AppTheme.spaceLg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBright.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(
+                        Icons.description_outlined,
+                        color: AppTheme.primaryBright,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Catatan Diagnosa & Tindakan Teknisi',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textInk,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Lengkapi catatan sebelum servis ditutup.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _buildServiceField(
+                  controller: _diagnosisController,
+                  enabled: !isDone && auth.isTeknisi,
+                  icon: Icons.search_rounded,
+                  label: 'Hasil Diagnosa Kerusakan *',
+                  hint:
+                      'Contoh: panel OLED rusak akibat benturan, IC charger normal',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                _buildServiceField(
+                  controller: _actionController,
+                  enabled: !isDone && auth.isTeknisi,
+                  icon: Icons.build_circle_outlined,
+                  label: 'Tindakan Servis yang Dilakukan *',
+                  hint:
+                      'Contoh: ganti modul LCD assembly dan pasang segel baru',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                _buildServiceField(
+                  controller: _costController,
+                  enabled: !isDone && auth.isTeknisi,
+                  icon: Icons.payments_outlined,
+                  label: 'Biaya Final Servis (Rp)',
+                  hint: 'Masukkan biaya akhir servis',
+                  keyboardType: TextInputType.number,
+                  prefixText: 'Rp ',
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
 
           // QC Checklist
-          const Text(
+          Text(
             'Quality Control (QC) Checklist Pengujian HP',
             style: TextStyle(
               fontSize: 16,
@@ -714,7 +864,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Uji semua komponen sebelum menyerahkan HP ke pelanggan untuk kepuasan CSAT & pencegahan retur.',
             style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
           ),
@@ -757,7 +907,7 @@ class _TicketProgressScreenState extends State<TicketProgressScreen> {
               hint: 'Pilih hasil akhir servis',
               sheetTitle: 'Pilih hasil akhir servis',
               value: _selectedResultStatus,
-              options: const [
+              options: [
                 OpsSelectionOption<String>(
                   value: 'success',
                   label: 'Berhasil diperbaiki',

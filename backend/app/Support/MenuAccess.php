@@ -5,8 +5,8 @@ namespace App\Support;
 use App\Models\User;
 
 /**
- * Access control menu Filament berbasis role Spatie + position_code.
- * Dipakai oleh canViewAny() tiap resource agar menu tersaring per peran.
+ * Access control menu admin berbasis role Spatie + position_code.
+ * Dipakai oleh route dan resource agar menu tersaring per peran.
  */
 class MenuAccess
 {

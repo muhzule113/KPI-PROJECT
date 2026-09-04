@@ -110,7 +110,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline_rounded,
                       color: AppTheme.statusDanger,
                       size: 48,
@@ -144,7 +144,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                         child: OpsCard(
                           padding: EdgeInsets.zero,
                           child: ListTile(
-                            leading: const Icon(
+                            leading: Icon(
                               Icons.move_to_inbox_rounded,
                               color: AppTheme.statusRevision,
                             ),
@@ -188,7 +188,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                           const SizedBox(width: 8),
                           Text(
                             '(${group.value.length})',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.textMuted,
                             ),
@@ -222,7 +222,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                               children: [
                                 Text(
                                   '${sp['stock'] ?? 0} pcs',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
                                     color: AppTheme.textInk,
@@ -230,7 +230,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
                                 ),
                                 Text(
                                   'Min: ${sp['min_stock'] ?? 0}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     color: AppTheme.textMuted,
                                   ),

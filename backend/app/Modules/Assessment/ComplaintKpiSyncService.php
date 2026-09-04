@@ -7,11 +7,12 @@ use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 
 /**
  * Subsistem Complaint Management → KPI.
  * Feed:
- *  - CS-05  Jumlah komplain terhadap CS (lower is better) = count
+ *  - CS-05  Jumlah komplain terhadap Pelayan (lower is better) = count
  *  - SUP-04 Penyelesaian komplain tim tepat waktu = resolved sebelum SLA / total × 100
  */
 class ComplaintKpiSyncService
@@ -34,11 +35,11 @@ class ComplaintKpiSyncService
 
         foreach ($kpis as $kpi) {
             $emp = $kpi->employee;
-            if (!$emp || !$emp->position) continue;
+            if (!$emp || !$emp->position || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
 
             $changed = false;
 
-            // CS-05: jumlah komplain terhadap CS tersebut
+            // CS-05: jumlah komplain terhadap Pelayan tersebut
             if ($emp->position->code === 'POS-CS') {
                 $count = $complaints->where('employee_id', $emp->id)->count();
 

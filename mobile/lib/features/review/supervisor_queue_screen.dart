@@ -73,7 +73,7 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Antrean Review Tim',
                   style: TextStyle(
                     fontSize: 18,
@@ -83,10 +83,7 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
                 ),
                 Text(
                   '${_queue.length} Submission',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
               ],
             ),
@@ -145,7 +142,7 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
                             const SizedBox(height: 4),
                             Text(
                               '${emp['position']} • ${emp['employee_number']}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppTheme.textMuted,
                                 fontSize: 13,
                               ),
@@ -161,7 +158,7 @@ class _SupervisorQueueScreenState extends State<SupervisorQueueScreen> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const Icon(
+                                Icon(
                                   Icons.arrow_forward_ios_rounded,
                                   size: 14,
                                   color: AppTheme.textMuted,

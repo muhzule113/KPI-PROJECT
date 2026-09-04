@@ -6,7 +6,7 @@ Sistem Manajemen KPI untuk Toko & Servis HP. PRD lengkap: `PRD_Sistem_KPI_Toko_S
 
 | Bagian | Teknologi | Lokasi |
 |---|---|---|
-| Backend (Web admin) | Laravel + **Filament 3.2** | `backend/` |
+| Backend (Web admin) | Laravel + Inertia React | `backend/` |
 | Database | MySQL (`kpi_management_db`) | — |
 | Mobile | Flutter (`kpi_mobile`) | `mobile/` |
 | Bahasa produk | Indonesia | — |
@@ -14,7 +14,7 @@ Sistem Manajemen KPI untuk Toko & Servis HP. PRD lengkap: `PRD_Sistem_KPI_Toko_S
 ## Struktur
 
 ```
-backend/                  # Laravel + Filament
+backend/                  # Laravel backend + React/Inertia admin di /app
   app/Models/             # Eloquent models
   app/Modules/            # Approval, Assessment, Calculation, Import, Period, Review
   app/Modules/Assessment/ # Sync services tiap subsistem KPI:
@@ -24,9 +24,9 @@ backend/                  # Laravel + Filament
                           #   StockOpnameService, AdminWorkLogKpiSyncService,
                           #   ComplaintKpiSyncService, CoachingKpiSyncService,
                           #   TeamAggregationKpiSyncService
-  app/Filament/           # Resources & Widgets (admin panel); group 'Operasional Harian':
-                          #   Absensi, Stock Opname, Work-Log Admin, Komplain, Coaching
-                          #   Akses menu per role via App\Support\MenuAccess (Spatie role + position_code)
+  app/Http/Controllers/Web/ # Controller halaman admin Inertia dan aksi workflow
+  app/Support/             # Registry resource admin dan aturan akses
+  resources/js/            # Halaman React/Inertia, layout, dan komponen UI
   routes/                 # web.php / api.php
 mobile/                   # Flutter — clean architecture
   lib/app/                # app-level setup
@@ -41,7 +41,8 @@ mobile/                   # Flutter — clean architecture
 # Backend
 cd backend && php artisan serve          # jalankan dev server
 php artisan migrate                      # migrasi DB
-php artisan make:filament-resource X     # bikin resource admin
+php artisan route:list --path=app       # cek route admin
+npm run build                            # build React/Inertia
 
 # Mobile
 cd mobile && flutter run                 # jalankan app
@@ -51,6 +52,6 @@ flutter test                             # tes
 ## Konvensi
 
 - **Mobile:** fitur baru masuk ke `lib/features/<nama>/`, jangan campur di `app/` atau `core/`. Infra bersama (API client, auth) di `lib/core/`.
-- **Backend:** logika bisnis per domain di `app/Modules/<Domain>/`, jangan numpuk di controller. Admin panel lewat Filament Resources.
+- **Backend:** logika bisnis per domain di `app/Modules/<Domain>/`, jangan numpuk di controller. Admin UI lewat Inertia React di `/app`.
 - **Git:** jangan commit `vendor/`, `.env`, `build/`, `.dart_tool/` (sudah di-cover .gitignore masing-masing).
 - **Komunikasi:** bahasa Indonesia (produk & chat).

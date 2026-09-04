@@ -22,6 +22,16 @@ class CorrectionFlowTest extends TestCase
         $empTek = Employee::where('email', 'teknisi@toko.com')->first();
         $period = KpiPeriod::where('status', 'OPEN')->first();
         $kpi = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $empTek->id)->first();
+        $kpi->load('items.assessment');
+        foreach ($kpi->items as $item) {
+            if ($item->formula_key_snapshot === 'rubric') {
+                $item->actual_decimal = 100;
+                $item->status = 'verified';
+            } elseif ($item->actual_decimal === null) {
+                $item->actual_decimal = $item->target_value_snapshot ?? 100;
+            }
+            $item->save();
+        }
         $kpi->update(['status' => 'locked']);
 
         return $kpi->fresh(['items']);

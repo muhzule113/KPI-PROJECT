@@ -96,7 +96,7 @@ class _KpiHistoryScreenState extends State<KpiHistoryScreen> {
                     color: AppTheme.primary.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.assignment_turned_in_rounded,
                     color: AppTheme.primaryBright,
                     size: 20,
@@ -121,7 +121,7 @@ class _KpiHistoryScreenState extends State<KpiHistoryScreen> {
                   children: [
                     Text(
                       h['final_score']?.toString() ?? '-',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
                         color: AppTheme.primaryBright,
@@ -129,10 +129,7 @@ class _KpiHistoryScreenState extends State<KpiHistoryScreen> {
                     ),
                     Text(
                       h['rating_label'] ?? '',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textMuted,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                     ),
                   ],
                 ),

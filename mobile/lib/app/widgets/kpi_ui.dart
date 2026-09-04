@@ -339,7 +339,7 @@ class KpiMetricTile extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -353,18 +353,19 @@ class KpiMetricTile extends StatelessWidget {
 class KpiProgressBar extends StatelessWidget {
   final double value;
   final String? label;
-  final Color color;
+  final Color? color;
 
   const KpiProgressBar({
     super.key,
     required this.value,
     this.label,
-    this.color = AppTheme.primaryBright,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     final clamped = value.clamp(0.0, 1.0);
+    final progressColor = color ?? AppTheme.primaryBright;
     final duration = AppTheme.motion(context, AppTheme.motionStandard);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -382,7 +383,10 @@ class KpiProgressBar extends StatelessWidget {
                   height: 9,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [color, color.withValues(alpha: 0.62)],
+                      colors: [
+                        progressColor,
+                        progressColor.withValues(alpha: 0.62),
+                      ],
                     ),
                     borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                   ),
@@ -395,7 +399,7 @@ class KpiProgressBar extends StatelessWidget {
           const SizedBox(height: 7),
           Text(
             label!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               color: AppTheme.textMuted,
               fontWeight: FontWeight.w600,
@@ -775,18 +779,20 @@ class KpiQuickAction extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
 
   const KpiQuickAction({
     super.key,
     required this.icon,
     required this.label,
     required this.onTap,
-    this.color = AppTheme.primaryBright,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final actionColor = color ?? AppTheme.primaryBright;
+
     return Semantics(
       button: true,
       label: label,
@@ -803,16 +809,16 @@ class KpiQuickAction extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.14),
+                color: actionColor.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: actionColor, size: 22),
             ),
             const SizedBox(height: AppTheme.spaceSm),
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textInk,
@@ -1134,7 +1140,7 @@ class OpsBottomNavigationBar extends StatelessWidget {
         shadowColor: AppTheme.shadow,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusXl),
-          side: const BorderSide(color: AppTheme.border),
+          side: BorderSide(color: AppTheme.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: ClipRRect(
@@ -1155,18 +1161,20 @@ class OpsBottomNavigationBar extends StatelessWidget {
 
 class OpsHeroCard extends StatelessWidget {
   final Widget child;
-  final Color accent;
+  final Color? accent;
   final EdgeInsetsGeometry padding;
 
   const OpsHeroCard({
     super.key,
     required this.child,
-    this.accent = AppTheme.primaryBright,
+    this.accent,
     this.padding = const EdgeInsets.all(AppTheme.spaceXl),
   });
 
   @override
   Widget build(BuildContext context) {
+    final heroAccent = accent ?? AppTheme.primaryBright;
+
     return Container(
       padding: padding,
       decoration: BoxDecoration(
@@ -1176,10 +1184,10 @@ class OpsHeroCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(AppTheme.radiusXl),
-        border: Border.all(color: accent.withValues(alpha: 0.32)),
+        border: Border.all(color: heroAccent.withValues(alpha: 0.32)),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: 0.09),
+            color: heroAccent.withValues(alpha: 0.09),
             blurRadius: 30,
             offset: const Offset(0, 16),
           ),
@@ -1195,7 +1203,7 @@ class OpsHeroCard extends StatelessWidget {
               height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: accent.withValues(alpha: 0.1),
+                color: heroAccent.withValues(alpha: 0.1),
               ),
             ),
           ),
@@ -1266,7 +1274,7 @@ class _OpsSkeletonState extends State<OpsSkeleton>
           gradient: LinearGradient(
             begin: Alignment(-1 + (_controller.value * 2), 0),
             end: Alignment(0.2 + (_controller.value * 2), 0),
-            colors: const [
+            colors: [
               AppTheme.surfaceElevated,
               AppTheme.surfaceMuted,
               AppTheme.surfaceElevated,

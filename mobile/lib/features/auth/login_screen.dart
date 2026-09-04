@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../app/theme/app_theme.dart';
@@ -13,8 +14,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'teknisi@toko.com');
-  final _passwordController = TextEditingController(text: 'password');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
@@ -96,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 58,
                               height: 58,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
+                                gradient: LinearGradient(
                                   colors: [
                                     AppTheme.primaryBright,
                                     AppTheme.primaryPressed,
@@ -122,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(width: 14),
-                            const Column(
+                            Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
@@ -162,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         delay: reducedMotion
                             ? Duration.zero
                             : const Duration(milliseconds: 120),
-                        child: const Text(
+                        child: Text(
                           'Pantau pekerjaan, progres, dan hasil KPI dari satu tempat.',
                           style: TextStyle(
                             fontSize: 14,
@@ -244,106 +245,106 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      OpsReveal(
-                        delay: reducedMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 230),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: AppTheme.primaryBright,
-                                shape: BoxShape.circle,
+                      if (!kReleaseMode) ...[
+                        const SizedBox(height: 20),
+                        OpsReveal(
+                          delay: reducedMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 230),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryBright,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Mode demo aktif',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.primaryBright,
+                              const SizedBox(width: 8),
+                              Text(
+                                'Mode demo aktif',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primaryBright,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Divider(color: AppTheme.border),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      OpsReveal(
-                        delay: reducedMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 280),
-                        child: const Text(
-                          'Pilih akses cepat untuk mencoba workflow per role.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textMuted,
+                              const SizedBox(width: 8),
+                              Expanded(child: Divider(color: AppTheme.border)),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      OpsReveal(
-                        delay: reducedMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 330),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _demoChip(
-                              'Teknisi',
-                              'teknisi@toko.com',
-                              AppTheme.primaryBright,
-                              Icons.build_rounded,
+                        const SizedBox(height: 12),
+                        OpsReveal(
+                          delay: reducedMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 280),
+                          child: Text(
+                            'Pilih akses cepat untuk mencoba workflow per role.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
                             ),
-                            _demoChip(
-                              'Supervisor',
-                              'supervisor@toko.com',
-                              AppTheme.statusUnderReview,
-                              Icons.rate_review_rounded,
-                            ),
-                            _demoChip(
-                              'Manager',
-                              'manager@toko.com',
-                              AppTheme.statusSubmitted,
-                              Icons.verified_user_rounded,
-                            ),
-                            _demoChip(
-                              'Kasir',
-                              'kasir@toko.com',
-                              AppTheme.statusVerified,
-                              Icons.upload_file_rounded,
-                            ),
-                            _demoChip(
-                              'CS',
-                              'cs@toko.com',
-                              AppTheme.statusRevision,
-                              Icons.support_agent_rounded,
-                            ),
-                            _demoChip(
-                              'Admin',
-                              'admin_staff@toko.com',
-                              AppTheme.textMuted,
-                              Icons.admin_panel_settings_rounded,
-                            ),
-                            _demoChip(
-                              'Gudang',
-                              'gudang@toko.com',
-                              AppTheme.primaryBright,
-                              Icons.inventory_2_rounded,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 26),
-                      const Center(
+                        const SizedBox(height: 12),
+                        OpsReveal(
+                          delay: reducedMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 330),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _demoChip(
+                                'Teknisi',
+                                'teknisi@toko.com',
+                                AppTheme.primaryBright,
+                                Icons.build_rounded,
+                              ),
+                              _demoChip(
+                                'Supervisor',
+                                'supervisor@toko.com',
+                                AppTheme.statusUnderReview,
+                                Icons.rate_review_rounded,
+                              ),
+                              _demoChip(
+                                'Manager',
+                                'manager@toko.com',
+                                AppTheme.statusSubmitted,
+                                Icons.verified_user_rounded,
+                              ),
+                              _demoChip(
+                                'Kasir',
+                                'kasir@toko.com',
+                                AppTheme.statusVerified,
+                                Icons.upload_file_rounded,
+                              ),
+                              _demoChip(
+                                'CS',
+                                'cs@toko.com',
+                                AppTheme.statusRevision,
+                                Icons.support_agent_rounded,
+                              ),
+                              _demoChip(
+                                'Admin',
+                                'admin_staff@toko.com',
+                                AppTheme.textMuted,
+                                Icons.admin_panel_settings_rounded,
+                              ),
+                              _demoChip(
+                                'Gudang',
+                                'gudang@toko.com',
+                                AppTheme.primaryBright,
+                                Icons.inventory_2_rounded,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 26),
+                      ],
+                      Center(
                         child: Text(
                           'Data demo lokal · KPI OPS v1.0',
                           style: TextStyle(

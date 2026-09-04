@@ -143,11 +143,12 @@ class TechnicianTicketAccessTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_cs_can_create_ticket(): void
+    public function test_pelayan_can_create_service_note_for_themselves(): void
     {
-        $userCs = User::where('email', 'cs@toko.com')->first();
+        $userPelayan = User::where('email', 'cs@toko.com')->first();
+        $pelayan = Employee::where('email', 'cs@toko.com')->first();
 
-        $this->actingAs($userCs, 'sanctum')
+        $response = $this->actingAs($userPelayan, 'sanctum')
             ->postJson('/api/v1/operational/tickets', [
                 'customer_name' => 'Pelanggan Baru',
                 'customer_phone' => '081298765432',
@@ -156,5 +157,57 @@ class TechnicianTicketAccessTest extends TestCase
                 'initial_complaint' => 'Baterai cepat habis',
             ])
             ->assertCreated();
+
+        $this->assertDatabaseHas('service_tickets', [
+            'id' => $response->json('data.id'),
+            'intake_by_employee_id' => $pelayan->id,
+            'cashier_employee_id' => null,
+            'status' => 'intake',
+        ]);
+    }
+
+    public function test_kasir_can_create_service_note_for_pelayan(): void
+    {
+        $userKasir = User::where('email', 'kasir@toko.com')->first();
+        $empKasir = Employee::where('email', 'kasir@toko.com')->first();
+        $pelayan = Employee::where('email', 'cs@toko.com')->first();
+
+        $response = $this->actingAs($userKasir, 'sanctum')
+            ->postJson('/api/v1/operational/tickets', [
+                'customer_name' => 'Pelanggan Baru',
+                'customer_phone' => '081298765432',
+                'device_brand' => 'Samsung',
+                'device_model' => 'Galaxy A54',
+                'initial_complaint' => 'Baterai cepat habis',
+                'customer_needs' => 'Butuh HP selesai sebelum hari Sabtu.',
+                'pelayan_employee_id' => $pelayan->id,
+            ])
+            ->assertCreated();
+
+        $ticketId = $response->json('data.id');
+
+        $this->assertDatabaseHas('service_tickets', [
+            'id' => $ticketId,
+            'intake_by_employee_id' => $pelayan->id,
+            'cashier_employee_id' => $empKasir->id,
+            'customer_needs' => 'Butuh HP selesai sebelum hari Sabtu.',
+        ]);
+        $this->assertSame('Siti Rahma', $response->json('data.pelayan_name'));
+    }
+
+    public function test_kasir_must_record_pelayan_on_service_note(): void
+    {
+        $userKasir = User::where('email', 'kasir@toko.com')->first();
+
+        $this->actingAs($userKasir, 'sanctum')
+            ->postJson('/api/v1/operational/tickets', [
+                'customer_name' => 'Pelanggan Baru',
+                'customer_phone' => '081298765432',
+                'device_brand' => 'Samsung',
+                'device_model' => 'Galaxy A54',
+                'initial_complaint' => 'Baterai cepat habis',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['pelayan_employee_id']);
     }
 }

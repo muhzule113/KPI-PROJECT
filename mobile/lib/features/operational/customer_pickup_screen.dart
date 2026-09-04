@@ -90,7 +90,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
                   const SizedBox(height: 6),
                   Text(
                     "Pelanggan: ${ticket['customer_name']} (${ticket['customer_phone']})",
-                    style: const TextStyle(color: AppTheme.textMuted),
+                    style: TextStyle(color: AppTheme.textMuted),
                   ),
                 ],
               ),
@@ -98,7 +98,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
           ),
           const SizedBox(height: 24),
 
-          const Text(
+          Text(
             'Tingkat Kepuasan Pelanggan (CSAT)',
             style: TextStyle(
               fontSize: 16,
@@ -107,7 +107,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Tanyakan kepuasan pelanggan terhadap hasil servis dan pelayanan CS.',
             style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
           ),
@@ -126,7 +126,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
                     starValue <= _rating
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
-                    color: Colors.amber[700],
+                    color: AppTheme.statusRevision,
                   ),
                   onPressed: () => setState(() => _rating = starValue),
                 );
@@ -139,7 +139,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
-                color: Colors.amber[800],
+                color: AppTheme.statusRevision,
               ),
             ),
           ),

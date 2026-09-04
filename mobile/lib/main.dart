@@ -33,6 +33,11 @@ class KpiMobileApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final preferences = context.watch<AppPreferences>();
+    AppTheme.configure(
+      mode: preferences.themeMode,
+      systemBrightness:
+          WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
     AppTheme.reduceMotion = preferences.reduceMotion;
 
     return MaterialApp(

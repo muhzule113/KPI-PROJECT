@@ -14,6 +14,7 @@ class ImportBatch extends Model
         'file_name',
         'file_path',
         'file_hash_sha256',
+        'source_application',
         'mapping_version_id',
         'period_id',
         'uploader_id',
@@ -26,6 +27,8 @@ class ImportBatch extends Model
         'summary_json',
         'issues_json',
         'confirmed_at',
+        'confirmed_by',
+        'warnings_acknowledged_at',
     ];
 
     protected $casts = [
@@ -37,6 +40,7 @@ class ImportBatch extends Model
         'summary_json' => 'array',
         'issues_json' => 'array',
         'confirmed_at' => 'datetime',
+        'warnings_acknowledged_at' => 'datetime',
     ];
 
     public function period()

@@ -5,6 +5,7 @@ namespace App\Modules\Assessment;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 
 /**
  * Agregasi KPI tim → KPI Supervisor.
@@ -31,6 +32,10 @@ class TeamAggregationKpiSyncService
         $updatedEmployees = 0;
 
         foreach ($spvKpis as $spvKpi) {
+            if (!KpiWorkflow::canSystemSyncKpi($spvKpi)) {
+                continue;
+            }
+
             $spv = $spvKpi->employee;
             if (!$spv) continue;
 

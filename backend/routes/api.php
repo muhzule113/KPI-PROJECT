@@ -3,6 +3,9 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CashierApiController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\DailyAssessmentController;
+use App\Http\Controllers\Api\V1\KpiCorrectionController;
+use App\Http\Controllers\Api\V1\KpiEvidenceController;
 use App\Http\Controllers\Api\V1\ManagerApprovalController;
 use App\Http\Controllers\Api\V1\MyKpiController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -13,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     // Public routes
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
     // Authenticated routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -21,11 +24,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+        Route::get('/kpi/evidence/{evidenceId}', [KpiEvidenceController::class, 'download'])
+            ->whereNumber('evidenceId')
+            ->name('api.v1.kpi.evidence.download');
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index']);
 
         // Operational Service Management & Tickets
+        Route::get('/operational/pelayan', [ServiceTicketApiController::class, 'pelayanEmployees']);
         Route::get('/operational/tickets', [ServiceTicketApiController::class, 'index']);
         Route::post('/operational/tickets', [ServiceTicketApiController::class, 'store']);
         Route::get('/operational/tickets/{id}', [ServiceTicketApiController::class, 'show']);
@@ -41,14 +48,23 @@ Route::prefix('v1')->group(function () {
 
         // Employee: My KPI
         Route::get('/my-kpi/active', [MyKpiController::class, 'active']);
+        Route::get('/my-kpi/daily', [DailyAssessmentController::class, 'employeeDay']);
         Route::get('/my-kpi/items/{id}', [MyKpiController::class, 'getItem']);
-        Route::post('/my-kpi/items/{id}/draft', [MyKpiController::class, 'saveDraft']);
-        Route::post('/my-kpi/items/{id}/evidence', [MyKpiController::class, 'uploadEvidence']);
-        Route::post('/my-kpi/submit', [MyKpiController::class, 'submit']);
         Route::get('/my-kpi/history', [MyKpiController::class, 'history']);
+
+        // Legacy write endpoints hanya tersedia untuk actor review/approval.
+        Route::middleware('role.require:supervisor|owner_manager|super_admin')->group(function () {
+            Route::post('/my-kpi/daily', [DailyAssessmentController::class, 'saveEmployeeDay']);
+            Route::post('/my-kpi/items/{id}/draft', [MyKpiController::class, 'saveDraft']);
+            Route::post('/my-kpi/items/{id}/evidence', [MyKpiController::class, 'uploadEvidence']);
+            Route::post('/my-kpi/submit', [MyKpiController::class, 'submit']);
+        });
 
         // Supervisor: Review Queue (hanya supervisor & super_admin)
         Route::middleware('role.require:supervisor|super_admin')->group(function () {
+            Route::get('/supervisor/daily', [DailyAssessmentController::class, 'supervisorQueue']);
+            Route::post('/supervisor/daily/{entryId}/assess', [DailyAssessmentController::class, 'assessSupervisor'])
+                ->whereNumber('entryId');
             Route::get('/supervisor/queue', [SupervisorReviewController::class, 'queue']);
             Route::get('/supervisor/review/{kpiId}', [SupervisorReviewController::class, 'detail']);
             Route::post('/supervisor/review/{kpiId}/items/{itemId}/verify', [SupervisorReviewController::class, 'verifyItem']);
@@ -59,14 +75,28 @@ Route::prefix('v1')->group(function () {
 
         // Manager / Owner: Approval Queue (hanya owner_manager & super_admin)
         Route::middleware('role.require:owner_manager|super_admin')->group(function () {
+            Route::get('/manager/daily', [DailyAssessmentController::class, 'managerQueue']);
+            Route::post('/manager/daily/{entryId}/assess', [DailyAssessmentController::class, 'assessManager'])
+                ->whereNumber('entryId');
             Route::get('/manager/queue', [ManagerApprovalController::class, 'queue']);
             Route::get('/manager/approval/{kpiId}', [ManagerApprovalController::class, 'detail']);
+            Route::post('/manager/approval/{kpiId}/items/{itemId}/assess', [ManagerApprovalController::class, 'assessItem']);
+            Route::post('/manager/approval/{kpiId}/items/{itemId}/rubric', [ManagerApprovalController::class, 'assessRubric']);
             Route::post('/manager/approval/{kpiId}/approve', [ManagerApprovalController::class, 'approve']);
             Route::post('/manager/approval/{kpiId}/return', [ManagerApprovalController::class, 'return']);
         });
 
+        // KPI correction requests: requester and assigned reviewer/manager scope is enforced by the service.
+        Route::get('/kpi/corrections', [KpiCorrectionController::class, 'index']);
+        Route::post('/kpi/{kpiId}/corrections', [KpiCorrectionController::class, 'request']);
+        Route::post('/kpi/corrections/{correctionId}/approve', [KpiCorrectionController::class, 'approve'])
+            ->whereNumber('correctionId');
+        Route::post('/kpi/corrections/{correctionId}/reject', [KpiCorrectionController::class, 'reject'])
+            ->whereNumber('correctionId');
+
         // Cashier Report Import
         Route::post('/cashier/import', [CashierApiController::class, 'upload']);
+        Route::get('/cashier/import/{batchId}', [CashierApiController::class, 'status']);
         Route::post('/cashier/import/{batchId}/confirm', [CashierApiController::class, 'confirm']);
 
         // Periode KPI (untuk picker di mobile)

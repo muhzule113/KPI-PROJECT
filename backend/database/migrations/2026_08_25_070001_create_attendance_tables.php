@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::dropIfExists('attendances');
 
         // Subsistem Absensi & Kehadiran
-        // Feed KPI: ADM-05, KSR-06, GUD-07, CS-06 (kehadiran & disiplin), SUP-03 (agregasi tim)
+        // Feed KPI: ADM-05, KSR-06, GUD-07, CS-06 Pelayan (kehadiran & disiplin), SUP-03 (agregasi tim)
         Schema::create('attendances', function (Blueprint $table) {
             $table->id();
             $table->foreignUlid('employee_id')->constrained('employees')->cascadeOnDelete();

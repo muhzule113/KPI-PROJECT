@@ -8,7 +8,9 @@ use App\Models\EmployeeKpiItem;
 use App\Models\KpiActualEntry;
 use App\Models\KpiEvidence;
 use App\Models\SystemNotification;
+use App\Models\User;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -25,13 +27,23 @@ class AssessmentService
         ?float $actualDecimal,
         ?array $actualJson = null,
         ?string $notes = null,
-        ?int $userId = null
+        ?int $userId = null,
+        ?int $expectedVersion = null
     ): EmployeeKpiItem {
         $kpi = $item->employeeKpi;
+        $actor = $userId !== null
+            ? User::with('employee')->find($userId)
+            : auth()->user();
+        KpiWorkflow::assertCanWriteKpi($actor, $kpi);
+        KpiWorkflow::assertMutableKpi($kpi);
+        KpiWorkflow::assertExpectedVersion($item, $expectedVersion);
 
-        // Guard: check status
         if (!in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("KPI berstatus '{$kpi->status}' dan tidak dapat diedit.");
+        }
+
+        if ($kpi->period->status !== 'OPEN' || $kpi->period->submission_deadline->isPast()) {
+            throw new Exception('Batas waktu pengisian periode ini telah berakhir.');
         }
 
         if ($kpi->status === 'revision_required' && $item->status !== 'revision_required') {
@@ -69,20 +81,43 @@ class AssessmentService
         ?int $userId = null
     ): KpiEvidence {
         $kpi = $item->employeeKpi;
+        $actor = $userId !== null
+            ? User::with('employee')->find($userId)
+            : auth()->user();
+        KpiWorkflow::assertCanWriteKpi($actor, $kpi);
         if (!in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("Tidak dapat mengunggah bukti pada status '{$kpi->status}'.");
         }
 
+        if ($kpi->period->status !== 'OPEN' || $kpi->period->submission_deadline->isPast()) {
+            throw new Exception('Batas waktu pengisian periode ini telah berakhir.');
+        }
+
+        KpiWorkflow::assertMutableKpi($kpi);
+
+        $allowedMimes = [
+            'image/jpeg', 'image/png', 'application/pdf',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
+        $mime = $file->getMimeType() ?? 'application/octet-stream';
+        if (!in_array($mime, $allowedMimes, true) || !$file->isValid()) {
+            throw new Exception('Format file evidence tidak didukung atau file rusak.');
+        }
+
         $hash = hash_file('sha256', $file->getRealPath());
-        $path = $file->store('evidences/' . date('Y/m'), 'public');
+        $path = $file->store('evidences/' . date('Y/m'), 'local');
 
         return KpiEvidence::create([
             'employee_kpi_item_id' => $item->id,
             'file_path' => $path,
             'file_name' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
-            'mime_type' => $file->getMimeType() ?? 'application/octet-stream',
+            'mime_type' => $mime,
             'sha256_hash' => $hash,
+            'scan_status' => 'pending',
+            'scanned_at' => null,
+            'scan_note' => 'Menunggu pemeriksaan keamanan file.',
             'uploaded_by' => $userId ?? auth()->id() ?? $kpi->employee->user_id,
             'description' => $description,
         ]);
@@ -90,12 +125,16 @@ class AssessmentService
 
     public function submitKpi(EmployeeKpi $kpi, ?int $userId = null): array
     {
+        $actor = $userId !== null
+            ? User::with('employee')->find($userId)
+            : auth()->user();
+        KpiWorkflow::assertCanWriteKpi($actor, $kpi);
         if (!in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("KPI berstatus '{$kpi->status}' dan tidak dapat disubmit.");
         }
 
         $period = $kpi->period;
-        if ($period->submission_deadline < now() && $period->status !== 'OPEN') {
+        if ($period->status !== 'OPEN' || $period->submission_deadline->isPast()) {
             throw new Exception("Batas waktu (deadline) pengisian periode ini telah berakhir.");
         }
 
@@ -104,14 +143,21 @@ class AssessmentService
         $missingItems = [];
 
         foreach ($kpi->items as $item) {
-            // If item is not filled
-            if ($item->actual_decimal === null && $item->actual_json === null && $item->source_type_snapshot === 'employee') {
+            // Rubrik diisi saat review; indikator numerik wajib sudah memiliki
+            // nilai dari sistem atau reviewer sebelum KPI dikirim.
+            if ($item->actual_decimal === null
+                && $item->actual_json === null
+                && $item->formula_key_snapshot !== 'rubric') {
                 $missingItems[] = "Item '{$item->name_snapshot}' belum memiliki nilai aktual.";
             }
 
-            // If evidence is required
-            if ($item->evidence_req_snapshot && $item->evidences->isEmpty()) {
-                $missingItems[] = "Item '{$item->name_snapshot}' mewajibkan unggahan bukti (evidence).";
+            // Evidence must exist and complete local security validation.
+            $usableEvidence = $item->evidences->whereIn('scan_status', ['clean', null]);
+            if ($item->evidence_req_snapshot && $usableEvidence->isEmpty()) {
+                $missingItems[] = "Item '{$item->name_snapshot}' mewajibkan evidence berstatus clean.";
+            }
+            if ($item->evidences->contains(fn (KpiEvidence $evidence) => !in_array($evidence->scan_status, ['clean', null], true))) {
+                $missingItems[] = "Evidence pada item '{$item->name_snapshot}' masih menunggu pemeriksaan atau ditolak.";
             }
         }
 

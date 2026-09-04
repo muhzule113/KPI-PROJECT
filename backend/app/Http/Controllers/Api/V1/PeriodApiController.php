@@ -10,7 +10,11 @@ class PeriodApiController extends Controller
 {
     public function index(): JsonResponse
     {
-        $periods = KpiPeriod::orderByDesc('year')->orderByDesc('month')->get();
+        $periods = KpiPeriod::query()
+            ->where('status', 'OPEN')
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->get();
 
         return response()->json([
             'success' => true,

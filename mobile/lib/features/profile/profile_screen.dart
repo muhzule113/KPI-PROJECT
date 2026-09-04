@@ -148,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (newPassword.trim().length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Kata sandi baru minimal 8 karakter.'),
           backgroundColor: AppTheme.statusDanger,
         ),
@@ -157,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Konfirmasi kata sandi tidak cocok.'),
           backgroundColor: AppTheme.statusDanger,
         ),
@@ -223,7 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     Text(
                       name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textInk,
@@ -232,10 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 4),
                     Text(
                       user?['email'] ?? '',
-                      style: const TextStyle(
-                        color: AppTheme.textMuted,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                     ),
                   ],
                 ),
@@ -271,7 +268,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
 
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Pengaturan & Akun',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -308,7 +305,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const Divider(height: 1),
-                    const ListTile(
+                    ListTile(
                       leading: Icon(
                         Icons.info_outline_rounded,
                         color: AppTheme.textMuted,
@@ -327,7 +324,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const Divider(height: 1),
                     ListTile(
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.lock_reset_rounded,
                         color: AppTheme.textMuted,
                       ),
@@ -335,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'Ubah Kata Sandi',
                         style: TextStyle(fontSize: 14),
                       ),
-                      trailing: const Icon(
+                      trailing: Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 14,
                         color: AppTheme.textMuted,
@@ -374,13 +371,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-        ),
+        Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 13,
             color: AppTheme.textInk,

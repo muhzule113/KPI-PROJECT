@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('unit', 30)->default('%');
             $table->string('direction', 30)->default('higher'); // higher, lower, zero_tolerance
             $table->string('default_formula', 50)->default('higher_is_better');
-            $table->string('source_type', 50)->default('employee'); // employee, supervisor, cross_role, import, system
+            $table->string('source_type', 50)->default('system'); // system, supervisor, import
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -79,7 +79,7 @@ return new class extends Migration
             $table->json('target_json')->nullable(); // Extended parameters (e.g. failure_limit, full_score_limit)
             $table->string('formula_key', 50)->default('higher_is_better'); // higher_is_better, lower_is_better, zero_tolerance, rubric
             $table->json('formula_params')->nullable();
-            $table->string('source_type', 50)->default('employee');
+            $table->string('source_type', 50)->default('system');
             $table->boolean('evidence_required')->default(false);
             $table->boolean('is_mandatory')->default(true);
             $table->unsignedInteger('sort_order')->default(1);

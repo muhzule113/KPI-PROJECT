@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SaveKpiDraftRequest;
 use App\Models\EmployeeKpi;
 use App\Models\EmployeeKpiItem;
 use App\Models\KpiPeriod;
 use App\Modules\Assessment\AssessmentService;
+use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,14 +54,18 @@ class MyKpiController extends Controller
     public function getItem(Request $request, string $itemId): JsonResponse
     {
         $employee = $request->user()->employee;
-        $item = EmployeeKpiItem::with(['evidences', 'reviewItems', 'employeeKpi.period'])
+        $item = EmployeeKpiItem::with([
+            'evidences',
+            'reviewItems',
+            'actualEntries',
+            'employeeKpi.period',
+        ])
             ->where('id', $itemId)
             ->first();
 
         if (!$item || $item->employeeKpi->employee_id !== $employee?->id) {
             return response()->json(['success' => false, 'message' => 'Indikator KPI tidak ditemukan.'], 404);
         }
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -77,13 +83,17 @@ class MyKpiController extends Controller
                 'rubric' => $item->rubric_snapshot,
                 'actual_decimal' => $item->actual_decimal !== null ? (float) $item->actual_decimal : null,
                 'actual_json' => $item->actual_json,
+                'calculation_note' => $item->calculation_note,
                 'status' => $item->status,
                 'achievement_percentage' => $item->achievement_percentage !== null ? (float) $item->achievement_percentage : null,
                 'weighted_score' => $item->weighted_score !== null ? (float) $item->weighted_score : null,
+                'row_version' => $item->row_version,
+                'notes' => $item->actualEntries->last()?->notes,
                 'evidences' => $item->evidences->map(fn($e) => [
                     'id' => $e->id,
                     'file_name' => $e->file_name,
-                    'file_url' => asset('storage/' . $e->file_path),
+                    'file_url' => route('api.v1.kpi.evidence.download', ['evidenceId' => $e->id]),
+                    'scan_status' => $e->scan_status,
                     'file_size' => $e->file_size,
                     'created_at' => $e->created_at->toIso8601String(),
                 ]),
@@ -96,19 +106,17 @@ class MyKpiController extends Controller
         ]);
     }
 
-    public function saveDraft(Request $request, string $itemId): JsonResponse
+    public function saveDraft(SaveKpiDraftRequest $request, string $itemId): JsonResponse
     {
-        $request->validate([
-            'actual_decimal' => 'nullable|numeric',
-            'actual_json' => 'nullable|array',
-            'notes' => 'nullable|string',
-        ]);
 
         $employee = $request->user()->employee;
         $item = EmployeeKpiItem::where('id', $itemId)->first();
 
         if (!$item || $item->employeeKpi->employee_id !== $employee?->id) {
             return response()->json(['success' => false, 'message' => 'Indikator KPI tidak ditemukan.'], 404);
+        }
+        if (!KpiWorkflow::canWriteKpi($request->user(), $item->employeeKpi)) {
+            return response()->json(['success' => false, 'message' => 'Karyawan tidak dapat mengunggah evidence KPI.'], 403);
         }
 
         try {
@@ -117,7 +125,8 @@ class MyKpiController extends Controller
                 actualDecimal: $request->input('actual_decimal') !== null ? (float) $request->actual_decimal : null,
                 actualJson: $request->input('actual_json'),
                 notes: $request->input('notes'),
-                userId: $request->user()->id
+                userId: $request->user()->id,
+                expectedVersion: $request->input('row_version')
             );
 
             return response()->json([
@@ -125,8 +134,10 @@ class MyKpiController extends Controller
                 'message' => 'Draft nilai aktual berhasil disimpan.',
                 'data' => [
                     'item_id' => $updated->id,
-                    'actual_decimal' => (float) $updated->actual_decimal,
+                    'actual_decimal' => $updated->actual_decimal !== null ? (float) $updated->actual_decimal : null,
+                    'actual_json' => $updated->actual_json,
                     'status' => $updated->status,
+                    'row_version' => $updated->row_version,
                     'achievement_percentage' => $updated->achievement_percentage,
                     'weighted_score' => $updated->weighted_score,
                 ],
@@ -164,7 +175,8 @@ class MyKpiController extends Controller
                 'data' => [
                     'id' => $evidence->id,
                     'file_name' => $evidence->file_name,
-                    'file_url' => asset('storage/' . $evidence->file_path),
+                    'file_url' => route('api.v1.kpi.evidence.download', ['evidenceId' => $evidence->id]),
+                    'scan_status' => $evidence->scan_status,
                     'file_size' => $evidence->file_size,
                 ],
             ]);
@@ -188,6 +200,9 @@ class MyKpiController extends Controller
 
         if (!$kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
+        }
+        if (!KpiWorkflow::canWriteKpi($request->user(), $kpi)) {
+            return response()->json(['success' => false, 'message' => 'Karyawan tidak dapat mengirim KPI.'], 403);
         }
 
         try {
@@ -259,6 +274,8 @@ class MyKpiController extends Controller
                 'has_evidence' => $item->evidences->isNotEmpty(),
                 'status' => $item->status,
                 'actual_decimal' => $item->actual_decimal !== null ? (float) $item->actual_decimal : null,
+                'actual_json' => $item->actual_json,
+                'calculation_note' => $item->calculation_note,
                 'achievement_percentage' => $item->achievement_percentage !== null ? (float) $item->achievement_percentage : null,
                 'weighted_score' => $item->weighted_score !== null ? (float) $item->weighted_score : null,
                 'rubric' => $item->rubric_snapshot,

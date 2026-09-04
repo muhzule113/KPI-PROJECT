@@ -16,7 +16,7 @@ return new class extends Migration
             $table->id();
             $table->string('code', 50)->unique(); // e.g. CMP-202608-001
             $table->date('complaint_date');
-            // Karyawan yang menjadi subjek komplain (CS/Kasir/Teknisi)
+            // Karyawan yang menjadi subjek komplain (Pelayan/Kasir/Teknisi)
             $table->foreignUlid('employee_id')->nullable()->constrained('employees')->nullOnDelete();
             $table->foreignId('service_ticket_id')->nullable()->constrained('service_tickets')->nullOnDelete();
             $table->string('channel', 30); // in_store, phone, whatsapp, google_review, other

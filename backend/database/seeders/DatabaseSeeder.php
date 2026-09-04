@@ -76,7 +76,7 @@ class DatabaseSeeder extends Seeder
         $posOwner = Position::firstOrCreate(['code' => 'POS-OWN'], ['name' => 'Owner / Manager', 'department' => 'Manajemen']);
         $posSpv = Position::firstOrCreate(['code' => 'POS-SPV'], ['name' => 'Supervisor', 'department' => 'Operasional']);
         $posTek = Position::firstOrCreate(['code' => 'POS-TEK'], ['name' => 'Teknisi', 'department' => 'Servis']);
-        $posCs = Position::firstOrCreate(['code' => 'POS-CS'], ['name' => 'Customer Service', 'department' => 'Front Office']);
+        $posCs = Position::updateOrCreate(['code' => 'POS-CS'], ['name' => 'Pelayan', 'department' => 'Front Office']);
         $posAdm = Position::firstOrCreate(['code' => 'POS-ADM'], ['name' => 'Admin', 'department' => 'Administrasi']);
         $posKsr = Position::firstOrCreate(['code' => 'POS-KSR'], ['name' => 'Kasir', 'department' => 'Front Office']);
         $posGud = Position::firstOrCreate(['code' => 'POS-GUD'], ['name' => 'Gudang / Sparepart', 'department' => 'Logistik']);
@@ -84,44 +84,44 @@ class DatabaseSeeder extends Seeder
         // 5. KPI Definitions Master (39 items)
         $definitionsData = [
             // Teknisi
-            ['code' => 'TEK-01', 'name' => 'Jumlah Servis Selesai', 'metric_type' => 'count', 'unit' => 'unit', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'TEK-02', 'name' => 'Tingkat Keberhasilan Servis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'TEK-03', 'name' => 'Tingkat Retur / Komplain Servis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'cross_role'],
-            ['code' => 'TEK-04', 'name' => 'Ketepatan Waktu Pengerjaan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
+            ['code' => 'TEK-01', 'name' => 'Jumlah Servis Selesai', 'metric_type' => 'count', 'unit' => 'unit', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'TEK-02', 'name' => 'Tingkat Keberhasilan Servis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'TEK-03', 'name' => 'Tingkat Retur / Komplain Servis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'system'],
+            ['code' => 'TEK-04', 'name' => 'Ketepatan Waktu Pengerjaan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'TEK-05', 'name' => 'Kepatuhan SOP Servis', 'metric_type' => 'rubric', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'rubric', 'source_type' => 'supervisor'],
             ['code' => 'TEK-06', 'name' => 'Kerapian & Kebersihan Meja Kerja', 'metric_type' => 'rubric', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'rubric', 'source_type' => 'supervisor'],
             ['code' => 'TEK-07', 'name' => 'Kelengkapan Laporan Servis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
 
-            // CS
-            ['code' => 'CS-01', 'name' => 'Kepuasan Pelanggan (CSAT)', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'CS-02', 'name' => 'Kecepatan Melayani Pelanggan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'CS-03', 'name' => 'Akurasi Input Order / Tiket', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'CS-04', 'name' => 'Follow-up Status Pelanggan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'CS-05', 'name' => 'Jumlah Komplain Pelanggan', 'metric_type' => 'count', 'unit' => 'komplain', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'cross_role'],
+            // Pelayan (kode indikator tetap CS-* untuk kompatibilitas)
+            ['code' => 'CS-01', 'name' => 'Kepuasan Pelanggan (CSAT)', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'CS-02', 'name' => 'Kecepatan Melayani Pelanggan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'CS-03', 'name' => 'Akurasi Input Order / Tiket', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'CS-04', 'name' => 'Follow-up Status Pelanggan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'CS-05', 'name' => 'Jumlah Komplain Pelanggan', 'metric_type' => 'count', 'unit' => 'komplain', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'system'],
             ['code' => 'CS-06', 'name' => 'Kehadiran & Disiplin', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'supervisor'],
 
             // Admin
-            ['code' => 'ADM-01', 'name' => 'Akurasi Input Data Administrasi', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
+            ['code' => 'ADM-01', 'name' => 'Akurasi Input Data Administrasi', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'ADM-02', 'name' => 'Ketepatan Laporan Harian & Bulanan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
-            ['code' => 'ADM-03', 'name' => 'Kelengkapan Dokumen & Arsip', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'ADM-04', 'name' => 'Rekonsiliasi Data Transaksi', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
+            ['code' => 'ADM-03', 'name' => 'Kelengkapan Dokumen & Arsip', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'ADM-04', 'name' => 'Rekonsiliasi Data Transaksi', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'ADM-05', 'name' => 'Kehadiran & Disiplin', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'supervisor'],
             ['code' => 'ADM-06', 'name' => 'Kepatuhan SOP Administrasi', 'metric_type' => 'rubric', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'rubric', 'source_type' => 'supervisor'],
 
             // Kasir
-            ['code' => 'KSR-01', 'name' => 'Akurasi Transaksi Kasir', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'import'],
-            ['code' => 'KSR-02', 'name' => 'Selisih Kas Harian / Bulanan', 'metric_type' => 'currency', 'unit' => 'Rp', 'direction' => 'zero_tolerance', 'default_formula' => 'zero_tolerance', 'source_type' => 'import'],
-            ['code' => 'KSR-03', 'name' => 'Ketepatan Waktu Upload Laporan Kas', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'import'],
-            ['code' => 'KSR-04', 'name' => 'Kecepatan Transaksi Layanan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'import'],
+            ['code' => 'KSR-01', 'name' => 'Akurasi Transaksi Kasir', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'KSR-02', 'name' => 'Selisih Kas Harian / Bulanan', 'metric_type' => 'currency', 'unit' => 'Rp', 'direction' => 'zero_tolerance', 'default_formula' => 'zero_tolerance', 'source_type' => 'system'],
+            ['code' => 'KSR-03', 'name' => 'Ketepatan Waktu Upload Laporan Kas', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'KSR-04', 'name' => 'Kecepatan Transaksi Layanan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'KSR-05', 'name' => 'Pelayanan & Keramahan Kasir', 'metric_type' => 'rubric', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'rubric', 'source_type' => 'supervisor'],
             ['code' => 'KSR-06', 'name' => 'Disiplin & Kehadiran', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'supervisor'],
 
             // Gudang
-            ['code' => 'GUD-01', 'name' => 'Akurasi Stok Sparepart', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'GUD-02', 'name' => 'Selisih Stok Opname', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'employee'],
-            ['code' => 'GUD-03', 'name' => 'Kecepatan Penyediaan Sparepart', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'GUD-04', 'name' => 'Kelengkapan Stok Sparepart Kritis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
-            ['code' => 'GUD-05', 'name' => 'Kepatuhan Jadwal Stock Opname', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
+            ['code' => 'GUD-01', 'name' => 'Akurasi Stok Sparepart', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'GUD-02', 'name' => 'Selisih Stok Opname', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'system'],
+            ['code' => 'GUD-03', 'name' => 'Kecepatan Penyediaan Sparepart', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'GUD-04', 'name' => 'Kelengkapan Stok Sparepart Kritis', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'GUD-05', 'name' => 'Kepatuhan Jadwal Stock Opname', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'GUD-06', 'name' => 'Kerapian & Kebersihan Gudang', 'metric_type' => 'rubric', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'rubric', 'source_type' => 'supervisor'],
             ['code' => 'GUD-07', 'name' => 'Disiplin & Kehadiran', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'supervisor'],
 
@@ -130,7 +130,7 @@ class DatabaseSeeder extends Seeder
             ['code' => 'SUP-02', 'name' => 'Kualitas Kerja Tim & Penekanan Retur', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'SUP-03', 'name' => 'Kedisiplinan & Absensi Tim', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'SUP-04', 'name' => 'Penyelesaian Komplain & Eskalasi', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
-            ['code' => 'SUP-05', 'name' => 'Coaching & Evaluasi Karyawan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'employee'],
+            ['code' => 'SUP-05', 'name' => 'Coaching & Evaluasi Karyawan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'SUP-06', 'name' => 'Kepatuhan SOP Tim Operasional', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'supervisor'],
             ['code' => 'SUP-07', 'name' => 'Ketepatan Laporan Evaluasi Bulanan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
         ];
@@ -160,10 +160,10 @@ class DatabaseSeeder extends Seeder
         );
 
         $tekItems = [
-            ['code' => 'TEK-01', 'weight' => 25.00, 'target' => 80.00, 'unit' => 'unit', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'TEK-02', 'weight' => 25.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'TEK-03', 'weight' => 15.00, 'target' => 3.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 6.00], 'evidence' => false, 'source' => 'cross_role'],
-            ['code' => 'TEK-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'TEK-01', 'weight' => 25.00, 'target' => 80.00, 'unit' => 'unit', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'TEK-02', 'weight' => 25.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'TEK-03', 'weight' => 15.00, 'target' => 3.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 6.00], 'evidence' => false, 'source' => 'system'],
+            ['code' => 'TEK-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'TEK-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Diagnosis kerusakan sesuai prosedur standar',
                 'Penggunaan alat servis & ESD protection sesuai SOP',
@@ -182,18 +182,18 @@ class DatabaseSeeder extends Seeder
 
         $this->attachTemplateItems($verTek, $tekItems, $defs);
 
-        // Template CS (Total 100%)
-        $tplCs = KpiTemplate::firstOrCreate(['code' => 'TPL-CS-01'], ['name' => 'Template KPI CS v1', 'position_id' => $posCs->id, 'is_active' => true]);
+        // Template Pelayan (kode template tetap TPL-CS-01 untuk kompatibilitas)
+        $tplCs = KpiTemplate::firstOrCreate(['code' => 'TPL-CS-01'], ['name' => 'Template KPI Pelayan v1', 'position_id' => $posCs->id, 'is_active' => true]);
         $verCs = KpiTemplateVersion::firstOrCreate(
             ['kpi_template_id' => $tplCs->id, 'version_number' => 1],
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $csItems = [
-            ['code' => 'CS-01', 'weight' => 25.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 8.00], 'evidence' => false, 'source' => 'cross_role'],
+            ['code' => 'CS-01', 'weight' => 25.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 8.00], 'evidence' => false, 'source' => 'system'],
             ['code' => 'CS-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
         ];
         $this->attachTemplateItems($verCs, $csItems, $defs);
@@ -205,10 +205,10 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $admItems = [
-            ['code' => 'ADM-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'ADM-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'ADM-02', 'weight' => 25.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
             ['code' => 'ADM-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
             ['code' => 'ADM-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Kelengkapan pengarsipan invoice & surat jalan',
@@ -225,10 +225,10 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $ksrItems = [
-            ['code' => 'KSR-01', 'weight' => 30.00, 'target' => 99.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'import'],
-            ['code' => 'KSR-02', 'weight' => 25.00, 'target' => 0.00, 'unit' => 'Rp', 'formula' => 'zero_tolerance', 'target_json' => ['full_score_limit' => 50000.00, 'failure_limit' => 200000.00], 'evidence' => false, 'source' => 'import'],
-            ['code' => 'KSR-03', 'weight' => 20.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'import'],
-            ['code' => 'KSR-04', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'import'],
+            ['code' => 'KSR-01', 'weight' => 30.00, 'target' => 99.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'KSR-02', 'weight' => 25.00, 'target' => 0.00, 'unit' => 'Rp', 'formula' => 'zero_tolerance', 'target_json' => ['full_score_limit' => 50000.00, 'failure_limit' => 200000.00], 'evidence' => false, 'source' => 'system'],
+            ['code' => 'KSR-03', 'weight' => 20.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'KSR-04', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'KSR-05', 'weight' => 10.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Salam, senyum, sapa kepada pelanggan (3S)',
                 'Ketelitian verifikasi uang tunai & QRIS/Debit',
@@ -246,11 +246,11 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $gudItems = [
-            ['code' => 'GUD-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'GUD-02', 'weight' => 20.00, 'target' => 2.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 5.00], 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'GUD-03', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'GUD-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'GUD-05', 'weight' => 10.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'GUD-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'GUD-02', 'weight' => 20.00, 'target' => 2.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 5.00], 'evidence' => false, 'source' => 'system'],
+            ['code' => 'GUD-03', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'GUD-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'GUD-05', 'weight' => 10.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
             ['code' => 'GUD-06', 'weight' => 5.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Penataan part sesuai rak & labeling jelas',
                 'Kebersihan lantai & sirkulasi udara gudang',
@@ -271,7 +271,7 @@ class DatabaseSeeder extends Seeder
             ['code' => 'SUP-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'SUP-03', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'SUP-04', 'weight' => 10.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'SUP-05', 'weight' => 10.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'SUP-05', 'weight' => 10.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
             ['code' => 'SUP-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
             ['code' => 'SUP-07', 'weight' => 5.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
         ];
@@ -285,37 +285,48 @@ class DatabaseSeeder extends Seeder
             $def = $defs[$itemData['code']] ?? null;
             if (!$def) continue;
 
-            $tplItem = KpiTemplateItem::create([
-                'template_version_id' => $version->id,
-                'kpi_definition_id' => $def->id,
-                'weight' => $itemData['weight'],
-                'target_value' => $itemData['target'] ?? null,
-                'target_unit' => $itemData['unit'] ?? '%',
-                'target_json' => $itemData['target_json'] ?? null,
-                'formula_key' => $itemData['formula'],
-                'formula_params' => $itemData['formula_params'] ?? null,
-                'source_type' => $itemData['source'],
-                'evidence_required' => $itemData['evidence'] ?? false,
-                'is_mandatory' => true,
-                'sort_order' => $sort++,
-            ]);
+            $source = in_array($itemData['source'], ['employee', 'cross_role', 'import'], true)
+                ? 'system'
+                : $itemData['source'];
+            $sortOrder = $sort++;
+            $tplItem = KpiTemplateItem::updateOrCreate(
+                [
+                    'template_version_id' => $version->id,
+                    'kpi_definition_id' => $def->id,
+                ],
+                [
+                    'weight' => $itemData['weight'],
+                    'target_value' => $itemData['target'] ?? null,
+                    'target_unit' => $itemData['unit'] ?? '%',
+                    'target_json' => $itemData['target_json'] ?? null,
+                    'formula_key' => $itemData['formula'],
+                    'formula_params' => $itemData['formula_params'] ?? null,
+                    'source_type' => $source,
+                    'evidence_required' => $itemData['evidence'] ?? false,
+                    'is_mandatory' => true,
+                    'sort_order' => $sortOrder,
+                ]
+            );
 
             if (!empty($itemData['rubric_criteria'])) {
-                $rubric = KpiRubric::create([
-                    'template_item_id' => $tplItem->id,
-                    'name' => "Rubrik {$def->name}",
-                    'description' => "Daftar kriteria evaluasi observasi Supervisor",
-                ]);
+                $rubric = KpiRubric::firstOrCreate(
+                    ['template_item_id' => $tplItem->id],
+                    [
+                        'name' => "Rubrik {$def->name}",
+                        'description' => "Daftar kriteria evaluasi observasi Supervisor",
+                    ]
+                );
 
                 $cSort = 1;
                 foreach ($itemData['rubric_criteria'] as $crit) {
-                    KpiRubricCriterion::create([
-                        'rubric_id' => $rubric->id,
-                        'criterion_text' => $crit,
-                        'points' => 1.00,
-                        'is_mandatory' => true,
-                        'sort_order' => $cSort++,
-                    ]);
+                    KpiRubricCriterion::firstOrCreate(
+                        ['rubric_id' => $rubric->id, 'sort_order' => $cSort++],
+                        [
+                            'criterion_text' => $crit,
+                            'points' => 1.00,
+                            'is_mandatory' => true,
+                        ]
+                    );
                 }
             }
         }
@@ -396,10 +407,10 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 5. Customer Service
+        // 5. Pelayan
         $userCs = User::firstOrCreate(
             ['email' => 'cs@toko.com'],
-            ['name' => 'Siti Rahma (CS)', 'password' => Hash::make('password')]
+            ['name' => 'Siti Rahma (Pelayan)', 'password' => Hash::make('password')]
         );
         $userCs->assignRole('employee');
 
@@ -496,7 +507,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Periode Agustus 2026',
                 'start_date' => '2026-08-01',
                 'end_date' => '2026-08-31',
-                'submission_deadline' => '2026-08-28 23:59:59',
+                'submission_deadline' => '2026-08-29 23:59:59',
                 'review_deadline' => '2026-08-30 23:59:59',
                 'approval_deadline' => '2026-08-31 23:59:59',
                 'status' => 'DRAFT',
@@ -521,13 +532,13 @@ class DatabaseSeeder extends Seeder
 
         // 1. Spareparts
         $partsData = [
-            ['code' => 'PRT-LCD-IP13', 'name' => 'LCD Screen Assembly iPhone 13 OEM', 'category' => 'LCD', 'compatible_models' => 'iPhone 13, iPhone 13 Mini', 'stock_quantity' => 15, 'min_stock_alert' => 3, 'purchase_price' => 750000, 'selling_price' => 1250000, 'is_critical' => true],
-            ['code' => 'PRT-BAT-IP13P', 'name' => 'Baterai High Capacity iPhone 13 Pro 3095mAh', 'category' => 'Baterai', 'compatible_models' => 'iPhone 13 Pro', 'stock_quantity' => 20, 'min_stock_alert' => 5, 'purchase_price' => 220000, 'selling_price' => 450000, 'is_critical' => true],
-            ['code' => 'PRT-LCD-SMA54', 'name' => 'Super AMOLED LCD Samsung Galaxy A54 5G', 'category' => 'LCD', 'compatible_models' => 'Samsung Galaxy A54 5G', 'stock_quantity' => 8, 'min_stock_alert' => 2, 'purchase_price' => 550000, 'selling_price' => 850000, 'is_critical' => true],
-            ['code' => 'PRT-BAT-SMA54', 'name' => 'Baterai Original Samsung A54 5000mAh', 'category' => 'Baterai', 'compatible_models' => 'Samsung Galaxy A54', 'stock_quantity' => 12, 'min_stock_alert' => 3, 'purchase_price' => 180000, 'selling_price' => 320000, 'is_critical' => false],
-            ['code' => 'PRT-IC-PM8150', 'name' => 'IC Power PM8150 Xiaomi POCO F3 / BlackShark', 'category' => 'IC', 'compatible_models' => 'POCO F3, Mi 11X, K40', 'stock_quantity' => 5, 'min_stock_alert' => 2, 'purchase_price' => 150000, 'selling_price' => 350000, 'is_critical' => true],
-            ['code' => 'PRT-FLX-CHG12', 'name' => 'Fleksibel Port Charger iPhone 12 Lightning', 'category' => 'Fleksibel', 'compatible_models' => 'iPhone 12, iPhone 12 Pro', 'stock_quantity' => 10, 'min_stock_alert' => 3, 'purchase_price' => 90000, 'selling_price' => 220000, 'is_critical' => false],
-            ['code' => 'PRT-CAM-IP11', 'name' => 'Modul Dual Camera Belakang iPhone 11', 'category' => 'Kamera', 'compatible_models' => 'iPhone 11', 'stock_quantity' => 4, 'min_stock_alert' => 2, 'purchase_price' => 350000, 'selling_price' => 650000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-LCD-IP13', 'name' => 'LCD Screen Assembly iPhone 13 OEM', 'category' => 'LCD', 'compatible_models' => 'iPhone 13, iPhone 13 Mini', 'stock_quantity' => 15, 'min_stock_alert' => 3, 'purchase_price' => 750000, 'selling_price' => 1250000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-BAT-IP13P', 'name' => 'Baterai High Capacity iPhone 13 Pro 3095mAh', 'category' => 'Baterai', 'compatible_models' => 'iPhone 13 Pro', 'stock_quantity' => 20, 'min_stock_alert' => 5, 'purchase_price' => 220000, 'selling_price' => 450000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-LCD-SMA54', 'name' => 'Super AMOLED LCD Samsung Galaxy A54 5G', 'category' => 'LCD', 'compatible_models' => 'Samsung Galaxy A54 5G', 'stock_quantity' => 8, 'min_stock_alert' => 2, 'purchase_price' => 550000, 'selling_price' => 850000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-BAT-SMA54', 'name' => 'Baterai Original Samsung A54 5000mAh', 'category' => 'Baterai', 'compatible_models' => 'Samsung Galaxy A54', 'stock_quantity' => 12, 'min_stock_alert' => 3, 'purchase_price' => 180000, 'selling_price' => 320000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-IC-PM8150', 'name' => 'IC Power PM8150 Xiaomi POCO F3 / BlackShark', 'category' => 'IC', 'compatible_models' => 'POCO F3, Mi 11X, K40', 'stock_quantity' => 5, 'min_stock_alert' => 2, 'purchase_price' => 150000, 'selling_price' => 350000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-FLX-CHG12', 'name' => 'Fleksibel Port Charger iPhone 12 Lightning', 'category' => 'Fleksibel', 'compatible_models' => 'iPhone 12, iPhone 12 Pro', 'stock_quantity' => 10, 'min_stock_alert' => 3, 'purchase_price' => 90000, 'selling_price' => 220000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'PRT-CAM-IP11', 'name' => 'Modul Dual Camera Belakang iPhone 11', 'category' => 'Kamera', 'compatible_models' => 'iPhone 11', 'stock_quantity' => 4, 'min_stock_alert' => 2, 'purchase_price' => 350000, 'selling_price' => 650000, 'is_critical' => true],
         ];
 
         $parts = [];
@@ -537,14 +548,14 @@ class DatabaseSeeder extends Seeder
 
         // 1b. Produk non-sparepart (handset, tablet/iPad, aksesoris) — katalog produk toko
         $productsData = [
-            ['code' => 'HS-IP13-128', 'product_type' => 'handset', 'name' => 'Handset iPhone 13 128GB (Bekas)', 'category' => 'Handset', 'compatible_models' => 'iPhone 13', 'stock_quantity' => 3, 'min_stock_alert' => 1, 'purchase_price' => 6500000, 'selling_price' => 7500000, 'is_critical' => true],
-            ['code' => 'HS-SMA54-8', 'product_type' => 'handset', 'name' => 'Handset Samsung Galaxy A54 8/128 (Baru)', 'category' => 'Handset', 'compatible_models' => 'Samsung Galaxy A54', 'stock_quantity' => 5, 'min_stock_alert' => 2, 'purchase_price' => 3800000, 'selling_price' => 4500000, 'is_critical' => false],
-            ['code' => 'TB-IPAD9-64', 'product_type' => 'tablet', 'name' => 'iPad 9th Gen 64GB WiFi', 'category' => 'Tablet', 'compatible_models' => 'iPad 9', 'stock_quantity' => 2, 'min_stock_alert' => 1, 'purchase_price' => 4200000, 'selling_price' => 5200000, 'is_critical' => true],
-            ['code' => 'TB-SMTAB-A9', 'product_type' => 'tablet', 'name' => 'Samsung Galaxy Tab A9+ 4/64', 'category' => 'Tablet', 'compatible_models' => 'Tab A9+', 'stock_quantity' => 4, 'min_stock_alert' => 1, 'purchase_price' => 2300000, 'selling_price' => 2900000, 'is_critical' => false],
-            ['code' => 'ACC-TMPR-IP13', 'product_type' => 'aksesoris', 'name' => 'Tempered Glass iPhone 13', 'category' => 'Aksesoris', 'compatible_models' => 'iPhone 13', 'stock_quantity' => 50, 'min_stock_alert' => 10, 'purchase_price' => 15000, 'selling_price' => 35000, 'is_critical' => false],
-            ['code' => 'ACC-CASE-SMA54', 'product_type' => 'aksesoris', 'name' => 'Casing Silikon Samsung A54', 'category' => 'Aksesoris', 'compatible_models' => 'Samsung A54', 'stock_quantity' => 30, 'min_stock_alert' => 10, 'purchase_price' => 25000, 'selling_price' => 60000, 'is_critical' => false],
-            ['code' => 'ACC-CHG-20W', 'product_type' => 'aksesoris', 'name' => 'Charger Adaptor 20W USB-C', 'category' => 'Aksesoris', 'compatible_models' => 'Universal', 'stock_quantity' => 25, 'min_stock_alert' => 5, 'purchase_price' => 80000, 'selling_price' => 150000, 'is_critical' => false],
-            ['code' => 'ACC-KBL-USB', 'product_type' => 'aksesoris', 'name' => 'Kabel USB-C to Lightning 1m', 'category' => 'Aksesoris', 'compatible_models' => 'Universal', 'stock_quantity' => 40, 'min_stock_alert' => 10, 'purchase_price' => 30000, 'selling_price' => 75000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'HS-IP13-128', 'product_type' => 'handset', 'name' => 'Handset iPhone 13 128GB (Bekas)', 'category' => 'Handset', 'compatible_models' => 'iPhone 13', 'stock_quantity' => 3, 'min_stock_alert' => 1, 'purchase_price' => 6500000, 'selling_price' => 7500000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'HS-SMA54-8', 'product_type' => 'handset', 'name' => 'Handset Samsung Galaxy A54 8/128 (Baru)', 'category' => 'Handset', 'compatible_models' => 'Samsung Galaxy A54', 'stock_quantity' => 5, 'min_stock_alert' => 2, 'purchase_price' => 3800000, 'selling_price' => 4500000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'TB-IPAD9-64', 'product_type' => 'tablet', 'name' => 'iPad 9th Gen 64GB WiFi', 'category' => 'Tablet', 'compatible_models' => 'iPad 9', 'stock_quantity' => 2, 'min_stock_alert' => 1, 'purchase_price' => 4200000, 'selling_price' => 5200000, 'is_critical' => true],
+            ['branch_id' => $branchPusat->id, 'code' => 'TB-SMTAB-A9', 'product_type' => 'tablet', 'name' => 'Samsung Galaxy Tab A9+ 4/64', 'category' => 'Tablet', 'compatible_models' => 'Tab A9+', 'stock_quantity' => 4, 'min_stock_alert' => 1, 'purchase_price' => 2300000, 'selling_price' => 2900000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'ACC-TMPR-IP13', 'product_type' => 'aksesoris', 'name' => 'Tempered Glass iPhone 13', 'category' => 'Aksesoris', 'compatible_models' => 'iPhone 13', 'stock_quantity' => 50, 'min_stock_alert' => 10, 'purchase_price' => 15000, 'selling_price' => 35000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'ACC-CASE-SMA54', 'product_type' => 'aksesoris', 'name' => 'Casing Silikon Samsung A54', 'category' => 'Aksesoris', 'compatible_models' => 'Samsung A54', 'stock_quantity' => 30, 'min_stock_alert' => 10, 'purchase_price' => 25000, 'selling_price' => 60000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'ACC-CHG-20W', 'product_type' => 'aksesoris', 'name' => 'Charger Adaptor 20W USB-C', 'category' => 'Aksesoris', 'compatible_models' => 'Universal', 'stock_quantity' => 25, 'min_stock_alert' => 5, 'purchase_price' => 80000, 'selling_price' => 150000, 'is_critical' => false],
+            ['branch_id' => $branchPusat->id, 'code' => 'ACC-KBL-USB', 'product_type' => 'aksesoris', 'name' => 'Kabel USB-C to Lightning 1m', 'category' => 'Aksesoris', 'compatible_models' => 'Universal', 'stock_quantity' => 40, 'min_stock_alert' => 10, 'purchase_price' => 30000, 'selling_price' => 75000, 'is_critical' => false],
         ];
 
         foreach ($productsData as $pd) {

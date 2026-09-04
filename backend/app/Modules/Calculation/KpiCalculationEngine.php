@@ -28,15 +28,17 @@ class KpiCalculationEngine
         ];
     }
 
-    public function getCalculator(string $formulaKey): CalculatorInterface
+    public function getCalculator(string $formulaKey): ?CalculatorInterface
     {
-        return $this->strategies[$formulaKey] ?? $this->strategies['higher_is_better'];
+        return $this->strategies[$formulaKey] ?? null;
     }
 
     public function calculateItem(EmployeeKpiItem $item, bool $persist = true): CalculationResult
     {
         $calculator = $this->getCalculator($item->formula_key_snapshot);
-        $result = $calculator->calculate($item);
+        $result = $calculator
+            ? $calculator->calculate($item)
+            : CalculationResult::unscorable("Formula KPI '{$item->formula_key_snapshot}' tidak dikenali.");
 
         if ($persist) {
             $item->achievement_percentage = $result->achievementPercentage;
@@ -81,13 +83,15 @@ class KpiCalculationEngine
             }
         }
 
-        // Round final score to 2 decimals HALF_UP
-        $finalScore = round($totalScoreRaw, 2, PHP_ROUND_HALF_UP);
+        // Partial KPI tidak boleh terlihat sebagai skor final.
+        $finalScore = $allCalculated
+            ? round($totalScoreRaw, 2, PHP_ROUND_HALF_UP)
+            : null;
 
         // Find rating band
         $ratingScheme = $kpi->templateVersion?->ratingScheme ?? KpiRatingScheme::where('is_default', true)->first();
         $band = null;
-        if ($ratingScheme) {
+        if ($ratingScheme && $finalScore !== null) {
             $band = KpiRatingBand::where('rating_scheme_id', $ratingScheme->id)
                 ->where('min_score', '<=', $finalScore)
                 ->where('max_score', '>=', $finalScore)
@@ -97,6 +101,10 @@ class KpiCalculationEngine
         $kpi->final_score = $finalScore;
         $kpi->rating_code = $band?->code ?? ($finalScore >= 95 ? 'STAR' : ($finalScore >= 80 ? 'GOOD' : 'FAIR'));
         $kpi->rating_label = $band?->label ?? ($finalScore >= 95 ? '⭐ Istimewa' : ($finalScore >= 80 ? 'Baik' : 'Cukup'));
+        if (!$allCalculated) {
+            $kpi->rating_code = null;
+            $kpi->rating_label = null;
+        }
         $kpi->calculateProgress();
         $kpi->save();
 
@@ -109,6 +117,14 @@ class KpiCalculationEngine
                 'employee_id' => $kpi->employee_id,
                 'template_version_id' => $kpi->template_version_id,
                 'revision_number' => $kpi->revision_number,
+                'items' => collect($itemsSnapshot)->map(fn (array $item) => [
+                    'item_id' => $item['item_id'],
+                    'actual' => $item['actual'],
+                    'formula' => $item['formula'],
+                    'formula_params' => $kpi->items->firstWhere('id', $item['item_id'])?->formula_params_snapshot,
+                    'target' => $kpi->items->firstWhere('id', $item['item_id'])?->target_value_snapshot,
+                    'target_json' => $kpi->items->firstWhere('id', $item['item_id'])?->target_json_snapshot,
+                ])->values()->all(),
             ],
             'output_snapshot' => [
                 'total_score' => $finalScore,

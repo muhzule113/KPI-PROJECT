@@ -132,4 +132,39 @@ void main() {
       );
     },
   );
+
+  testWidgets('My KPI memperbarui data otomatis setelah interval polling', (
+    tester,
+  ) async {
+    var requestCount = 0;
+    ApiService.client = MockClient((request) async {
+      if (request.url.path.endsWith('/my-kpi/active')) {
+        requestCount++;
+        final data = _kpiData();
+        if (requestCount > 1) {
+          data['period'] = {'id': 1, 'name': 'Periode September 2026'};
+        }
+        return http.Response(
+          jsonEncode({'success': true, 'data': data}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response(
+        jsonEncode({'success': false, 'message': 'Not found'}),
+        404,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    await tester.pumpWidget(const MaterialApp(home: MyKpiScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Periode Agustus 2026'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pump();
+
+    expect(requestCount, 2);
+    expect(find.text('Periode September 2026'), findsOneWidget);
+  });
 }

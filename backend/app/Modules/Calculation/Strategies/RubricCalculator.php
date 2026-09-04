@@ -12,6 +12,14 @@ class RubricCalculator implements CalculatorInterface
     {
         $weight = (float) $item->weight_snapshot;
 
+        if (is_array($item->actual_json) && !empty($item->actual_json['_daily_aggregate']) && $item->actual_decimal !== null) {
+            $achievement = min(max((float) $item->actual_decimal, 0.0), 100.0);
+            return CalculationResult::calculated($achievement, ($achievement * ($weight / 100.0)), [
+                'source' => 'daily_aggregate',
+                'weight' => $weight,
+            ]);
+        }
+
         // If the item has an assessment record from supervisor review
         $assessment = $item->assessment;
         if (!$assessment) {

@@ -40,6 +40,11 @@ class KpiWorkflowTest extends TestCase
         $spvUser = User::where('email', 'supervisor@toko.com')->first();
         $managerUser = User::where('email', 'manager@toko.com')->first();
         $period = KpiPeriod::where('status', 'OPEN')->first();
+        $period->update([
+            'submission_deadline' => now()->addDay(),
+            'review_deadline' => now()->addDays(2),
+            'approval_deadline' => now()->addDays(3),
+        ]);
 
         $teknisiEmp = Employee::where('user_id', $teknisiUser->id)->first();
         $kpi = EmployeeKpi::where('period_id', $period->id)
@@ -49,11 +54,11 @@ class KpiWorkflowTest extends TestCase
         $this->assertNotNull($kpi);
         $this->assertEquals('draft', $kpi->status);
 
-        // 1. Employee fills values
+        // 1. Supervisor supplies the non-rubric values; employee has no write path
         foreach ($kpi->items as $item) {
-            if ($item->source_type_snapshot === 'employee') {
+            if ($item->formula_key_snapshot !== 'rubric') {
                 $targetVal = $item->target_value_snapshot ?? 100;
-                $this->assessmentService->saveItemDraft($item, (float) $targetVal, null, 'Test input', $teknisiUser->id);
+                $this->assessmentService->saveItemDraft($item, (float) $targetVal, null, 'Test input', $spvUser->id);
             }
         }
 
@@ -61,11 +66,16 @@ class KpiWorkflowTest extends TestCase
         $evidenceItem = $kpi->items()->where('evidence_req_snapshot', true)->first();
         if ($evidenceItem) {
             $fakeFile = UploadedFile::fake()->create('laporan_servis.pdf', 500, 'application/pdf');
-            $this->assessmentService->uploadEvidence($evidenceItem, $fakeFile, 'Bukti servis bulanan', $teknisiUser->id);
+            $evidence = $this->assessmentService->uploadEvidence($evidenceItem, $fakeFile, 'Bukti servis bulanan', $spvUser->id);
+            $evidence->update([
+                'scan_status' => 'clean',
+                'scanned_at' => now(),
+                'scan_note' => 'Test scanner menyatakan file aman.',
+            ]);
         }
 
-        // 2. Submit KPI
-        $submitRes = $this->assessmentService->submitKpi($kpi, $teknisiUser->id);
+        // 2. Submit KPI through the assigned Supervisor
+        $submitRes = $this->assessmentService->submitKpi($kpi, $spvUser->id);
         $this->assertTrue($submitRes['success']);
         $kpi->refresh();
         $this->assertEquals('submitted', $kpi->status);
@@ -123,6 +133,47 @@ class KpiWorkflowTest extends TestCase
             $this->expectExceptionMessage('Pemisahan tugas (No Self-Approval)');
             $this->approvalService->approve($spvKpi, 'Self approval attempt', $spvUser->id);
         }
+    }
+
+    public function test_manager_can_assess_all_kpi_items_before_approval(): void
+    {
+        $managerUser = User::where('email', 'manager@toko.com')->first();
+        $period = KpiPeriod::where('status', 'OPEN')->first();
+        $teknisiEmp = Employee::whereHas('user', fn ($query) => $query->where('email', 'teknisi@toko.com'))->first();
+        $kpi = EmployeeKpi::where('period_id', $period->id)
+            ->where('employee_id', $teknisiEmp->id)
+            ->firstOrFail();
+
+        $kpi->update(['status' => 'pending_approval']);
+        $kpi->items()->update(['status' => 'verified']);
+
+        $this->actingAs($managerUser, 'sanctum');
+
+        foreach ($kpi->items()->get() as $item) {
+            if ($item->formula_key_snapshot === 'rubric') {
+                $answers = collect($item->rubric_snapshot['criteria'] ?? [])
+                    ->map(fn (array $criterion): array => [
+                        'criterion_id' => $criterion['id'],
+                        'is_fulfilled' => true,
+                    ])->all();
+
+                $this->postJson(
+                    "/api/v1/manager/approval/{$kpi->id}/items/{$item->id}/rubric",
+                    ['answers' => $answers]
+                )->assertOk()->assertJsonPath('success', true);
+            } else {
+                $this->postJson(
+                    "/api/v1/manager/approval/{$kpi->id}/items/{$item->id}/assess",
+                    ['actual_decimal' => (float) ($item->target_value_snapshot ?? 0)]
+                )->assertOk()->assertJsonPath('success', true);
+            }
+        }
+
+        $this->assertSame(0, $kpi->items()->where('status', '!=', 'assessed')->count());
+
+        $this->postJson("/api/v1/manager/approval/{$kpi->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
     }
 
     public function test_duplicate_import_hash_rejection(): void

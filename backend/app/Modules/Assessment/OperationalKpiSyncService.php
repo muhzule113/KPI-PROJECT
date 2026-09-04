@@ -11,6 +11,7 @@ use App\Models\ServiceTicket;
 use App\Models\Sparepart;
 use App\Models\SparepartRequest;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 use Illuminate\Support\Facades\DB;
 
 class OperationalKpiSyncService
@@ -35,7 +36,7 @@ class OperationalKpiSyncService
 
         foreach ($kpis as $kpi) {
             $emp = $kpi->employee;
-            if (!$emp || !$emp->position) continue;
+            if (!$emp || !$emp->position || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
 
             $posCode = $emp->position->code;
 
@@ -45,7 +46,7 @@ class OperationalKpiSyncService
                 if ($posCode === 'POS-TEK') {
                     $hasUpdates = $this->syncTeknisiKpi($kpi, $emp, $period);
                 } elseif ($posCode === 'POS-CS') {
-                    $hasUpdates = $this->syncCustomerServiceKpi($kpi, $emp, $period);
+                    $hasUpdates = $this->syncPelayanKpi($kpi, $emp, $period);
                 } elseif ($posCode === 'POS-GUD') {
                     $hasUpdates = $this->syncGudangKpi($kpi, $emp, $period);
                 }
@@ -89,7 +90,7 @@ class OperationalKpiSyncService
     {
         $emp = $kpi->employee;
         $period = $kpi->period;
-        if (!$emp || !$emp->position || !$period) return false;
+        if (!$emp || !$emp->position || !$period || !KpiWorkflow::canSystemSyncKpi($kpi)) return false;
 
         $posCode = $emp->position->code;
         $hasUpdates = false;
@@ -98,7 +99,7 @@ class OperationalKpiSyncService
             if ($posCode === 'POS-TEK') {
                 $hasUpdates = $this->syncTeknisiKpi($kpi, $emp, $period);
             } elseif ($posCode === 'POS-CS') {
-                $hasUpdates = $this->syncCustomerServiceKpi($kpi, $emp, $period);
+                $hasUpdates = $this->syncPelayanKpi($kpi, $emp, $period);
             } elseif ($posCode === 'POS-GUD') {
                 $hasUpdates = $this->syncGudangKpi($kpi, $emp, $period);
             }
@@ -114,20 +115,28 @@ class OperationalKpiSyncService
 
     protected function syncTeknisiKpi(EmployeeKpi $kpi, Employee $emp, KpiPeriod $period): bool
     {
+        $periodStart = $period->start_date->copy()->startOfDay();
+        $periodEndExclusive = $period->end_date->copy()->addDay()->startOfDay();
         $tickets = ServiceTicket::where('technician_employee_id', $emp->id)
-            ->where(function ($q) use ($period) {
-                $q->where('period_id', $period->id)
-                  ->orWhereBetween('created_at', [$period->start_date, $period->end_date]);
-            })
+            ->where('completed_at', '>=', $periodStart)
+            ->where('completed_at', '<', $periodEndExclusive)
+            ->whereIn('status', ['completed', 'delivered'])
             ->get();
 
-        $completedTickets = $tickets->whereIn('status', ['completed', 'delivered']);
+        $completedTickets = $tickets;
         $totalCompleted = $completedTickets->count();
+        $hasCompletedData = $totalCompleted > 0;
 
         // TEK-01: Jumlah Servis Selesai
         $tek01 = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-01');
         if ($tek01) {
             $tek01->actual_decimal = (float) $totalCompleted;
+            $tek01->actual_json = [
+                'formula' => 'tiket berstatus completed atau delivered dalam periode KPI',
+                'completed_tickets' => $totalCompleted,
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $period->end_date->toDateString(),
+            ];
             $tek01->status = 'draft';
             $tek01->save();
             $this->calculationEngine->calculateItem($tek01);
@@ -136,9 +145,23 @@ class OperationalKpiSyncService
         // TEK-02: Tingkat Keberhasilan Servis (%)
         $tek02 = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-02');
         if ($tek02) {
+            $eligibleResultStatuses = ['success', 'unrepairable', 'warranty_return'];
             $successCount = $completedTickets->where('result_status', 'success')->count();
-            $rate = $totalCompleted > 0 ? round(($successCount / $totalCompleted) * 100, 2) : 100.0;
+            $unclassifiedCount = $completedTickets
+                ->reject(fn ($ticket) => in_array($ticket->result_status, $eligibleResultStatuses, true))
+                ->count();
+            $rate = $hasCompletedData && $unclassifiedCount === 0
+                ? round(($successCount / $totalCompleted) * 100, 2)
+                : null;
             $tek02->actual_decimal = $rate;
+            $tek02->actual_json = [
+                'formula' => 'tiket berhasil / seluruh tiket selesai × 100',
+                'successful_tickets' => $successCount,
+                'completed_tickets' => $totalCompleted,
+                'unclassified_tickets' => $unclassifiedCount,
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $period->end_date->toDateString(),
+            ];
             $tek02->status = 'draft';
             $tek02->save();
             $this->calculationEngine->calculateItem($tek02);
@@ -148,8 +171,21 @@ class OperationalKpiSyncService
         $tek03 = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-03');
         if ($tek03) {
             $returnCount = $completedTickets->where('is_warranty_return', true)->count();
-            $returnRate = $totalCompleted > 0 ? round(($returnCount / $totalCompleted) * 100, 2) : 0.0;
+            $unclassifiedCount = $completedTickets
+                ->reject(fn ($ticket) => in_array($ticket->result_status, ['success', 'unrepairable', 'warranty_return'], true))
+                ->count();
+            $returnRate = $hasCompletedData && $unclassifiedCount === 0
+                ? round(($returnCount / $totalCompleted) * 100, 2)
+                : null;
             $tek03->actual_decimal = $returnRate;
+            $tek03->actual_json = [
+                'formula' => 'tiket retur garansi / seluruh tiket selesai × 100',
+                'warranty_return_tickets' => $returnCount,
+                'completed_tickets' => $totalCompleted,
+                'unclassified_tickets' => $unclassifiedCount,
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $period->end_date->toDateString(),
+            ];
             $tek03->status = 'draft';
             $tek03->save();
             $this->calculationEngine->calculateItem($tek03);
@@ -158,12 +194,24 @@ class OperationalKpiSyncService
         // TEK-04: Ketepatan Waktu Pengerjaan (%)
         $tek04 = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-04');
         if ($tek04) {
-            $ontimeCount = $completedTickets->filter(function ($t) {
-                if (!$t->estimated_completion_at || !$t->completed_at) return true;
+            $timedTickets = $completedTickets->filter(function ($t) {
+                return $t->estimated_completion_at && $t->completed_at;
+            });
+            $ontimeCount = $timedTickets->filter(function ($t) {
                 return $t->completed_at <= $t->estimated_completion_at;
             })->count();
-            $ontimeRate = $totalCompleted > 0 ? round(($ontimeCount / $totalCompleted) * 100, 2) : 100.0;
+            $ontimeRate = $timedTickets->isNotEmpty()
+                ? round(($ontimeCount / $timedTickets->count()) * 100, 2)
+                : null;
             $tek04->actual_decimal = $ontimeRate;
+            $tek04->actual_json = [
+                'formula' => 'tiket selesai tepat waktu / tiket dengan estimasi dan waktu selesai × 100',
+                'ontime_tickets' => $ontimeCount,
+                'timed_completed_tickets' => $timedTickets->count(),
+                'excluded_without_timestamps' => $totalCompleted - $timedTickets->count(),
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $period->end_date->toDateString(),
+            ];
             $tek04->status = 'draft';
             $tek04->save();
             $this->calculationEngine->calculateItem($tek04);
@@ -173,9 +221,12 @@ class OperationalKpiSyncService
         $tek07 = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-07');
         if ($tek07) {
             $completeReportCount = $completedTickets->filter(function ($t) {
-                return !empty($t->diagnosis_notes) && !empty($t->action_notes) && !empty($t->qc_checklist_json);
+                return !empty($t->diagnosis_notes)
+                    && !empty($t->action_notes)
+                    && is_array($t->qc_checklist_json)
+                    && collect($t->qc_checklist_json)->every(fn ($value) => is_bool($value));
             })->count();
-            $reportRate = $totalCompleted > 0 ? round(($completeReportCount / $totalCompleted) * 100, 2) : 100.0;
+            $reportRate = $hasCompletedData ? round(($completeReportCount / $totalCompleted) * 100, 2) : null;
             $tek07->actual_decimal = $reportRate;
             $tek07->status = 'verified'; // automatically verified by system
             $tek07->save();
@@ -185,59 +236,53 @@ class OperationalKpiSyncService
         return true;
     }
 
-    protected function syncCustomerServiceKpi(EmployeeKpi $kpi, Employee $emp, KpiPeriod $period): bool
+    protected function syncPelayanKpi(EmployeeKpi $kpi, Employee $emp, KpiPeriod $period): bool
     {
+        $periodStart = $period->start_date->copy()->startOfDay();
+        $periodEndExclusive = $period->end_date->copy()->addDay()->startOfDay();
         $feedbacks = CustomerFeedback::where('cs_employee_id', $emp->id)
-            ->whereBetween('created_at', [$period->start_date, $period->end_date])
+            ->where('created_at', '>=', $periodStart)
+            ->where('created_at', '<', $periodEndExclusive)
             ->get();
 
         $intakeTickets = ServiceTicket::where('intake_by_employee_id', $emp->id)
-            ->whereBetween('created_at', [$period->start_date, $period->end_date])
+            ->where('created_at', '>=', $periodStart)
+            ->where('created_at', '<', $periodEndExclusive)
             ->get();
 
-        // CS-01: CSAT / Kepuasan Pelanggan (%)
+        // CS-01: CSAT / Kepuasan Pelanggan Pelayan (%)
         $cs01 = $kpi->items->firstWhere('definition_code_snapshot', 'CS-01');
         if ($cs01) {
             $avgRating = $feedbacks->avg('rating');
-            $csatPercent = $avgRating ? round(($avgRating / 5.0) * 100, 2) : 95.0;
+            $csatPercent = $feedbacks->isNotEmpty() ? round(($avgRating / 5.0) * 100, 2) : null;
             $cs01->actual_decimal = $csatPercent;
             $cs01->status = 'draft';
             $cs01->save();
             $this->calculationEngine->calculateItem($cs01);
         }
 
-        // CS-03: Akurasi Input Order / Tiket (%)
+        // CS-03: Akurasi Input Order / Nota Servis (%)
         $cs03 = $kpi->items->firstWhere('definition_code_snapshot', 'CS-03');
         if ($cs03) {
             $validCount = $intakeTickets->filter(function ($t) {
                 return !empty($t->customer_phone) && !empty($t->device_brand) && !empty($t->initial_complaint);
             })->count();
-            $accuracy = $intakeTickets->isNotEmpty() ? round(($validCount / $intakeTickets->count()) * 100, 2) : 98.0;
+            $accuracy = $intakeTickets->isNotEmpty() ? round(($validCount / $intakeTickets->count()) * 100, 2) : null;
             $cs03->actual_decimal = $accuracy;
             $cs03->status = 'draft';
             $cs03->save();
             $this->calculationEngine->calculateItem($cs03);
         }
 
-        // CS-04: Follow-up Status Pelanggan (%)
+        // CS-04: Follow-up Status Pelanggan oleh Pelayan (%)
         $cs04 = $kpi->items->firstWhere('definition_code_snapshot', 'CS-04');
         if ($cs04) {
             $ontimeFollowUp = $feedbacks->where('follow_up_ontime', true)->count();
-            $followUpRate = $feedbacks->isNotEmpty() ? round(($ontimeFollowUp / $feedbacks->count()) * 100, 2) : 95.0;
+            $followUpRate = $feedbacks->isNotEmpty() ? round(($ontimeFollowUp / $feedbacks->count()) * 100, 2) : null;
             $cs04->actual_decimal = $followUpRate;
             $cs04->status = 'draft';
             $cs04->save();
             $this->calculationEngine->calculateItem($cs04);
-        }
-
-        // CS-05: Jumlah Komplain Pelanggan
-        $cs05 = $kpi->items->firstWhere('definition_code_snapshot', 'CS-05');
-        if ($cs05) {
-            $complaintsCount = $feedbacks->where('rating', '<=', 2)->count() + $intakeTickets->where('is_warranty_return', true)->count();
-            $cs05->actual_decimal = (float) $complaintsCount;
-            $cs05->status = 'draft';
-            $cs05->save();
-            $this->calculationEngine->calculateItem($cs05);
         }
 
         return true;
@@ -245,17 +290,21 @@ class OperationalKpiSyncService
 
     protected function syncGudangKpi(EmployeeKpi $kpi, Employee $emp, KpiPeriod $period): bool
     {
-        $requests = SparepartRequest::whereBetween('created_at', [$period->start_date, $period->end_date])->get();
+        $periodStart = $period->start_date->copy()->startOfDay();
+        $periodEndExclusive = $period->end_date->copy()->addDay()->startOfDay();
+        $requests = SparepartRequest::where('created_at', '>=', $periodStart)
+            ->where('created_at', '<', $periodEndExclusive)
+            ->get();
         $fulfilled = $requests->where('status', 'fulfilled');
 
         // GUD-03: Kecepatan Penyediaan Sparepart (%)
         $gud03 = $kpi->items->firstWhere('definition_code_snapshot', 'GUD-03');
         if ($gud03) {
             $fastFulfilled = $fulfilled->filter(function ($r) {
-                if (!$r->requested_at || !$r->fulfilled_at) return true;
+                if (!$r->requested_at || !$r->fulfilled_at) return false;
                 return $r->fulfilled_at->diffInMinutes($r->requested_at) <= 15; // SLA 15 menit
             })->count();
-            $rate = $fulfilled->isNotEmpty() ? round(($fastFulfilled / $fulfilled->count()) * 100, 2) : 96.0;
+            $rate = $fulfilled->isNotEmpty() ? round(($fastFulfilled / $fulfilled->count()) * 100, 2) : null;
             $gud03->actual_decimal = $rate;
             $gud03->status = 'draft';
             $gud03->save();
@@ -267,7 +316,7 @@ class OperationalKpiSyncService
         if ($gud04) {
             $criticalParts = Sparepart::where('is_critical', true)->get();
             $inStockCritical = $criticalParts->where('stock_quantity', '>', 0)->count();
-            $stockRate = $criticalParts->isNotEmpty() ? round(($inStockCritical / $criticalParts->count()) * 100, 2) : 100.0;
+            $stockRate = $criticalParts->isNotEmpty() ? round(($inStockCritical / $criticalParts->count()) * 100, 2) : null;
             $gud04->actual_decimal = $stockRate;
             $gud04->status = 'draft';
             $gud04->save();

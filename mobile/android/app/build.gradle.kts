@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace = "com.kpitoko.kpi_mobile"
-    // file_picker dependency requires Android API 36 or newer.
-    compileSdk = 36
+    // flutter_secure_storage v11 requires Android API 37 or newer.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

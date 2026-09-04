@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../app/theme/app_theme.dart';
 import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/realtime/realtime_service.dart';
 import '../approval/manager_approval_screen.dart';
 import '../imports/cashier_upload_screen.dart';
 import '../operational/create_ticket_screen.dart';
@@ -26,31 +29,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _dashboardData;
   String? _errorMessage;
+  Timer? _refreshTimer;
+  bool _requestInFlight = false;
+  StreamSubscription<void>? _realtimeSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadDashboard();
+    unawaited(_loadDashboard());
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_loadDashboard(showLoading: false)),
+    );
+    _realtimeSubscription = RealtimeService.instance.kpiUpdates.listen(
+      (_) => unawaited(_loadDashboard(showLoading: false)),
+    );
   }
 
-  Future<void> _loadDashboard() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _loadDashboard({bool showLoading = true}) async {
+    if (_requestInFlight) return;
+    _requestInFlight = true;
+
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final res = await ApiService.get('/dashboard');
-      setState(() {
-        _dashboardData = res['data'];
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _dashboardData = res['data'];
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
+      if (mounted && (showLoading || _dashboardData == null)) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    } finally {
+      _requestInFlight = false;
     }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _realtimeSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -108,7 +140,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [AppTheme.primaryBright, AppTheme.primary],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -129,7 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -331,7 +363,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline_rounded,
                 color: AppTheme.statusDanger,
                 size: 48,
@@ -399,7 +431,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Text(
                         'Halo, ${employee?['name'] ?? 'Karyawan'}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.textInk,
@@ -408,7 +440,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 2),
                       Text(
                         '${employee?['position'] ?? 'Staff'} • ${employee?['branch'] ?? 'Cabang Pusat'}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           color: AppTheme.textMuted,
                         ),
@@ -434,7 +466,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const KpiStatusPill(
+                          KpiStatusPill(
                             label: 'PERIODE AKTIF',
                             color: AppTheme.primaryBright,
                             icon: Icons.radio_button_checked_rounded,
@@ -449,7 +481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 20),
                       Text(
                         activePeriod['name'],
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppTheme.textInk,
                           fontWeight: FontWeight.w800,
                           fontSize: 22,
@@ -457,7 +489,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'Batas waktu pengisian',
                         style: TextStyle(
                           color: AppTheme.textMuted,
@@ -469,7 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         activePeriod['submission_deadline'].toString().split(
                           'T',
                         )[0],
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppTheme.primaryBright,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -491,7 +523,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             // My KPI Progress Section
             if (myKpi != null) ...[
-              const Text(
+              Text(
                 'Progress KPI Anda',
                 style: TextStyle(
                   fontSize: 16,
@@ -554,7 +586,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             Text(
                               '${(myKpi['progress_percentage'] as num).toInt()}% terisi',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textMuted,
                                 fontWeight: FontWeight.w600,
@@ -562,7 +594,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             Text(
                               '${myKpi['filled_items']} / ${myKpi['total_items']} indikator',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textMuted,
                               ),
@@ -601,7 +633,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Supervisor Queue Summary
             if (spvQueue != null) ...[
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Antrean Review Tim Supervisor',
                 style: TextStyle(
                   fontSize: 16,
@@ -636,7 +668,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Executive Summary
             if (execOverview != null) ...[
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Ringkasan Eksekutif Manager',
                 style: TextStyle(
                   fontSize: 16,
@@ -712,7 +744,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
             ),
           ],
         ),

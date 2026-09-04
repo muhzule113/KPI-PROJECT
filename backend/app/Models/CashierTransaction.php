@@ -12,9 +12,11 @@ class CashierTransaction extends Model
     protected $fillable = [
         'import_batch_id',
         'period_id',
+        'source_application',
         'cashier_employee_id',
         'cashier_name_raw',
         'transaction_number',
+        'business_key',
         'transaction_date',
         'transaction_amount',
         'system_cash_amount',

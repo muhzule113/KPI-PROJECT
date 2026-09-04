@@ -1,40 +1,148 @@
 import 'package:flutter/material.dart';
 
+class _OpsPalette {
+  final Color primary;
+  final Color primaryPressed;
+  final Color primaryBright;
+  final Color primaryLime;
+  final Color darkSurface;
+  final Color background;
+  final Color surface;
+  final Color surfaceElevated;
+  final Color surfaceMuted;
+  final Color surfaceGlass;
+  final Color shadow;
+  final Color parchment;
+  final Color textInk;
+  final Color textMuted;
+  final Color border;
+  final Color statusDraft;
+  final Color statusSubmitted;
+  final Color statusUnderReview;
+  final Color statusRevision;
+  final Color statusVerified;
+  final Color statusApproved;
+  final Color statusDanger;
+
+  const _OpsPalette({
+    required this.primary,
+    required this.primaryPressed,
+    required this.primaryBright,
+    required this.primaryLime,
+    required this.darkSurface,
+    required this.background,
+    required this.surface,
+    required this.surfaceElevated,
+    required this.surfaceMuted,
+    required this.surfaceGlass,
+    required this.shadow,
+    required this.parchment,
+    required this.textInk,
+    required this.textMuted,
+    required this.border,
+    required this.statusDraft,
+    required this.statusSubmitted,
+    required this.statusUnderReview,
+    required this.statusRevision,
+    required this.statusVerified,
+    required this.statusApproved,
+    required this.statusDanger,
+  });
+}
+
 class AppTheme {
+  AppTheme._();
+
   static bool reduceMotion = false;
+  static _OpsPalette _active = _darkPalette;
 
-  // Ops Noir design tokens: graphite surfaces + satu aksen emerald.
-  // Primary tetap Emerald 700 agar teks putih memenuhi WCAG AA.
-  static const Color primary = Color(
-    0xFF047857,
-  ); // Emerald 700 — kontras 5.48:1 vs putih
-  static const Color primaryPressed = Color(
-    0xFF065F46,
-  ); // Emerald 800 — pressed/depth state
-  static const Color primaryBright = Color(0xFF35D39E);
-  static const Color primaryLime = Color(0xFFBEFF50); // signature accent
-  static const Color darkSurface = Color(0xFF101A17);
-  static const Color background = Color(0xFF07100E);
-  static const Color surface = Color(0xFF111B18);
-  static const Color surfaceElevated = Color(0xFF18241F);
-  static const Color surfaceMuted = Color(0xFF20302A);
-  static const Color surfaceGlass = Color(0xCC111B18);
-  static const Color shadow = Color(0x66000000);
-  static const Color parchment = Color(0xFF1B2924);
-  static const Color textInk = Color(0xFFF1F7F3);
-  static const Color textMuted = Color(0xFFA9BAB1);
-  static const Color border = Color(0xFF2A3B34);
+  // Primary tetap kontras di kedua mode dan kompatibel dengan pemakaian lama.
+  static const Color primary = Color(0xFF047857);
 
-  // Status Colors
-  static const Color statusDraft = Color(0xFF64748B);
-  static const Color statusSubmitted = Color(0xFF3B82F6);
-  static const Color statusUnderReview = Color(0xFF8B5CF6);
-  static const Color statusRevision = Color(0xFFF59E0B);
-  static const Color statusVerified = Color(0xFF06B6D4);
-  static const Color statusApproved = Color(0xFF10B981);
-  static const Color statusDanger = Color(0xFFEF4444);
+  static const _darkPalette = _OpsPalette(
+    primary: primary,
+    primaryPressed: Color(0xFF065F46),
+    primaryBright: Color(0xFF35D39E),
+    primaryLime: Color(0xFFBEFF50),
+    darkSurface: Color(0xFF101A17),
+    background: Color(0xFF07100E),
+    surface: Color(0xFF111B18),
+    surfaceElevated: Color(0xFF18241F),
+    surfaceMuted: Color(0xFF20302A),
+    surfaceGlass: Color(0xCC111B18),
+    shadow: Color(0x66000000),
+    parchment: Color(0xFF1B2924),
+    textInk: Color(0xFFF1F7F3),
+    textMuted: Color(0xFFA9BAB1),
+    border: Color(0xFF2A3B34),
+    statusDraft: Color(0xFF94A3B8),
+    statusSubmitted: Color(0xFF60A5FA),
+    statusUnderReview: Color(0xFFA78BFA),
+    statusRevision: Color(0xFFFBBF24),
+    statusVerified: Color(0xFF22D3EE),
+    statusApproved: Color(0xFF34D399),
+    statusDanger: Color(0xFFF87171),
+  );
 
-  // Motion tokens — satu ritme untuk seluruh aplikasi.
+  // Light mode memakai graphite-green, dengan teks sekunder dan batas komponen
+  // yang cukup gelap untuk tetap terbaca di layar terang.
+  static const _lightPalette = _OpsPalette(
+    primary: primary,
+    primaryPressed: Color(0xFF065F46),
+    primaryBright: Color(0xFF047857),
+    primaryLime: Color(0xFF466B12),
+    darkSurface: Color(0xFFDCEAE0),
+    background: Color(0xFFF4F8F5),
+    surface: Color(0xFFFFFFFF),
+    surfaceElevated: Color(0xFFEAF3ED),
+    surfaceMuted: Color(0xFFDCE9E0),
+    surfaceGlass: Color(0xF2FFFFFF),
+    shadow: Color(0x22091B12),
+    parchment: Color(0xFFE8F1EB),
+    textInk: Color(0xFF10231A),
+    textMuted: Color(0xFF355247),
+    border: Color(0xFF718A79),
+    statusDraft: Color(0xFF475569),
+    statusSubmitted: Color(0xFF1D4ED8),
+    statusUnderReview: Color(0xFF6D28D9),
+    statusRevision: Color(0xFF704A00),
+    statusVerified: Color(0xFF0E7490),
+    statusApproved: Color(0xFF047857),
+    statusDanger: Color(0xFFB42318),
+  );
+
+  static void configure({
+    required ThemeMode mode,
+    required Brightness systemBrightness,
+  }) {
+    final useLight =
+        mode == ThemeMode.light ||
+        (mode == ThemeMode.system && systemBrightness == Brightness.light);
+    _active = useLight ? _lightPalette : _darkPalette;
+  }
+
+  static Color get primaryPressed => _active.primaryPressed;
+  static Color get primaryBright => _active.primaryBright;
+  static Color get primaryLime => _active.primaryLime;
+  static Color get darkSurface => _active.darkSurface;
+  static Color get background => _active.background;
+  static Color get surface => _active.surface;
+  static Color get surfaceElevated => _active.surfaceElevated;
+  static Color get surfaceMuted => _active.surfaceMuted;
+  static Color get surfaceGlass => _active.surfaceGlass;
+  static Color get shadow => _active.shadow;
+  static Color get parchment => _active.parchment;
+  static Color get textInk => _active.textInk;
+  static Color get textMuted => _active.textMuted;
+  static Color get border => _active.border;
+  static Color get statusDraft => _active.statusDraft;
+  static Color get statusSubmitted => _active.statusSubmitted;
+  static Color get statusUnderReview => _active.statusUnderReview;
+  static Color get statusRevision => _active.statusRevision;
+  static Color get statusVerified => _active.statusVerified;
+  static Color get statusApproved => _active.statusApproved;
+  static Color get statusDanger => _active.statusDanger;
+
   static const Duration motionFast = Duration(milliseconds: 150);
   static const Duration motionStandard = Duration(milliseconds: 250);
   static const Duration motionRoute = Duration(milliseconds: 350);
@@ -47,184 +155,78 @@ class AppTheme {
         : duration;
   }
 
-  // Spacing tokens (8dp system)
   static const double spaceXs = 4;
   static const double spaceSm = 8;
   static const double spaceMd = 12;
   static const double spaceLg = 16;
   static const double spaceXl = 24;
   static const double space2xl = 32;
-
-  // Radius tokens
   static const double radiusSm = 10;
   static const double radiusMd = 14;
   static const double radiusLg = 20;
   static const double radiusXl = 28;
 
-  static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
-      scaffoldBackgroundColor: const Color(0xFFF3F7F4),
-      canvasColor: const Color(0xFFF3F7F4),
-      fontFamily: 'Roboto',
-      brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primary,
-        primary: primary,
-        secondary: const Color(0xFF7AA22C),
-        surface: Colors.white,
-        brightness: Brightness.light,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFFF3F7F4),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        foregroundColor: Color(0xFF10231A),
-        iconTheme: IconThemeData(color: Color(0xFF10231A)),
-        titleTextStyle: TextStyle(
-          color: Color(0xFF10231A),
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: Colors.white,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusLg),
-          side: const BorderSide(color: Color(0xFFC8D8CE)),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: Color(0xFFC8D8CE)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: Color(0xFFC8D8CE)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: primary, width: 2),
-        ),
-        labelStyle: const TextStyle(color: Color(0xFF52675B)),
-        hintStyle: const TextStyle(color: Color(0xFF52675B)),
-        prefixIconColor: const Color(0xFF52675B),
-        suffixIconColor: const Color(0xFF52675B),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 52),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusLg),
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: primary,
-          minimumSize: const Size(double.infinity, 50),
-          side: const BorderSide(color: Color(0xFFC8D8CE)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusLg),
-          ),
-        ),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        indicatorColor: primary.withValues(alpha: 0.15),
-        height: 72,
-      ),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: Colors.white,
-        modalBackgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        showDragHandle: true,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusXl)),
-        ),
-      ),
-      textTheme: const TextTheme(
-        headlineMedium: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF10231A),
-        ),
-        titleLarge: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF10231A),
-        ),
-        titleMedium: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF10231A),
-        ),
-        bodyMedium: TextStyle(fontSize: 14, color: Color(0xFF10231A)),
-        bodySmall: TextStyle(fontSize: 12, color: Color(0xFF52675B)),
-      ),
-    );
-  }
+  static ThemeData get lightTheme =>
+      _buildTheme(_lightPalette, Brightness.light);
 
-  static ThemeData get darkTheme {
+  static ThemeData get darkTheme => _buildTheme(_darkPalette, Brightness.dark);
+
+  static ThemeData _buildTheme(_OpsPalette p, Brightness brightness) {
+    final isLight = brightness == Brightness.light;
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: primary,
-      primary: primary,
+      seedColor: p.primary,
+      primary: p.primary,
       onPrimary: Colors.white,
-      secondary: primaryLime,
-      surface: surface,
-      onSurface: textInk,
-      brightness: Brightness.dark,
+      secondary: p.primaryLime,
+      onSecondary: isLight ? Colors.white : p.darkSurface,
+      surface: p.surface,
+      onSurface: p.textInk,
+      surfaceContainerHighest: p.surfaceElevated,
+      onSurfaceVariant: p.textMuted,
+      outline: p.border,
+      error: p.statusDanger,
+      onError: Colors.white,
+      brightness: brightness,
     );
 
     return ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: background,
+      scaffoldBackgroundColor: p.background,
+      canvasColor: p.background,
       fontFamily: 'Roboto',
-      primaryColor: primary,
+      primaryColor: p.primary,
       colorScheme: colorScheme,
-      brightness: Brightness.dark,
+      brightness: brightness,
       visualDensity: VisualDensity.standard,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: background,
+      appBarTheme: AppBarTheme(
+        backgroundColor: p.background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        iconTheme: IconThemeData(color: textInk),
+        foregroundColor: p.textInk,
+        iconTheme: IconThemeData(color: p.textInk),
         titleTextStyle: TextStyle(
-          color: textInk,
+          color: p.textInk,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
       ),
       cardTheme: CardThemeData(
-        color: surface,
+        color: p.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shadowColor: shadow,
+        shadowColor: p.shadow,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLg),
-          side: const BorderSide(color: border, width: 1),
+          side: BorderSide(color: p.border),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
+          backgroundColor: p.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: surfaceMuted,
-          disabledForegroundColor: textMuted,
+          disabledBackgroundColor: p.surfaceMuted,
+          disabledForegroundColor: p.textMuted,
           elevation: 0,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
@@ -236,186 +238,197 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: primaryBright,
+          foregroundColor: p.primary,
           minimumSize: const Size(double.infinity, 50),
-          side: const BorderSide(color: border),
+          side: BorderSide(color: p.border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusLg),
           ),
           animationDuration: motionStandard,
         ),
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: primaryBright,
-        foregroundColor: darkSurface,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: p.primaryBright,
+        foregroundColor: isLight ? Colors.white : p.darkSurface,
         elevation: 6,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(radiusLg)),
+          borderRadius: BorderRadius.circular(radiusLg),
         ),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: primaryBright,
-        linearTrackColor: surfaceMuted,
-        circularTrackColor: surfaceMuted,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: p.primaryBright,
+        linearTrackColor: p.surfaceMuted,
+        circularTrackColor: p.surfaceMuted,
       ),
-      listTileTheme: const ListTileThemeData(
-        iconColor: textMuted,
-        textColor: textInk,
+      listTileTheme: ListTileThemeData(
+        iconColor: p.textMuted,
+        textColor: p.textInk,
         minLeadingWidth: 40,
-        contentPadding: EdgeInsets.symmetric(horizontal: spaceLg, vertical: 4),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: spaceLg,
+          vertical: 4,
+        ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(radiusMd)),
+          borderRadius: BorderRadius.circular(radiusMd),
         ),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: surfaceElevated,
-        modalBackgroundColor: surfaceElevated,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: p.surfaceElevated,
+        modalBackgroundColor: p.surfaceElevated,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
-        dragHandleColor: border,
+        dragHandleColor: p.border,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(radiusXl)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surfaceElevated,
+        fillColor: p.surfaceElevated,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: border),
+          borderSide: BorderSide(color: p.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: border),
+          borderSide: BorderSide(color: p.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: primary, width: 2),
+          borderSide: BorderSide(color: p.primary, width: 2),
         ),
-        labelStyle: const TextStyle(color: textMuted),
-        hintStyle: const TextStyle(color: textMuted),
-        prefixIconColor: textMuted,
-        suffixIconColor: textMuted,
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: BorderSide(color: p.statusDanger),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: BorderSide(color: p.statusDanger, width: 2),
+        ),
+        labelStyle: TextStyle(color: p.textMuted),
+        hintStyle: TextStyle(color: p.textMuted),
+        prefixIconColor: p.textMuted,
+        suffixIconColor: p.textMuted,
       ),
-      // Text scale konsisten: 12/14/16/18/24/32.
-      textTheme: const TextTheme(
+      textTheme: TextTheme(
         headlineMedium: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w800,
-          color: textInk,
+          color: p.textInk,
           letterSpacing: -0.5,
         ),
         titleLarge: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: textInk,
+          color: p.textInk,
         ),
         titleMedium: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w700,
-          color: textInk,
+          color: p.textInk,
         ),
-        bodyMedium: TextStyle(fontSize: 14, color: textInk),
-        bodySmall: TextStyle(fontSize: 12, color: textMuted),
+        bodyMedium: TextStyle(fontSize: 14, color: p.textInk),
+        bodySmall: TextStyle(fontSize: 12, color: p.textMuted),
         labelLarge: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.bold,
-          color: textInk,
+          color: p.textInk,
         ),
         labelMedium: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: textMuted,
+          color: p.textMuted,
         ),
       ),
-      // Shared Material 3 components — berlaku untuk semua role/screen.
       chipTheme: ChipThemeData(
-        backgroundColor: surfaceElevated,
-        selectedColor: primary.withValues(alpha: 0.28),
-        disabledColor: surfaceMuted,
-        side: const BorderSide(color: border),
+        backgroundColor: p.surfaceElevated,
+        selectedColor: p.primary.withValues(alpha: isLight ? 0.12 : 0.28),
+        disabledColor: p.surfaceMuted,
+        side: BorderSide(color: p.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        labelStyle: const TextStyle(
+        labelStyle: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: textInk,
+          color: p.textInk,
         ),
-        secondaryLabelStyle: const TextStyle(
+        secondaryLabelStyle: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: primary,
+          color: p.primary,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
+        backgroundColor: p.surface,
         elevation: 0,
         height: 72,
-        indicatorColor: primary.withValues(alpha: 0.24),
+        indicatorColor: p.primary.withValues(alpha: isLight ? 0.12 : 0.24),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? primary : textMuted,
+            color: selected ? p.primary : p.textMuted,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          return IconThemeData(color: selected ? primary : textMuted, size: 24);
+          return IconThemeData(
+            color: selected ? p.primary : p.textMuted,
+            size: 24,
+          );
         }),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: surface,
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: p.surface,
         elevation: 0,
-        selectedItemColor: primary,
-        unselectedItemColor: textMuted,
-        selectedLabelStyle: TextStyle(
+        selectedItemColor: p.primary,
+        unselectedItemColor: p.textMuted,
+        selectedLabelStyle: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
-        unselectedLabelStyle: TextStyle(
+        unselectedLabelStyle: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: surfaceElevated,
+        backgroundColor: p.surfaceElevated,
         elevation: 8,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLg),
         ),
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w700,
-          color: textInk,
+          color: p.textInk,
         ),
-        contentTextStyle: const TextStyle(
+        contentTextStyle: TextStyle(
           fontSize: 14,
           height: 1.5,
-          color: textInk,
+          color: p.textInk,
         ),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: surfaceElevated,
+        backgroundColor: p.surfaceElevated,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMd),
         ),
-        contentTextStyle: const TextStyle(fontSize: 14, color: Colors.white),
+        contentTextStyle: TextStyle(
+          fontSize: 14,
+          color: isLight ? p.textInk : Colors.white,
+        ),
         insetPadding: const EdgeInsets.all(spaceLg),
       ),
-      dividerTheme: const DividerThemeData(
-        color: border,
-        thickness: 1,
-        space: 1,
-      ),
+      dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
       scrollbarTheme: ScrollbarThemeData(
-        thumbColor: WidgetStatePropertyAll(primary.withValues(alpha: 0.55)),
+        thumbColor: WidgetStatePropertyAll(p.primary.withValues(alpha: 0.55)),
         radius: const Radius.circular(12),
         thickness: const WidgetStatePropertyAll(4),
       ),
@@ -444,7 +457,9 @@ class _OpsPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    if (MediaQuery.disableAnimationsOf(context)) return child;
+    if (AppTheme.reduceMotion || MediaQuery.disableAnimationsOf(context)) {
+      return child;
+    }
 
     final curved = CurvedAnimation(
       parent: animation,

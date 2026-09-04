@@ -6,6 +6,7 @@ use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Models\StockOpname;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 
 /**
  * Subsistem Inventory (stock opname) → KPI Gudang.
@@ -39,6 +40,10 @@ class InventoryKpiSyncService
         $updatedEmployees = 0;
 
         foreach ($kpis as $kpi) {
+            if (!KpiWorkflow::canSystemSyncKpi($kpi)) {
+                continue;
+            }
+
             $changed = false;
 
             // GUD-01 & GUD-02 dari opname terakhir yang selesai
@@ -51,7 +56,7 @@ class InventoryKpiSyncService
 
                     $totalSystem = $counted->sum('system_stock');
                     $totalDifference = $counted->sum(fn($i) => abs($i->difference));
-                    $selisih = $totalSystem > 0 ? round(($totalDifference / $totalSystem) * 100, 2) : 0.0;
+                    $selisih = $totalSystem > 0 ? round(($totalDifference / $totalSystem) * 100, 2) : null;
 
                     $gud01 = $kpi->items->firstWhere('definition_code_snapshot', 'GUD-01');
                     if ($gud01) {

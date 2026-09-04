@@ -1,0 +1,48 @@
+# Project-wide secrets and environment files
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+
+# Dependencies
+**/node_modules/
+**/vendor/
+
+# Build and test output
+**/build/
+**/dist/
+**/coverage/
+**/.dart_tool/
+**/.pub-cache/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+*.apk
+*.aab
+*.ipa
+*.dSYM/
+
+# Laravel runtime and generated frontend assets
+backend/storage/*
+!backend/storage/.gitignore
+backend/public/build/
+backend/public/hot
+backend/public/storage
+backend/bootstrap/cache/*.php
+!backend/bootstrap/cache/.gitignore
+
+# Local tooling, IDE, and OS files
+/.claude/
+/.codex/
+/.playwright-mcp/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Local secrets and signing material
+**/key.properties
+**/*.keystore
+**/*.jks
+*.pem

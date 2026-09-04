@@ -36,4 +36,9 @@ class CustomerFeedback extends Model
     {
         return $this->belongsTo(Employee::class, 'cs_employee_id');
     }
+
+    public function pelayanEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'cs_employee_id');
+    }
 }

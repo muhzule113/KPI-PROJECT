@@ -153,8 +153,8 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Antrean Approval Manager',
+                Text(
+                  'Antrean Penilaian Manager',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -162,11 +162,8 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                   ),
                 ),
                 Text(
-                  '${_queue.length} Menunggu Persetujuan',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 13,
-                  ),
+                  '${_queue.length} Menunggu Penilaian / Approval',
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
               ],
             ),
@@ -175,8 +172,8 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
             if (_queue.isEmpty)
               const KpiEmptyState(
                 icon: Icons.verified_rounded,
-                title: 'Approval sudah beres',
-                message: 'Semua pengajuan KPI telah disetujui.',
+                title: 'Antrean sudah beres',
+                message: 'Semua KPI telah dinilai dan disetujui.',
               )
             else
               ..._queue.map((kpi) {
@@ -215,7 +212,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '${emp['position']} • ${emp['branch']}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppTheme.textMuted,
                               fontSize: 13,
                             ),
@@ -228,7 +225,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                 Icons.visibility_outlined,
                                 size: 16,
                               ),
-                              label: const Text('Lihat Detail & Eviden'),
+                              label: const Text('Buka Penilaian & Eviden'),
                               style: OutlinedButton.styleFrom(
                                 minimumSize: const Size(0, 36),
                               ),

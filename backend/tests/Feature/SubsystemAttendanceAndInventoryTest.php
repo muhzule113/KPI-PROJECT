@@ -108,17 +108,18 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         app(StockOpnameService::class)->snapshotItems($opname);
 
         // Isi stok fisik: PRT-BAT (sistem 5) salah hitung → fisik 3, dua sisanya akurat
-        $items = $opname->items->whereIn('sparepart_id', $parts->pluck('id'))->values();
-        $this->assertCount(3, $items);
+        $items = $opname->items;
+        $selectedItems = $items->whereIn('sparepart_id', $parts->pluck('id'))->values();
+        $this->assertCount(3, $selectedItems);
         foreach ($items as $it) {
             $it->update(['physical_stock' => $it->system_stock]); // akurat dulu
         }
-        $batItem = $items->firstWhere('sparepart_id', $parts[1]->id);
+        $batItem = $selectedItems->firstWhere('sparepart_id', $parts[1]->id);
         $batItem->update(['physical_stock' => 3]); // selisih: sistem 5 → fisik 3
 
-        // Selesaikan opname via service (logika yang dipakai Filament action)
+        // Selesaikan opname via service (logika yang dipakai action web)
         $res = app(StockOpnameService::class)->complete($opname, $userGud->id);
-        $this->assertEquals(3, $res['counted']);
+        $this->assertEquals($items->count(), $res['counted']);
         $this->assertEquals(1, $res['adjusted']);
 
         // Stok sparepart part[1] disesuaikan 5 → 3
@@ -136,10 +137,14 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         $gud02 = $kpi->items->firstWhere('definition_code_snapshot', 'GUD-02');
         $gud05 = $kpi->items->firstWhere('definition_code_snapshot', 'GUD-05');
 
-        // GUD-01: 2/3 akurat = 66.67%
-        $this->assertEquals(round(2 / 3 * 100, 2), (float) $gud01->actual_decimal);
-        // GUD-02: selisih 2 dari total sistem 23 = 8.70%
-        $this->assertEquals(round(2 / 23 * 100, 2), (float) $gud02->actual_decimal);
+        // GUD-01/GUD-02 use the complete branch snapshot, not only the three selected fixtures.
+        $counted = $opname->fresh('items')->items;
+        $accurate = $counted->where('difference', 0)->count();
+        $totalSystem = $counted->sum('system_stock');
+        $totalDifference = $counted->sum(fn ($item) => abs($item->difference));
+        $this->assertEquals(round(($accurate / $counted->count()) * 100, 2), (float) $gud01->actual_decimal);
+        $this->assertEquals(round(($totalDifference / $totalSystem) * 100, 2), (float) $gud02->actual_decimal);
+        // GUD-02 is the absolute difference divided by system stock.
         // GUD-05: 1 dari 1 sesi selesai = 100%
         $this->assertEquals(100.0, (float) $gud05->actual_decimal);
     }

@@ -121,6 +121,155 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
     }
   }
 
+  Future<void> _assessNumeric(Map<String, dynamic> item) async {
+    final value = await showOpsTextInputSheet(
+      context: context,
+      eyebrow: 'Penilaian Manager',
+      title: 'Nilai aktual ${item['code']}',
+      subtitle:
+          'Masukkan nilai aktual indikator sesuai bukti dan hasil review.',
+      label: 'Nilai aktual (${item['target_unit'] ?? '-'})',
+      hintText: 'Contoh: ${item['target_value'] ?? '0'}',
+      helperText:
+          'Target: ${item['target_value'] ?? '-'} ${item['target_unit'] ?? ''}',
+      actionLabel: 'Simpan nilai',
+    );
+    if (value == null) return;
+
+    final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+    if (parsed == null || !parsed.isFinite) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Nilai aktual harus berupa angka yang valid.'),
+          backgroundColor: AppTheme.statusDanger,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final res = await ApiService.post(
+        '/manager/approval/${widget.kpiId}/items/${item['id']}/assess',
+        {'actual_decimal': parsed},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res['message'] ?? 'Penilaian Manager berhasil disimpan.',
+          ),
+          backgroundColor: AppTheme.primary,
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppTheme.statusDanger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openManagerRubricChecklist(Map<String, dynamic> item) async {
+    final rubric = item['rubric'] as Map<String, dynamic>?;
+    final criteria = (rubric?['criteria'] as List<dynamic>?) ?? [];
+    if (criteria.isEmpty) return;
+
+    final assessment = item['assessment'] as Map<String, dynamic>?;
+    final existingAnswers = (assessment?['answers'] as List<dynamic>?) ?? [];
+    final fulfilledIds = existingAnswers
+        .where((answer) => answer['is_fulfilled'] == true)
+        .map((answer) => answer['criterion_id'].toString())
+        .toSet();
+    final checked = <String, bool>{
+      for (final criterion in criteria)
+        criterion['id'].toString(): fulfilledIds.contains(
+          criterion['id'].toString(),
+        ),
+    };
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => OpsFormSheet(
+          eyebrow: 'Penilaian Manager',
+          title: 'Checklist rubrik ${item['code']}',
+          subtitle:
+              'Nilai seluruh kriteria berdasarkan bukti dan hasil review.',
+          footer: ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.calculate_rounded),
+            label: const Text('Simpan & hitung skor'),
+          ),
+          child: Column(
+            children: criteria.map((criterion) {
+              final id = criterion['id'].toString();
+              return CheckboxListTile(
+                value: checked[id] ?? false,
+                onChanged: (value) =>
+                    setModalState(() => checked[id] = value ?? false),
+                title: Text(
+                  criterion['criterion_text'] ?? 'Kriteria',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                subtitle: Text(
+                  '${criterion['points'] ?? 0} Poin',
+                  style: TextStyle(fontSize: 12, color: AppTheme.primaryBright),
+                ),
+                activeColor: AppTheme.primary,
+                contentPadding: EdgeInsets.zero,
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final res = await ApiService.post(
+        '/manager/approval/${widget.kpiId}/items/${item['id']}/rubric',
+        {
+          'answers': criteria
+              .map(
+                (criterion) => {
+                  'criterion_id': criterion['id'],
+                  'is_fulfilled': checked[criterion['id'].toString()] ?? false,
+                  'notes': null,
+                },
+              )
+              .toList(),
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res['message'] ?? 'Checklist Manager berhasil disimpan.',
+          ),
+          backgroundColor: AppTheme.primary,
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: AppTheme.statusDanger,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -169,7 +318,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
               children: [
                 Text(
                   emp['name'] ?? 'Karyawan',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     color: AppTheme.textInk,
@@ -178,10 +327,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '${emp['employee_number'] ?? ''} • ${emp['position'] ?? '-'} • ${emp['branch'] ?? '-'}',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -231,10 +377,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                   const SizedBox(height: 6),
                   Text(
                     _stringify(explanation),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textInk,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textInk),
                   ),
                 ],
               ),
@@ -242,7 +385,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
           ],
 
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Breakdown Indikator',
             style: TextStyle(
               fontSize: 16,
@@ -253,6 +396,10 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
           const SizedBox(height: 12),
           ...items.map((item) {
             final evidences = (item['evidences'] as List<dynamic>?) ?? [];
+            final isRubric = item['formula'] == 'rubric';
+            final canAssess =
+                data['status'] == 'pending_approval' &&
+                item['status'] != 'locked';
             return OpsCard(
               padding: EdgeInsets.zero,
               child: Padding(
@@ -283,7 +430,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                         ),
                         Text(
                           'Bobot ${item['weight']}%',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AppTheme.textMuted,
                           ),
@@ -293,7 +440,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                     const SizedBox(height: 8),
                     Text(
                       item['name'] ?? '',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.textInk,
@@ -335,7 +482,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                       ...evidences.map(
                         (e) => Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.attach_file_rounded,
                               size: 14,
                               color: AppTheme.textMuted,
@@ -344,7 +491,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                             Expanded(
                               child: Text(
                                 e['file_name'] ?? '',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   color: AppTheme.textMuted,
                                 ),
@@ -352,6 +499,30 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ],
+                    if (canAssess) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: Icon(
+                            isRubric
+                                ? Icons.checklist_rounded
+                                : Icons.edit_note_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            isRubric
+                                ? 'Isi Checklist Manager'
+                                : item['actual_decimal'] != null
+                                ? 'Ubah Nilai Manager'
+                                : 'Isi Nilai Manager',
+                          ),
+                          onPressed: () => isRubric
+                              ? _openManagerRubricChecklist(item)
+                              : _assessNumeric(item),
                         ),
                       ),
                     ],
@@ -396,10 +567,7 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
         Text(
           value,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),

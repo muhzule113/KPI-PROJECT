@@ -18,6 +18,9 @@ class KpiEvidence extends Model
         'file_size',
         'mime_type',
         'sha256_hash',
+        'scan_status',
+        'scanned_at',
+        'scan_note',
         'uploaded_by',
         'description',
     ];

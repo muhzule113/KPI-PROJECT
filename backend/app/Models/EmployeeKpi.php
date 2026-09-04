@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\KpiDataUpdated;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,6 +10,15 @@ use Illuminate\Database\Eloquent\Model;
 class EmployeeKpi extends Model
 {
     use HasFactory, HasUlids;
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $kpi): void {
+            if ($kpi->period_id !== null && $kpi->wasChanged()) {
+                KpiDataUpdated::dispatch((int) $kpi->period_id);
+            }
+        });
+    }
 
     protected $fillable = [
         'period_id',

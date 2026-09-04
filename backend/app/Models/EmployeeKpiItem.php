@@ -63,6 +63,11 @@ class EmployeeKpiItem extends Model
         return $this->hasMany(KpiActualEntry::class, 'employee_kpi_item_id');
     }
 
+    public function dailyEntries()
+    {
+        return $this->hasMany(KpiDailyEntry::class, 'employee_kpi_item_id')->orderBy('entry_date');
+    }
+
     public function evidences()
     {
         return $this->hasMany(KpiEvidence::class, 'employee_kpi_item_id');
@@ -76,5 +81,17 @@ class EmployeeKpiItem extends Model
     public function assessment()
     {
         return $this->hasOne(KpiAssessment::class, 'employee_kpi_item_id');
+    }
+
+    public function isSystemSourced(): bool
+    {
+        return strtolower((string) $this->source_type_snapshot) === 'system';
+    }
+
+    public function systemActualDecimal(): ?float
+    {
+        return $this->isSystemSourced() && $this->actual_decimal !== null
+            ? (float) $this->actual_decimal
+            : null;
     }
 }

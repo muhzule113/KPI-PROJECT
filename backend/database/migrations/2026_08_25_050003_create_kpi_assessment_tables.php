@@ -197,7 +197,7 @@ return new class extends Migration
             $table->string('run_type', 30)->default('submission'); // submission, review, approval, correction, recalculation
             $table->json('input_snapshot');
             $table->json('output_snapshot');
-            $table->decimal('total_score', 8, 2);
+            $table->decimal('total_score', 8, 2)->nullable();
             $table->string('rating_code', 50)->nullable();
             $table->foreignId('calculated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('calculated_at');

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
+import '../../core/realtime/realtime_service.dart';
 import 'kpi_item_detail_screen.dart';
 import 'kpi_history_screen.dart';
 
@@ -16,55 +19,60 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _kpiData;
   String? _errorMessage;
+  Timer? _refreshTimer;
+  bool _requestInFlight = false;
+  StreamSubscription<void>? _realtimeSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadMyKpi();
+    unawaited(_loadMyKpi());
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_loadMyKpi(showLoading: false)),
+    );
+    _realtimeSubscription = RealtimeService.instance.kpiUpdates.listen(
+      (_) => unawaited(_loadMyKpi(showLoading: false)),
+    );
   }
 
-  Future<void> _loadMyKpi() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _loadMyKpi({bool showLoading = true}) async {
+    if (_requestInFlight) return;
+    _requestInFlight = true;
+
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final res = await ApiService.get('/my-kpi/active');
-      setState(() {
-        _kpiData = res['data'];
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _kpiData = res['data'];
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
+      if (mounted && (showLoading || _kpiData == null)) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    } finally {
+      _requestInFlight = false;
     }
   }
 
-  Future<void> _syncOperationalData() async {
-    try {
-      final res = await ApiService.post('/operational/sync-kpi');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            res['message'] ?? 'Data operasional berhasil disinkronkan!',
-          ),
-          backgroundColor: AppTheme.primary,
-        ),
-      );
-      _loadMyKpi();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: AppTheme.statusDanger,
-        ),
-      );
-    }
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _realtimeSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -80,7 +88,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.info_outline_rounded,
                 color: AppTheme.textMuted,
                 size: 48,
@@ -118,7 +126,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'PERFORMA SAYA',
                             style: TextStyle(
                               color: AppTheme.primaryBright,
@@ -130,7 +138,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                           const SizedBox(height: 8),
                           Text(
                             _kpiData?['period']?['name'] ?? 'Periode Aktif',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 20,
                               color: AppTheme.textInk,
@@ -139,7 +147,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                           const SizedBox(height: 5),
                           Text(
                             'Supervisor: ${_kpiData?['supervisor'] ?? 'Atasan'}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppTheme.textMuted,
                               fontSize: 13,
                             ),
@@ -156,7 +164,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                     Column(
                       children: [
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.history_rounded,
                             color: AppTheme.primaryBright,
                           ),
@@ -170,12 +178,12 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(
-                            Icons.sync_rounded,
+                          icon: Icon(
+                            Icons.refresh_rounded,
                             color: AppTheme.primaryBright,
                           ),
-                          tooltip: 'Perbarui data',
-                          onPressed: _syncOperationalData,
+                          tooltip: 'Muat ulang KPI',
+                          onPressed: _loadMyKpi,
                         ),
                       ],
                     ),
@@ -184,7 +192,6 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
               ),
             ),
 
-            // Info banner: nilai datang otomatis, bukan isian manual
             if (status == 'draft' || status == 'revision_required') ...[
               const SizedBox(height: 12),
               OpsReveal(
@@ -198,19 +205,19 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                       color: AppTheme.primary.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        Icons.auto_awesome_rounded,
+                        Icons.info_outline_rounded,
                         color: AppTheme.primary,
                         size: 20,
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Nilai KPI dihitung otomatis oleh sistem dari aktivitas Anda di aplikasi '
-                          '(mis. tiket servis) dan penilaian Supervisor — tidak ada isian manual.',
+                          'Nilai KPI diisi otomatis oleh sistem atau melalui review Supervisor/Manager. '
+                          'Karyawan hanya dapat melihat hasil dan catatan review.',
                           style: TextStyle(
                             fontSize: 12.5,
                             color: AppTheme.textInk,
@@ -222,12 +229,28 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                 ),
               ),
             ],
-
+            if (status == 'submitted' ||
+                status == 'under_review' ||
+                status == 'verified' ||
+                status == 'pending_approval') ...[
+              const SizedBox(height: 12),
+              Text(
+                'Nilai yang sudah dikirim sedang diproses dalam alur review dan approval.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              ),
+            ],
+            if (status == 'approved' || status == 'locked') ...[
+              const SizedBox(height: 12),
+              Text(
+                'KPI final bersifat immutable. Perubahan hanya melalui alur koreksi resmi.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Daftar Indikator KPI',
                   style: TextStyle(
                     fontSize: 16,
@@ -237,10 +260,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                 ),
                 Text(
                   '${items.length} Indikator',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
               ],
             ),
@@ -293,7 +313,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             ),
                             Text(
                               'Bobot: ${item['weight']}%',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textMuted,
@@ -304,7 +324,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                         const SizedBox(height: 10),
                         Text(
                           item['name'],
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textInk,
@@ -317,7 +337,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Target',
                                   style: TextStyle(
                                     fontSize: 12,
@@ -336,7 +356,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text(
+                                Text(
                                   'Nilai Aktual',
                                   style: TextStyle(
                                     fontSize: 12,
@@ -371,7 +391,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
                                 Icon(
                                   Icons.warning_amber_rounded,
@@ -399,7 +419,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
             }),
 
             const SizedBox(height: 20),
-            const Center(
+            Center(
               child: Text(
                 'Hasil akhir akan diumumkan setelah periode ditutup dan disetujui.',
                 textAlign: TextAlign.center,
@@ -443,6 +463,8 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
         return 'Menunggu penilaian Supervisor';
       case 'cross_role':
         return 'Dinilai rekan kerja';
+      case 'employee':
+        return 'Belum diisi';
       default:
         return 'Otomatis dari sistem';
     }

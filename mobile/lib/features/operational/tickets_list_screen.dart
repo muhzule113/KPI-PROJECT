@@ -98,36 +98,37 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 );
               },
             ),
-          IconButton(
-            icon: const Icon(Icons.sync_rounded),
-            tooltip: 'Sync ke KPI',
-            onPressed: () async {
-              try {
-                final res = await ApiService.post('/operational/sync-kpi');
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        res['message'] ??
-                            'KPI berhasil disinkronkan dari tiket operasional!',
+          if (auth.isManager)
+            IconButton(
+              icon: const Icon(Icons.sync_rounded),
+              tooltip: 'Sync ke KPI',
+              onPressed: () async {
+                try {
+                  final res = await ApiService.post('/operational/sync-kpi');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          res['message'] ??
+                              'KPI berhasil disinkronkan dari tiket operasional!',
+                        ),
+                        backgroundColor: AppTheme.primary,
                       ),
-                      backgroundColor: AppTheme.primary,
-                    ),
-                  );
-                  _loadTickets();
+                    );
+                    _loadTickets();
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(e.toString()),
+                        backgroundColor: AppTheme.statusDanger,
+                      ),
+                    );
+                  }
                 }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(e.toString()),
-                      backgroundColor: AppTheme.statusDanger,
-                    ),
-                  );
-                }
-              }
-            },
-          ),
+              },
+            ),
         ],
       ),
       floatingActionButton: isCs
@@ -141,7 +142,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
               },
               backgroundColor: AppTheme.primary,
               icon: const Icon(Icons.add_rounded, color: Colors.white),
-              label: const Text(
+              label: Text(
                 'Tiket Baru',
                 style: TextStyle(
                   color: AppTheme.surface,
@@ -204,7 +205,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.error_outline_rounded,
                         color: AppTheme.statusDanger,
                         size: 40,
@@ -226,13 +227,13 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 alignment: Alignment.center,
                 child: Column(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.search_off_rounded,
                       size: 48,
                       color: AppTheme.textMuted,
                     ),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'Tidak ada tiket servis yang sesuai filter.',
                       style: TextStyle(color: AppTheme.textMuted),
                     ),
@@ -335,7 +336,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                           const SizedBox(height: 10),
                           Text(
                             "${t['device_brand']} ${t['device_model']}",
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.textInk,
@@ -344,7 +345,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                           const SizedBox(height: 4),
                           Text(
                             "Pelanggan: ${t['customer_name']} (${t['customer_phone']})",
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               color: AppTheme.textMuted,
                             ),
@@ -358,7 +359,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.build_circle_outlined,
                                   size: 16,
                                   color: AppTheme.textMuted,
@@ -367,7 +368,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                                 Expanded(
                                   child: Text(
                                     t['initial_complaint'] ?? 'Keluhan',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       color: AppTheme.textInk,
                                     ),
@@ -384,7 +385,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                             children: [
                               Text(
                                 "Teknisi: ${t['technician_name'] ?? 'Belum Ditugaskan'}",
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: AppTheme.primaryBright,
@@ -415,7 +416,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                                   },
                                 )
                               else if (isTeknisi && status != 'delivered')
-                                const Icon(
+                                Icon(
                                   Icons.arrow_forward_ios_rounded,
                                   size: 14,
                                   color: AppTheme.textMuted,

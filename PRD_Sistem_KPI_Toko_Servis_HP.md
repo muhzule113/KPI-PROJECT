@@ -8,7 +8,7 @@
 | Tanggal | Agustus 2026 |
 | Platform | Web (Laravel + Filament) + Mobile (Flutter) |
 | Database | MySQL |
-| Periode evaluasi | Bulanan |
+| Periode evaluasi | Bulanan (dengan input dan review harian) |
 | Bahasa produk | Indonesia |
 
 ---
@@ -43,7 +43,7 @@
 
 ### 1.1 Konteks Bisnis
 
-Perusahaan bergerak di bidang penjualan dan servis HP. Struktur operasional melibatkan berbagai jabatan: Teknisi, Customer Service, Admin, Kasir, Gudang/Sparepart, dan Supervisor yang semuanya memiliki kontribusi berbeda terhadap performa bisnis.
+Perusahaan bergerak di bidang penjualan dan servis HP. Struktur operasional melibatkan berbagai jabatan: Teknisi, Pelayan, Admin, Kasir, Gudang/Sparepart, dan Supervisor yang semuanya memiliki kontribusi berbeda terhadap performa bisnis.
 
 ### 1.2 Masalah yang Ada Saat Ini
 
@@ -105,6 +105,7 @@ Sistem KPI Management yang:
 **Kebutuhan:**
 - Dashboard ringkasan performa seluruh jabatan dan periode.
 - Perbandingan antar karyawan, antar periode (trend).
+- Memantau hasil review harian Supervisor dan Manager.
 - Final approval KPI sebelum hasil diumumkan.
 - Laporan yang bisa diekspor untuk evaluasi bisnis.
 
@@ -112,18 +113,19 @@ Sistem KPI Management yang:
 
 ### 3.2 Supervisor
 
-**Profil:** Mengelola tim operasional (Teknisi, CS, Admin, Kasir, Gudang). Bertanggung jawab atas performa tim.
+**Profil:** Mengelola tim operasional (Teknisi, Pelayan, Admin, Kasir, Gudang). Bertanggung jawab atas performa tim.
 
 **Kebutuhan:**
 - Melihat progress submission seluruh anggota tim.
 - Review aktual dan evidence yang disubmit karyawan.
 - Mengisi penilaian subjektif (SOP, kerapian) via checklist.
+- Menyetujui atau meminta revisi penilaian harian anggota tim.
 - Meminta revisi jika data tidak sesuai.
 - Coaching action plan untuk karyawan di bawah target.
 
 **Frustrasi saat ini:** Harus review secara manual dan hasilnya tidak tersimpan dengan baik.
 
-### 3.3 Karyawan Operasional (Teknisi, CS, Admin, Kasir, Gudang)
+### 3.3 Karyawan Operasional (Teknisi, Pelayan, Admin, Kasir, Gudang)
 
 **Profil:** Karyawan lapangan yang mengerjakan tugas harian.
 
@@ -131,6 +133,7 @@ Sistem KPI Management yang:
 - Tahu target KPI mereka sebelum periode mulai.
 - Bisa input data pekerjaan secara bertahap (draft).
 - Tahu status review KPI mereka.
+- Melihat nilai efektif harian dan histori revisi.
 - Lihat hasil akhir dan feedback Supervisor.
 
 **Frustrasi saat ini:** Tidak tahu dinilai dari apa. Sering kaget dengan hasil penilaian akhir.
@@ -155,10 +158,10 @@ Sistem KPI Management yang:
 - Struktur organisasi: karyawan, jabatan, departemen, tim, Supervisor, Manager.
 - Role dan permission berbasis RBAC.
 - Master KPI: definisi indikator, template per jabatan, versi template, bobot, target, formula, rubric.
-- Periode KPI bulanan: deadline input/review/approval, generate KPI karyawan.
+- Periode KPI bulanan dengan deadline; input fakta dan review berlangsung per hari, lalu direkap ke hasil bulanan.
 - Alur karyawan: draft, input aktual, upload evidence, submit.
 - Alur Supervisor: review, verifikasi, checklist subjektif, request revisi.
-- Alur Manager: approval/return final, locking data.
+- Alur Manager: menilai ulang atau mengoreksi setiap hari, meminta revisi bila perlu, lalu approval/return rekap bulanan.
 - KPI Engine: kalkulasi otomatis, achievement, weighted score, rating/predikat.
 - Import laporan kasir: XLSX, CSV, dan PDF text-based.
 - Dashboard role-based: Manager, Supervisor, Karyawan.
@@ -187,7 +190,7 @@ Sistem KPI Management yang:
 Owner / Manager
 └── Supervisor
     ├── Teknisi
-    ├── Customer Service (CS)
+    ├── Pelayan
     ├── Admin
     ├── Kasir
     └── Gudang / Sparepart
@@ -209,8 +212,9 @@ Owner / Manager
 ### 5.3 Prinsip Pemisahan Tugas
 
 - **Input** fakta dilakukan oleh karyawan atau sumber yang lebih objektif (sistem/cross-role).
-- **Verifikasi** dan penilaian subjektif dilakukan Supervisor.
-- **Approval final** dilakukan Manager/Owner, bukan oleh yang mereview.
+- **Verifikasi harian** dan penilaian awal dilakukan Supervisor.
+- **Review, koreksi, dan approval harian** dilakukan Manager/Owner setelah Supervisor menyetujui.
+- **Approval final** rekap bulanan dilakukan Manager/Owner, bukan oleh yang mereview.
 - **Tidak ada self-approval** — satu orang tidak bisa approve KPI dirinya sendiri.
 
 ---
@@ -223,7 +227,7 @@ Owner / Manager
 |---|---|---:|---|---|---|---|
 | TEK-01 | Jumlah servis selesai | 25% | ≥ [N] unit/bulan | Higher | Laporan pekerjaan | Teknisi |
 | TEK-02 | Tingkat keberhasilan servis | 25% | ≥ 95% | Higher | Laporan pekerjaan | Teknisi |
-| TEK-03 | Tingkat retur/komplain | 15% | ≤ 3% | Lower | Record retur dari CS/Admin | Cross-role (CS/Admin) |
+| TEK-03 | Tingkat retur/komplain | 15% | ≤ 3% | Lower | Record retur dari Pelayan/Admin | Cross-role (Pelayan/Admin) |
 | TEK-04 | Ketepatan waktu pengerjaan | 15% | ≥ 95% | Higher | Timestamp mulai & selesai | Teknisi |
 | TEK-05 | Kepatuhan SOP | 10% | ≥ 95% | Higher | Checklist observasi | Supervisor |
 | TEK-06 | Kerapian & kebersihan | 5% | ≥ 90% | Higher | Checklist observasi | Supervisor |
@@ -236,19 +240,21 @@ Owner / Manager
 **Field yang TIDAK BOLEH diisi Teknisi:**
 `jumlah_retur`, `skor_sop`, `skor_kerapian`, `achievement`, `weighted_score`, `final_score`, `rating`
 
-### 6.2 Customer Service (CS)
+### 6.2 Pelayan
 
 | Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
 |---|---|---:|---|---|---|---|
-| CS-01 | Kepuasan pelanggan | 25% | ≥ 90% | Higher | Survei/feedback (manual untuk MVP) | CS + Supervisor verifikasi |
-| CS-02 | Kecepatan melayani | 20% | ≥ 95% sesuai standar | Higher | Log waktu / manual | CS + Supervisor verifikasi |
-| CS-03 | Akurasi input order | 20% | ≥ 98% | Higher | Order valid vs error | CS input fakta; sistem hitung |
-| CS-04 | Follow-up pelanggan | 15% | ≥ 95% | Higher | Record follow-up | CS input record; sistem hitung |
+| CS-01 | Kepuasan pelanggan | 25% | ≥ 90% | Higher | Survei/feedback (manual untuk MVP) | Pelayan + Supervisor verifikasi |
+| CS-02 | Kecepatan melayani | 20% | ≥ 95% sesuai standar | Higher | Log waktu / manual | Pelayan + Supervisor verifikasi |
+| CS-03 | Akurasi input order | 20% | ≥ 98% | Higher | Order valid vs error | Pelayan input fakta; sistem hitung |
+| CS-04 | Follow-up pelanggan | 15% | ≥ 95% | Higher | Record follow-up | Pelayan input record; sistem hitung |
 | CS-05 | Jumlah komplain | 10% | ≤ [N] komplain/bulan | Lower | Record komplain kanal resmi | Cross-role / sistem |
 | CS-06 | Kehadiran & disiplin | 10% | ≥ 95% | Higher | Data absensi | Sistem / Supervisor |
 | | **Total** | **100%** | | | | |
 
-> CS juga berperan sebagai **sumber data retur Teknisi** — CS mencatat retur dari pelanggan, sistem mengaitkannya ke Teknisi yang mengerjakan servis tersebut.
+> Pelayan juga berperan sebagai **sumber data retur Teknisi** — Pelayan mencatat retur dari pelanggan, sistem mengaitkannya ke Teknisi yang mengerjakan servis tersebut.
+
+> **Catatan terminologi:** Pelayan adalah nama bisnis baru untuk jabatan yang sebelumnya disebut CS. Kode posisi `POS-CS`, kode KPI `CS-*`, dan nama kolom database terkait dipertahankan agar data historis dan aturan akses tetap kompatibel.
 
 ### 6.3 Admin
 
@@ -310,6 +316,20 @@ Daftar KPI, bobot, dan target Owner/Manager **belum tersedia**. Sistem menyediak
 
 ## 7. Alur Sistem End-to-End
 
+### 7.0 Alur Penerimaan Servis: Pelayan/CS → Kasir → Teknisi
+
+1. **Customer datang**
+   - Customer datang ke konter dan menyampaikan keluhan HP kepada Pelayan.
+   - Pelayan melakukan konsultasi awal untuk memahami masalah HP.
+   - Pelayan mencatat informasi penting seperti keluhan, kondisi fisik HP, dan kebutuhan customer.
+   - Pelayan/CS dapat membuat tiket servis langsung melalui web atau mobile.
+2. **HP diserahkan ke Kasir**
+   - Setelah konsultasi selesai, Pelayan menyerahkan HP kepada Kasir.
+   - Kasir atau Pelayan/CS membuat Nota Servis di aplikasi.
+   - Data yang dapat dimasukkan meliputi nama customer, nomor HP customer, tipe HP, keluhan, estimasi biaya jika sudah diketahui, nama Pelayan yang menerima customer, serta tanggal dan jam masuk.
+3. **HP diserahkan ke Teknisi**
+   - Setelah Nota Servis dibuat, Pelayan membawa HP ke meja Teknisi.
+
 ### 7.1 Diagram Alur Utama
 
 ```
@@ -319,21 +339,23 @@ Sistem generate KPI snapshot per karyawan
         ↓
 Periode OPEN — karyawan mulai isi
         ↓
-Karyawan input aktual + evidence → Submit
+Setiap hari: karyawan input aktual + evidence → Submit hari
         ↓
-Supervisor review → verifikasi / minta revisi
+Supervisor review harian → verifikasi / minta revisi
         ↓ (jika revisi)
 Karyawan perbaiki item yang dikembalikan → Resubmit
         ↓
-Supervisor isi checklist subjektif → Verify → Forward ke Manager
+Supervisor isi checklist subjektif → Verify
         ↓
-Sistem hitung skor otomatis
+Manager review harian → setujui / koreksi / minta revisi
         ↓
-Manager review breakdown → Approve / Return
+Sistem agregasi nilai harian → hitung rekap bulanan
+        ↓
+Manager review rekap bulanan → Approve / Return
         ↓ (jika return)
-Supervisor review ulang
+Supervisor dan/atau Manager review ulang sesuai item yang dikembalikan
         ↓
-Approve → KPI terkunci (Locked/Final)
+Approve rekap → KPI terkunci (Locked/Final)
         ↓
 Karyawan lihat hasil, rating, dan feedback
 ```
@@ -374,6 +396,15 @@ Not Started → Draft → Submitted → Under Review → Revision Required → [
 
 ## 8. Alur per Role
 
+### 8.0 Alur Pelayan
+
+1. Menerima customer di konter dan melakukan konsultasi awal.
+2. Mencatat keluhan, kondisi fisik HP, dan kebutuhan customer.
+3. Membuat tiket/Nota Servis langsung melalui web atau mobile; sistem otomatis mencatat dirinya sebagai Pelayan penerima.
+4. Jika proses toko mensyaratkan Kasir, meneruskan data tiket kepada Kasir untuk validasi Nota Servis.
+5. Memastikan tiket mencatat Pelayan penerima customer serta tanggal dan jam masuk.
+6. Membawa HP dan tiket ke meja Teknisi.
+
 ### 8.1 Alur Teknisi (Employee Operasional)
 
 1. Login → lihat periode aktif dan 7 indikator KPI beserta target.
@@ -387,7 +418,7 @@ Not Started → Draft → Submitted → Under Review → Revision Required → [
 6. Setelah approved → lihat skor, rating, dan feedback.
 
 **Yang TIDAK dilakukan Teknisi:**
-- Mengisi retur (dari CS/Admin)
+- Mengisi retur (dari Pelayan/Admin)
 - Mengisi SOP dan kerapian (dari Supervisor)
 - Melihat atau mengubah skor/achievement
 
@@ -406,21 +437,24 @@ Not Started → Draft → Submitted → Under Review → Revision Required → [
 ### 8.3 Alur Kasir
 
 1. Login → lihat periode aktif.
-2. Upload file laporan dari aplikasi kasir (XLSX/CSV):
+2. Menerima HP dan informasi customer dari Pelayan.
+3. Membuat Nota Servis di aplikasi dengan mengisi nama customer, nomor HP customer, tipe HP, keluhan, estimasi biaya jika sudah diketahui, nama Pelayan penerima, serta tanggal dan jam masuk.
+4. Menyimpan Nota Servis dan memastikan HP/Nota Servis diteruskan ke Teknisi.
+5. Upload file laporan dari aplikasi kasir (XLSX/CSV):
    - Pilih periode
    - Pilih file
    - Klik upload
-3. Sistem parsing file → tampilkan preview:
+6. Sistem parsing file → tampilkan preview:
    - Total baris terdeteksi
    - Valid / Warning / Error / Duplikat
    - Total transaksi, kas sistem, kas aktual, selisih
-4. Jika ada error → tidak bisa konfirmasi, perbaiki file dulu.
-5. Jika ada warning → akui warning → konfirmasi.
-6. Setelah konfirmasi → sistem hitung KSR-01 s/d KSR-04 otomatis.
-7. Supervisor verifikasi hasil import.
-8. KSR-05 (pelayanan) diisi Supervisor via checklist.
-9. KSR-06 (disiplin) dari absensi.
-10. Manager approve → final.
+7. Jika ada error → tidak bisa konfirmasi, perbaiki file dulu.
+8. Jika ada warning → akui warning → konfirmasi.
+9. Setelah konfirmasi → sistem hitung KSR-01 s/d KSR-04 otomatis.
+10. Supervisor verifikasi hasil import.
+11. KSR-05 (pelayanan) diisi Supervisor via checklist.
+12. KSR-06 (disiplin) dari absensi.
+13. Manager approve → final.
 
 ### 8.4 Alur Supervisor
 
@@ -514,7 +548,7 @@ otherwise : achievement = ((failure_limit - actual) / (failure_limit - full_scor
 
 > Nilai `full_score_limit` dan `failure_limit` dalam rupiah atau persentase — **wajib dikonfigurasi sebelum periode pertama.**
 
-#### Rubric / Checklist (untuk penilaian subjektif Supervisor)
+#### Rubric / Checklist (untuk penilaian subjektif Supervisor dan Manager)
 
 Dipakai untuk: TEK-05, TEK-06, KSR-05, GUD-06, ADM-06.
 
@@ -522,7 +556,7 @@ Dipakai untuk: TEK-05, TEK-06, KSR-05, GUD-06, ADM-06.
 achievement = (poin_terpenuhi / total_poin) × 100
 ```
 
-Supervisor memilih setiap criterion (terpenuhi/tidak), sistem menghitung rasio. Tidak ada input skor bebas.
+Supervisor memilih setiap criterion (terpenuhi/tidak), kemudian Manager dapat menilai ulang setiap hari. Sistem menghitung rasio; tidak ada input skor bebas.
 
 Contoh rubric SOP Teknisi:
 
@@ -533,6 +567,14 @@ Contoh rubric SOP Teknisi:
 | Pemeriksaan akhir | 1 | Ya |
 | Dokumentasi lengkap | 1 | Ya |
 | Keselamatan kerja | 1 | Ya |
+
+#### Siklus Harian dan Agregasi Bulanan
+
+- Setiap item KPI memiliki satu entri per tanggal. Karyawan mengirim fakta/evidence, Supervisor memverifikasi, lalu Manager memberi keputusan harian.
+- Untuk indikator numerik, Manager boleh mempertahankan atau mengoreksi nilai Supervisor. Koreksi dan permintaan revisi wajib tercatat beserta alasan.
+- Untuk rubric, Supervisor dan Manager menilai seluruh kriteria; skor dihitung sistem dari poin terpenuhi.
+- Nilai resmi harian menggunakan urutan: keputusan Manager, keputusan Supervisor, lalu nilai karyawan bila belum ada keputusan review.
+- Rekap bulanan menggunakan rata-rata untuk rubric dan unit persentase, serta penjumlahan untuk metrik numerik lainnya. Setiap perubahan keputusan harian memicu kalkulasi ulang rekap.
 
 ### 9.2 Total Skor & Rating
 
@@ -647,13 +689,14 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 ### 10.5 Modul Input Karyawan (KPI Saya)
 
 **Fitur:**
+- Isi dan kirim nilai aktual per hari; rekap bulan berjalan selalu terlihat.
 - Lihat daftar indikator, target, bobot, sumber data, dan deadline.
 - Input aktual per item (sesuai field yang diizinkan).
 - Upload evidence (file: foto, dokumen, PDF).
 - Simpan draft — bisa disimpan bertahap.
 - Submit — memicu locking dan notifikasi ke Supervisor.
 - Lihat status per item dan status keseluruhan.
-- Lihat histori revisi dan feedback Supervisor.
+- Lihat nilai efektif harian, histori revisi, dan feedback Supervisor/Manager.
 - Setelah final: lihat skor, rating, breakdown, dan timeline.
 
 **Validasi Submit:**
@@ -669,14 +712,14 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 
 **Fitur:**
 - Daftar anggota tim yang sudah submit, dengan status progress.
-- Filter: belum submit, sudah submit, dalam revisi, sudah verify.
+- Filter tanggal: belum submit, sudah submit, dalam revisi, sudah verify.
 - Buka detail review per karyawan:
   - Lihat actual, target, evidence per item
   - Tombol: Valid / Minta Revisi (wajib beri alasan jika minta revisi)
 - Isi checklist/rubric untuk item subjektif.
 - Sistem hitung skor dari checklist — Supervisor tidak input angka.
-- Klik Verify jika semua item sudah diputuskan.
-- Forward ke Manager.
+- Klik keputusan harian jika semua item sudah diputuskan.
+- Forward keputusan harian ke Manager.
 - Jika Manager return → tangani tanpa menghapus histori keputusan sebelumnya.
 
 **Batasan Supervisor:**
@@ -688,9 +731,13 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 ### 10.7 Modul Approval Manager
 
 **Fitur:**
-- Antrean KPI yang sudah diverifikasi Supervisor, siap di-approve.
+- Antrean penilaian harian yang sudah disetujui Supervisor.
+- Menilai ulang seluruh aspek harian: mempertahankan/mengoreksi nilai numerik atau mengisi ulang rubric.
+- Meminta revisi dengan alasan; histori keputusan sebelumnya tetap tersimpan.
+- Melihat rekap bulanan yang dihitung dari keputusan harian.
 - Detail per karyawan: breakdown indikator, skor, evidence summary, histori review, dan calculation explanation.
-- Tombol: Approve / Return.
+- Tombol harian: Setujui / Koreksi / Minta Revisi.
+- Tombol bulanan: Approve / Return rekap.
 - Jika Return: wajib isi alasan, KPI kembali ke status Under Review Supervisor.
 - Approve → sistem finalize → KPI terkunci.
 - Tidak bisa approve KPI dirinya sendiri.
@@ -1050,6 +1097,7 @@ kpi_periods, kpi_period_branches
 #### Penilaian
 ```
 employee_kpis, employee_kpi_items
+kpi_daily_entries
 kpi_actual_entries, kpi_evidences
 kpi_submissions, kpi_reviews, kpi_review_items
 kpi_assessments, kpi_assessment_answers
@@ -1103,6 +1151,22 @@ achievement_percentage (nullable), weighted_score (nullable)
 calculation_status, row_version
 ```
 
+**`kpi_daily_entries`** — nilai dan keputusan satu item pada satu tanggal
+```
+id, employee_kpi_item_id, entry_date (unique per item/tanggal)
+employee_actual_decimal, employee_actual_json, employee_note
+entry_status, employee_entered_by, employee_submitted_at
+supervisor_actual_decimal, supervisor_actual_json, supervisor_answers_json
+supervisor_score_percentage, supervisor_note, supervisor_assessed_by
+supervisor_status, supervisor_assessed_at
+manager_actual_decimal, manager_actual_json, manager_answers_json
+manager_score_percentage, manager_note, manager_assessed_by
+manager_status, manager_assessed_at
+row_version, created_at, updated_at
+```
+
+Nilai efektif harian mengikuti keputusan Manager, lalu Supervisor, lalu input karyawan. Histori koreksi tetap tersimpan melalui `audit_events` dan `kpi_actual_entries`.
+
 **`audit_events`**
 ```
 id, occurred_at (UTC), actor_type, actor_id (nullable)
@@ -1138,6 +1202,7 @@ KPI_PERIODS ||--o{ EMPLOYEE_KPIS : generate
 
 EMPLOYEE_KPIS ||--o{ EMPLOYEE_KPI_ITEMS : berisi
 EMPLOYEE_KPI_ITEMS ||--o{ KPI_ACTUAL_ENTRIES : aktual
+EMPLOYEE_KPI_ITEMS ||--o{ KPI_DAILY_ENTRIES : per_hari
 EMPLOYEE_KPI_ITEMS ||--o{ KPI_EVIDENCES : bukti
 EMPLOYEE_KPI_ITEMS ||--o{ KPI_REVIEW_ITEMS : direview
 EMPLOYEE_KPI_ITEMS ||--o{ KPI_ASSESSMENTS : dinilai
@@ -1152,9 +1217,10 @@ EMPLOYEE_KPIS ||--o{ AUDIT_EVENTS : tercatat
 ### 15.4 Constraint & Index Penting
 
 - Unique: `employee_id + period_id` pada employee_kpis.
+- Unique: `employee_kpi_item_id + entry_date` pada kpi_daily_entries.
 - Unique: `template_id + version_number` pada kpi_template_versions.
 - Unique: transaction business key per source application.
-- Index: period/status, supervisor/status, employee/period, audit subject/time.
+- Index: period/status, supervisor/status, manager/status, employee/period/date, audit subject/time.
 - Check constraint: total weight per template version = 100.0000.
 - FK RESTRICT pada histori kritis (tidak bisa hapus yang masih direferensikan).
 - Optimistic locking via `row_version` pada form review/approval.
@@ -1446,6 +1512,7 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 - [ ] Recalculation menghasilkan skor yang sama jika data sama.
 
 ### AC-03 — Input Karyawan
+- Input dan submit harian tersimpan per item dan tanggal.
 - [ ] Karyawan hanya bisa mengisi field yang diizinkan untuk jabatannya.
 - [ ] Target, bobot, formula, achievement, dan skor selalu read-only untuk karyawan.
 - [ ] Submit ditolak jika item wajib belum terisi atau evidence belum ada.
@@ -1453,6 +1520,7 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 - [ ] Revision hanya membuka item yang dikembalikan.
 
 ### AC-04 — Review Supervisor
+- Supervisor dapat memutuskan setiap item harian sebelum diteruskan ke Manager.
 - [ ] Supervisor hanya bisa review tim yang menjadi tanggung jawabnya.
 - [ ] Item objektif hanya bisa diverifikasi (valid/revisi), bukan diberi skor bebas.
 - [ ] Item subjektif menggunakan checklist/rubric — sistem yang hitung skor.
@@ -1460,12 +1528,16 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 - [ ] Verify gagal jika ada item yang belum diputuskan atau data exception terbuka.
 
 ### AC-05 — Approval Manager
+- Manager dapat menilai ulang seluruh item harian setelah Supervisor menyetujui.
+- Koreksi numerik dan permintaan revisi Manager wajib menyimpan alasan serta histori.
 - [ ] Self-approval ditolak — Manager tidak bisa approve KPI dirinya sendiri.
 - [ ] Return wajib disertai alasan.
 - [ ] Approve menghasilkan locking atomik + audit event.
 - [ ] Ranking hanya berisi KPI yang sudah Locked.
 
 ### AC-06 — Kalkulasi
+- Rekap bulanan menghitung ulang setelah keputusan harian Manager berubah.
+- Metrik persentase/rubric dirata-rata; metrik numerik lainnya dijumlahkan.
 - [ ] Formula higher/lower/zero_tolerance menghasilkan hasil yang benar (ada test matrix).
 - [ ] Cap 100% diterapkan secara konsisten.
 - [ ] Denominator nol menghasilkan UNSCORABLE, bukan error atau nilai palsu.

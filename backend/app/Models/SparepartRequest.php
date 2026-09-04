@@ -10,6 +10,15 @@ class SparepartRequest extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $request): void {
+            $request->pending_unique_key = $request->status === 'pending'
+                ? "ticket:{$request->service_ticket_id}:part:{$request->sparepart_id}"
+                : null;
+        });
+    }
+
     protected $fillable = [
         'service_ticket_id',
         'sparepart_id',
@@ -20,6 +29,7 @@ class SparepartRequest extends Model
         'requested_at',
         'fulfilled_at',
         'notes',
+        'pending_unique_key',
     ];
 
     protected $casts = [

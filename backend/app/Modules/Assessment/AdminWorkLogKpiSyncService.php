@@ -6,6 +6,7 @@ use App\Models\AdminWorkLog;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 
 /**
  * Subsistem Admin Work-Log → KPI Admin.
@@ -36,7 +37,7 @@ class AdminWorkLogKpiSyncService
 
         foreach ($kpis as $kpi) {
             $emp = $kpi->employee;
-            if (!$emp) continue;
+            if (!$emp || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
 
             $logs = AdminWorkLog::where('employee_id', $emp->id)
                 ->whereBetween('work_date', [$period->start_date->toDateString(), $period->end_date->toDateString()])

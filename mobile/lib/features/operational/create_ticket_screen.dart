@@ -88,7 +88,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
+            Text(
               'Informasi Pelanggan',
               style: TextStyle(
                 fontSize: 16,
@@ -123,7 +123,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
             ),
             const SizedBox(height: 24),
 
-            const Text(
+            Text(
               'Informasi Perangkat HP',
               style: TextStyle(
                 fontSize: 16,

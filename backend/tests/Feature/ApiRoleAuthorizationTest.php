@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\EmployeeKpi;
+use App\Models\KpiPeriod;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -38,5 +40,46 @@ class ApiRoleAuthorizationTest extends TestCase
 
         $this->actingAs($userSpv, 'sanctum')->getJson('/api/v1/supervisor/queue')->assertOk();
         $this->actingAs($userSpv, 'sanctum')->getJson('/api/v1/manager/queue')->assertForbidden();
+    }
+
+    public function test_daily_assessment_api_enforces_roles(): void
+    {
+        $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
+        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
+        $date = KpiPeriod::where('status', 'OPEN')->firstOrFail()->start_date->toDateString();
+
+        $this->actingAs($employee, 'sanctum')->getJson('/api/v1/manager/daily')->assertForbidden();
+        $this->actingAs($supervisor, 'sanctum')->getJson("/api/v1/supervisor/daily?date={$date}")->assertOk();
+        $this->actingAs($supervisor, 'sanctum')->getJson("/api/v1/manager/daily?date={$date}")->assertForbidden();
+        $this->actingAs($manager, 'sanctum')->getJson("/api/v1/manager/daily?date={$date}")->assertOk();
+    }
+
+    public function test_employee_can_read_kpi_but_cannot_write_any_kpi_endpoint(): void
+    {
+        $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $kpi = EmployeeKpi::where('employee_id', $employee->employee->id)
+            ->whereHas('period', fn ($query) => $query->where('status', 'OPEN'))
+            ->firstOrFail();
+        $item = $kpi->items()->firstOrFail();
+
+        $this->actingAs($employee, 'sanctum')
+            ->getJson("/api/v1/my-kpi/items/{$item->id}")
+            ->assertOk();
+        $this->actingAs($employee, 'sanctum')
+            ->postJson("/api/v1/my-kpi/items/{$item->id}/draft", [
+                'actual_decimal' => 100,
+                'row_version' => $item->row_version,
+            ])
+            ->assertForbidden();
+        $this->actingAs($employee, 'sanctum')
+            ->postJson("/api/v1/my-kpi/items/{$item->id}/evidence")
+            ->assertForbidden();
+        $this->actingAs($employee, 'sanctum')
+            ->postJson('/api/v1/my-kpi/submit')
+            ->assertForbidden();
+        $this->actingAs($employee, 'sanctum')
+            ->postJson('/api/v1/my-kpi/daily', ['date' => now()->toDateString()])
+            ->assertForbidden();
     }
 }

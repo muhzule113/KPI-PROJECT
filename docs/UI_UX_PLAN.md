@@ -132,7 +132,7 @@ Sebelum deliver, cek:
 |--------|----------|
 | Widget test rusak | Jaga struktur widget (jangan rename class/finder), cek test dulu sebelum ubah |
 | Kontras primary terlalu gelap | Test visual di device; kalau terlalu gelap, kompromi di `#059669` (3.77:1, lolos large text) |
-| Bottom nav refactor mutus flow | Uji manual semua role (teknisi/CS/gudang/kasir/manager/supervisor) |
+| Bottom nav refactor mutus flow | Uji manual semua role (teknisi/pelayan/gudang/kasir/manager/supervisor) |
 | Font platform fallback beda | Ini justru yang bener — platform-native lebih konsisten |
 
 ---

@@ -7,10 +7,11 @@ use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
+use App\Support\KpiWorkflow;
 
 /**
  * Subsistem Absensi → KPI Kehadiran & Disiplin.
- * Feed: ADM-05, KSR-06, GUD-07, CS-06 (dan SUP-03 via agregasi).
+ * Feed: ADM-05, KSR-06, GUD-07, CS-06 Pelayan (dan SUP-03 via agregasi).
  *
  * Rate = (hari hadir / hari kerja Senin–Jumat dalam periode) × 100.
  * Status hadir: present, late, permission, sick_leave. Absent = tidak hadir.
@@ -42,6 +43,10 @@ class AttendanceKpiSyncService
 
             $rate = $this->calculateAttendanceRate($emp, $period);
             if ($rate === null) continue;
+
+            if (!KpiWorkflow::canSystemSyncKpi($kpi)) {
+                continue;
+            }
 
             foreach ($items as $item) {
                 $item->actual_decimal = $rate;

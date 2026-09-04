@@ -2,15 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ParseCashierImport;
 use App\Models\Employee;
 use App\Models\ImportBatch;
 use App\Models\KpiPeriod;
 use App\Models\ServiceTicket;
 use App\Models\Sparepart;
 use App\Models\SparepartRequest;
+use App\Modules\Import\CashierImportService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ApiOwnershipGateTest extends TestCase
@@ -34,7 +38,7 @@ class ApiOwnershipGateTest extends TestCase
             'device_brand' => 'Apple',
             'device_model' => 'iPhone 13',
             'initial_complaint' => 'Layar retak',
-            'status' => 'intake',
+            'status' => 'in_progress',
             'technician_employee_id' => $technicianId,
             'branch_id' => 1,
             'period_id' => $period->id,
@@ -169,6 +173,7 @@ class ApiOwnershipGateTest extends TestCase
             ->postJson("/api/v1/operational/tickets/{$ticket->id}/feedback", [
                 'rating' => 5,
                 'comments' => 'self rating',
+                'follow_up_ontime' => true,
             ])
             ->assertForbidden();
     }
@@ -177,13 +182,17 @@ class ApiOwnershipGateTest extends TestCase
     {
         $userCs = User::where('email', 'cs@toko.com')->first();
         $ticket = $this->makeTicket('teknisi@toko.com');
-        $ticket->update(['status' => 'completed']);
+        $ticket->update([
+            'status' => 'completed',
+            'intake_by_employee_id' => Employee::where('email', 'cs@toko.com')->value('id'),
+        ]);
 
         $this->actingAs($userCs, 'sanctum')
             ->postJson("/api/v1/operational/tickets/{$ticket->id}/feedback", [
                 'rating' => 5,
                 'comments' => 'Pelayanan bagus',
                 'feedback_channel' => 'in_store',
+                'follow_up_ontime' => true,
             ])
             ->assertOk();
     }
@@ -198,6 +207,44 @@ class ApiOwnershipGateTest extends TestCase
         $this->actingAs($userTek, 'sanctum')
             ->postJson('/api/v1/cashier/import', ['file' => $file])
             ->assertForbidden();
+    }
+
+    public function test_cashier_import_is_queued_and_can_be_polled(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+
+        $cashier = User::where('email', 'kasir@toko.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $file = UploadedFile::fake()->createWithContent(
+            'laporan.csv',
+            "No Invoice,Tanggal,Nama Kasir,Grand Total,Kas Sistem,Kas Aktual,Durasi (detik),Status\n"
+                . "INV-QUEUE-001,2026-08-10,Rian Pratama,150000,150000,150000,45,SUCCESS\n"
+        );
+
+        $response = $this->actingAs($cashier, 'sanctum')
+            ->postJson('/api/v1/cashier/import', [
+                'file' => $file,
+                'period_id' => $period->id,
+            ]);
+
+        $response->assertOk()->assertJsonPath('data.status', 'parsing');
+        $batchId = $response->json('data.batch_id');
+
+        Queue::assertPushed(ParseCashierImport::class, fn (ParseCashierImport $job): bool => $job->batchId === $batchId);
+
+        $this->actingAs($cashier, 'sanctum')
+            ->getJson("/api/v1/cashier/import/{$batchId}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'parsing');
+
+        (new ParseCashierImport($batchId))->handle(app(CashierImportService::class));
+
+        $this->assertDatabaseHas('import_batches', [
+            'id' => $batchId,
+            'status' => 'ready_for_preview',
+            'valid_rows' => 1,
+        ]);
     }
 
     public function test_kasir_cannot_confirm_other_persons_batch(): void

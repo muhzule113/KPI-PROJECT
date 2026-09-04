@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EmployeeKpi;
 use App\Models\EmployeeKpiItem;
 use App\Modules\Review\ReviewService;
+use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,6 +52,14 @@ class SupervisorReviewController extends Controller
             'items.reviewItems',
             'items.assessment.answers',
         ])->where('id', $kpiId)->first();
+
+        if ($kpi && !KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
+        }
+
+        if ($kpi && $kpi->employee?->branch_id !== $request->user()->employee?->branch_id && !$request->user()->hasRole('super_admin')) {
+            return response()->json(['success' => false, 'message' => 'KPI berada di luar cakupan cabang Anda.'], 403);
+        }
 
         if (!$kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
@@ -105,7 +114,7 @@ class SupervisorReviewController extends Controller
                     'evidences' => $item->evidences->map(fn($e) => [
                         'id' => $e->id,
                         'file_name' => $e->file_name,
-                        'file_url' => asset('storage/' . $e->file_path),
+                        'file_url' => route('api.v1.kpi.evidence.download', ['evidenceId' => $e->id]),
                         'file_size' => $e->file_size,
                     ]),
                 ]),
@@ -121,9 +130,15 @@ class SupervisorReviewController extends Controller
             'reason' => 'nullable|string',
         ]);
 
-        $item = EmployeeKpiItem::where('id', $itemId)->where('employee_kpi_id', $kpiId)->first();
+        $item = EmployeeKpiItem::with('employeeKpi.employee')
+            ->where('id', $itemId)
+            ->where('employee_kpi_id', $kpiId)
+            ->first();
         if (!$item) {
             return response()->json(['success' => false, 'message' => 'Item tidak ditemukan.'], 404);
+        }
+        if (!KpiWorkflow::canReviewKpi($request->user(), $item->employeeKpi)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
         try {
@@ -154,16 +169,20 @@ class SupervisorReviewController extends Controller
     {
         $request->validate([
             'answers' => 'required|array|min:1',
-            'answers.*.criterion_id' => 'nullable|integer',
-            'answers.*.criterion_text' => 'required|string',
-            'answers.*.points' => 'required|numeric',
+            'answers.*.criterion_id' => 'required|integer',
             'answers.*.is_fulfilled' => 'required|boolean',
             'answers.*.notes' => 'nullable|string',
         ]);
 
-        $item = EmployeeKpiItem::where('id', $itemId)->where('employee_kpi_id', $kpiId)->first();
+        $item = EmployeeKpiItem::with('employeeKpi.employee')
+            ->where('id', $itemId)
+            ->where('employee_kpi_id', $kpiId)
+            ->first();
         if (!$item) {
             return response()->json(['success' => false, 'message' => 'Item tidak ditemukan.'], 404);
+        }
+        if (!KpiWorkflow::canReviewKpi($request->user(), $item->employeeKpi)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
         try {
@@ -195,9 +214,12 @@ class SupervisorReviewController extends Controller
             'reason' => 'required|string|min:5',
         ]);
 
-        $kpi = EmployeeKpi::where('id', $kpiId)->first();
+        $kpi = EmployeeKpi::with('employee')->where('id', $kpiId)->first();
         if (!$kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
+        }
+        if (!KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
         try {
@@ -217,9 +239,12 @@ class SupervisorReviewController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $kpi = EmployeeKpi::where('id', $kpiId)->first();
+        $kpi = EmployeeKpi::with('employee')->where('id', $kpiId)->first();
         if (!$kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
+        }
+        if (!KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
+            return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
         try {

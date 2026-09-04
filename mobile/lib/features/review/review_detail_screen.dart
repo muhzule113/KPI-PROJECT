@@ -105,7 +105,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
     final Map<int, bool> checked = {};
     for (int i = 0; i < criteria.length; i++) {
-      checked[i] = true; // default fulfilled
+      checked[i] = false;
     }
 
     final confirmed = await showModalBottomSheet<bool>(
@@ -140,7 +140,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     ),
                     subtitle: Text(
                       '${c['points']} Poin',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.primaryBright,
                       ),
@@ -262,10 +262,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '${emp['position']} • ${emp['branch']}',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -289,7 +286,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           ),
           const SizedBox(height: 20),
 
-          const Text(
+          Text(
             'Verifikasi Indikator & Rubrik Observasi:',
             style: TextStyle(
               fontWeight: FontWeight.bold,
@@ -302,6 +299,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           ...items.map((item) {
             final isRubric = item['formula'] == 'rubric';
             final isVerified = item['status'] == 'verified';
+            final evidences = (item['evidences'] as List<dynamic>?) ?? [];
 
             return OpsReveal(
               delay: Duration(milliseconds: 60 + (items.indexOf(item) * 35)),
@@ -366,7 +364,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                         children: [
                           Text(
                             'Target: ${item['target_value']} ${item['target_unit']}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               color: AppTheme.textMuted,
                             ),
@@ -380,6 +378,50 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Evidence',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (evidences.isEmpty)
+                        Text(
+                          'Tidak ada evidence tercatat.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textMuted,
+                          ),
+                        )
+                      else
+                        ...evidences.map((entry) {
+                          final evidence = Map<String, dynamic>.from(
+                            entry as Map,
+                          );
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(
+                              Icons.attach_file_rounded,
+                              size: 18,
+                              color: AppTheme.primary,
+                            ),
+                            title: Text(
+                              evidence['file_name']?.toString() ?? 'Evidence',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            subtitle: Text(
+                              evidence['file_size']?.toString() ?? '-',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textMuted,
+                              ),
+                            ),
+                          );
+                        }),
                       const SizedBox(height: 14),
 
                       // Action buttons

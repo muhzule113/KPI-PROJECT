@@ -9,6 +9,15 @@ class KpiCorrectionRequest extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $request): void {
+            $request->pending_unique_key = $request->status === 'pending'
+                ? "kpi:{$request->employee_kpi_id}"
+                : null;
+        });
+    }
+
     protected $fillable = [
         'employee_kpi_id',
         'requested_by',
@@ -17,7 +26,10 @@ class KpiCorrectionRequest extends Model
         'before_json',
         'after_json',
         'status',
+        'rejection_reason',
+        'row_version_snapshot',
         'applied_at',
+        'pending_unique_key',
     ];
 
     protected $casts = [
