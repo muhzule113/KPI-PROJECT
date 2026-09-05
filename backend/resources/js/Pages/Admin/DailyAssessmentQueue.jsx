@@ -1,13 +1,12 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, RotateCcw, Save, UserRound } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, RotateCcw, Save, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { useFeedback } from '@/components/feedback/ActionFeedback';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout';
 
 const statusLabels = {
     pending: 'Menunggu',
@@ -27,8 +26,36 @@ const formatValue = (value, unit, formula) => {
     return `${formatted}${suffix}`;
 };
 
-export default function DailyAssessmentQueue({ role, title, description, date, entries = [], message }) {
+const formatDeadline = (value) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+
+    return parsed.toLocaleString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+};
+
+export default function DailyAssessmentQueue({ role, title, description, date, entries = [], message, deadline = null, canAssess = false }) {
     const { requestAction } = useFeedback();
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
+    useEffect(() => {
+        if (!deadline || !canAssess) return undefined;
+
+        const timeout = window.setTimeout(
+            () => setCurrentTime(Date.now()),
+            Math.max(new Date(deadline).getTime() - Date.now(), 0) + 1,
+        );
+
+        return () => window.clearTimeout(timeout);
+    }, [deadline, canAssess]);
+
+    const deadlineExpired = Boolean(deadline && new Date(deadline).getTime() <= currentTime);
+    const assessmentDisabled = !canAssess || deadlineExpired;
+    const roleLabel = role === 'manager' ? 'Manager' : 'Supervisor';
     const groups = Array.from(entries.reduce((map, entry) => {
         const key = String(entry.employee?.id ?? entry.kpi_id ?? entry.employee?.name ?? entry.id);
         const group = map.get(key) ?? { employee: entry.employee, entries: [] };
@@ -45,6 +72,8 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
     };
 
     const assess = async (entry, decision) => {
+        if (assessmentDisabled) return;
+
         let note = null;
         if (decision === 'revision_required') {
             const result = await requestAction({
@@ -75,7 +104,7 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title={title} />
             <div className="min-h-[calc(100dvh-76px)] bg-muted/15 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-[1500px] space-y-6">
@@ -92,12 +121,22 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
                         </div>
                     </div>
 
-                    {message && <Card><CardContent className="p-6"><p className="text-sm text-muted-foreground">{message}</p></CardContent></Card>}
+                    {message && <Card role="alert"><CardContent className="p-6"><p className="text-sm text-muted-foreground">{message}</p></CardContent></Card>}
+
+                    {deadline && (
+                        <div role="alert" className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${deadlineExpired ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'border-primary/20 bg-primary/5 text-foreground'}`}>
+                            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                            <div>
+                                <p className="font-medium">{deadlineExpired ? 'Deadline penilaian sudah lewat.' : `Deadline penilaian ${roleLabel}: ${formatDeadline(deadline)}`}</p>
+                                <p className="mt-1 text-xs opacity-80">{deadlineExpired ? 'Tombol penilaian dan revisi dinonaktifkan. Hubungi administrator jika perlu membuka koreksi resmi.' : 'Setelah deadline ini lewat, penilaian tidak dapat disimpan.'}</p>
+                            </div>
+                        </div>
+                    )}
 
                     <Card className="overflow-hidden">
                         <CardHeader className="border-b border-border/70">
                             <CardTitle>Antrean {role === 'manager' ? 'penilaian Manager' : 'review Supervisor'} - {date}</CardTitle>
-                            <CardDescription>{pendingCount ? `${pendingCount} indikator menunggu diproses pada ${groups.length} karyawan.` : entries.length ? `Semua indikator dari ${groups.length} karyawan sudah diputuskan. Anda tetap dapat menyimpan koreksi.` : 'Belum ada data harian yang siap diproses.'}</CardDescription>
+                            <CardDescription>{deadlineExpired ? 'Deadline sudah lewat. Seluruh aksi penilaian dinonaktifkan.' : assessmentDisabled ? 'Penilaian tidak tersedia untuk tanggal atau periode ini.' : pendingCount ? `${pendingCount} indikator menunggu diproses pada ${groups.length} karyawan.` : entries.length ? `Semua indikator dari ${groups.length} karyawan sudah diputuskan. Anda tetap dapat menyimpan koreksi.` : 'Belum ada data harian yang siap diproses.'}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 p-4 sm:p-5">
                             {entries.length ? groups.map((group) => (
@@ -118,14 +157,15 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
                                         {group.entries.map((entry) => {
                                             const criteria = entry.item.rubric?.criteria ?? [];
                                             const selected = rubricAnswers[entry.id] ?? [];
-                                            const isSystem = String(entry.item.source_type).toLowerCase() === 'system';
+                                            const isSystem = ['system', 'cross_role', 'import'].includes(String(entry.item.source_type).toLowerCase());
                                             const systemMeta = entry.item.system_meta ?? {};
                                             const currentStatus = role === 'manager' ? entry.manager_status : entry.supervisor_status;
                                             const reviewedValue = entry.item.formula === 'rubric'
                                                 ? (role === 'manager' ? (entry.manager_score ?? entry.supervisor_score) : entry.supervisor_score)
                                                 : (role === 'manager' ? (entry.manager_actual ?? entry.supervisor_actual) : entry.supervisor_actual);
-                                            const displayValue = isSystem ? (entry.item.system_actual ?? reviewedValue) : reviewedValue;
-                                            const hasSystemValue = entry.item.system_actual !== null && entry.item.system_actual !== undefined;
+                                            const systemValue = entry.system_actual ?? entry.item.system_actual;
+                                            const displayValue = isSystem ? (systemValue ?? reviewedValue) : reviewedValue;
+                                            const hasSystemValue = systemValue !== null && systemValue !== undefined;
                                             const hasManualValue = values[entry.id] !== '' && values[entry.id] !== undefined && values[entry.id] !== null;
                                             const systemReady = !isSystem || hasSystemValue || hasManualValue;
                                             const systemDetail = systemMeta.completed_tickets !== undefined
@@ -152,19 +192,19 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
                                                         {entry.item.formula === 'rubric' ? (
                                                             <div className="space-y-2">
                                                                 <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ClipboardCheck className="size-3.5" />Checklist penilaian</p>
-                                                                {criteria.map((criterion) => <label key={criterion.id} className="flex gap-2 text-xs"><input type="checkbox" checked={selected.includes(String(criterion.id))} onChange={(event) => setRubricAnswers((current) => { const next = new Set(current[entry.id] ?? []); event.target.checked ? next.add(String(criterion.id)) : next.delete(String(criterion.id)); return { ...current, [entry.id]: [...next] }; })} className="mt-0.5 size-3.5 accent-primary" />{criterion.criterion_text}</label>)}
-                                                                <div className="flex flex-wrap gap-2 pt-1"><Button type="button" size="sm" onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Simpan penilaian'}</Button><Button type="button" size="sm" variant="outline" onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button></div>
+                                                                {criteria.map((criterion) => <label key={criterion.id} className="flex gap-2 text-xs"><input type="checkbox" disabled={assessmentDisabled} checked={selected.includes(String(criterion.id))} onChange={(event) => setRubricAnswers((current) => { const next = new Set(current[entry.id] ?? []); event.target.checked ? next.add(String(criterion.id)) : next.delete(String(criterion.id)); return { ...current, [entry.id]: [...next] }; })} className="mt-0.5 size-3.5 accent-primary" />{criterion.criterion_text}</label>)}
+                                                                <div className="flex flex-wrap gap-2 pt-1"><Button type="button" size="sm" disabled={assessmentDisabled} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Simpan penilaian'}</Button><Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button></div>
                                                             </div>
                                                         ) : isSystem ? (
                                                             <div className="space-y-2">
                                                                 <p className="text-xs text-muted-foreground">{systemReady ? 'Periksa sumber operasional, lalu konfirmasi angka sistem.' : 'Belum dapat dikonfirmasi karena angka sistem belum tersedia.'}</p>
-                                                                <div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={!systemReady} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan konfirmasi' : 'Konfirmasi sistem'}</Button><Button type="button" size="sm" variant="outline" onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button></div>
+                                                                <div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={assessmentDisabled || !systemReady} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan konfirmasi' : 'Konfirmasi sistem'}</Button><Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button></div>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-wrap gap-2">
-                                                                <Input type="number" step="any" value={values[entry.id] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [entry.id]: event.target.value }))} aria-label={`Nilai ${entry.item.code} ${group.employee?.name ?? ''}`} placeholder={`Nilai (${entry.item.unit ?? 'angka'})`} className="max-w-48" />
-                                                                <Button type="button" size="sm" onClick={() => assess(entry, 'approved')}><Save />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Setujui nilai'}</Button>
-                                                                <Button type="button" size="sm" variant="outline" onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>
+                                                                <Input type="number" step="any" disabled={assessmentDisabled} value={values[entry.id] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [entry.id]: event.target.value }))} aria-label={`Nilai ${entry.item.code} ${group.employee?.name ?? ''}`} placeholder={`Nilai (${entry.item.unit ?? 'angka'})`} className="max-w-48" />
+                                                                <Button type="button" size="sm" disabled={assessmentDisabled} onClick={() => assess(entry, 'approved')}><Save />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Setujui nilai'}</Button>
+                                                                <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -178,6 +218,6 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
                     </Card>
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }

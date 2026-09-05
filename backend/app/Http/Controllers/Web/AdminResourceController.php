@@ -157,6 +157,7 @@ final class AdminResourceController extends Controller
             DB::transaction(function () use ($config, $record, $request, $before): void {
                 $this->runHook($config, 'before_delete', $record, $request);
                 $record->delete();
+                $this->runHook($config, 'after_delete', $record, $request);
                 $this->auditResourceChange('deleted', $record, $before, $request);
             });
         } catch (QueryException | \RuntimeException $exception) {
@@ -281,6 +282,10 @@ final class AdminResourceController extends Controller
                     ? $record->{$config['relationships'][$field['name']]}()->pluck($record->{$config['relationships'][$field['name']]}()->getRelated()->getTable() . '.id')->values()->all()
                     : data_get($record, $field['name']))
                 : ($field['default'] ?? null);
+
+            if ($record && ($field['sensitive'] ?? false)) {
+                $value = null;
+            }
 
             if ($value instanceof \DateTimeInterface) {
                 $value = match ($field['type'] ?? null) {

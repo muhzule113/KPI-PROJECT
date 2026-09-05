@@ -48,7 +48,7 @@ class DashboardController extends Controller
         }
 
         // 2. Supervisor stats
-        if ($user->hasRole(['supervisor', 'super_admin']) && $employee) {
+        if ($user->hasRole('supervisor') && !$user->hasRole('super_admin') && $employee) {
             $teamKpis = EmployeeKpi::where('supervisor_id_snapshot', $employee->id)
                 ->where('period_id', $activePeriod?->id)
                 ->get();

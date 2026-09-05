@@ -72,14 +72,14 @@ export default function Sidebar({
             )}
         >
             <div className="flex h-[76px] items-center justify-between border-b border-sidebar-border/70 px-5">
-                <a href="/app" className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+                <Link href="/app" className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
                         <Gauge className="size-5" strokeWidth={2} />
                     </span>
                     <span className="truncate text-sm font-semibold tracking-wide">
                         KPI System
                     </span>
-                </a>
+                </Link>
 
                 <button
                     type="button"
@@ -113,7 +113,7 @@ export default function Sidebar({
                                         </>
                                     );
 
-                                    return item.href === '/app' ? (
+                                    return (
                                         <Link
                                             key={item.href}
                                             href={item.href}
@@ -123,16 +123,6 @@ export default function Sidebar({
                                         >
                                             {content}
                                         </Link>
-                                    ) : (
-                                        <a
-                                            key={item.href}
-                                            href={item.href}
-                                            className={className}
-                                            aria-current={active ? 'page' : undefined}
-                                            onClick={onClose}
-                                        >
-                                            {content}
-                                        </a>
                                     );
                                 })}
                             </div>

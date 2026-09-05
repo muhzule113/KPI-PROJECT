@@ -184,4 +184,50 @@ class ServiceTicketWebTest extends TestCase
             ->post('/app/service-tickets/actions/sync_kpi')
             ->assertForbidden();
     }
+
+    public function test_service_ticket_lists_only_show_the_active_period(): void
+    {
+        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
+        $oldPeriod = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $oldPeriod->update(['status' => 'LOCKED']);
+        $start = $oldPeriod->start_date->copy()->addMonthNoOverflow()->startOfMonth();
+        $currentPeriod = KpiPeriod::create([
+            'name' => 'Periode Berikutnya',
+            'year' => $start->year,
+            'month' => $start->month,
+            'start_date' => $start,
+            'end_date' => $start->copy()->endOfMonth(),
+            'submission_deadline' => $start->copy()->addDays(5),
+            'review_deadline' => $start->copy()->addDays(10),
+            'approval_deadline' => $start->copy()->addDays(15),
+            'status' => 'OPEN',
+            'created_by' => $manager->id,
+        ]);
+
+        $attributes = [
+            'customer_name' => 'Pelanggan Periode',
+            'customer_phone' => '081234567899',
+            'device_brand' => 'Samsung',
+            'device_model' => 'Galaxy A54',
+            'initial_complaint' => 'Layar bermasalah',
+            'branch_id' => $manager->employee->branch_id,
+            'status' => 'intake',
+            'result_status' => 'pending',
+        ];
+        $oldTicket = ServiceTicket::create([...$attributes, 'ticket_number' => 'SRV-OLD-PERIOD', 'period_id' => $oldPeriod->id]);
+        $currentTicket = ServiceTicket::create([...$attributes, 'ticket_number' => 'SRV-CURRENT-PERIOD', 'period_id' => $currentPeriod->id]);
+
+        $webRecords = $this->actingAs($manager)
+            ->get('/app/service-tickets')
+            ->assertOk()
+            ->inertiaProps('records');
+        $this->assertSame(['SRV-CURRENT-PERIOD'], collect($webRecords)->pluck('values.ticket_number.value')->all());
+
+        $apiTickets = $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/v1/operational/tickets')
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([$currentTicket->id], collect($apiTickets)->pluck('id')->all());
+        $this->assertNotContains($oldTicket->id, collect($apiTickets)->pluck('id')->all());
+    }
 }

@@ -354,7 +354,7 @@ class ReviewService
         }
 
         return DB::transaction(function () use ($kpi, $supervisorNotes, $reviewerUser) {
-            $lockedKpi = EmployeeKpi::with(['items', 'employee.position', 'period'])
+            $lockedKpi = EmployeeKpi::with(['items', 'employee.position', 'period', 'managerSnapshot.user'])
                 ->whereKey($kpi->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -402,9 +402,9 @@ class ReviewService
                 actorId: $reviewerUser
             );
 
-            // Notify Manager(s) / Owner
-            $managers = User::role(['owner_manager', 'super_admin'])->get();
-            foreach ($managers as $manager) {
+            // Notify only the Manager captured by the KPI snapshot.
+            $manager = $kpi->managerSnapshot?->user;
+            if ($manager) {
                 SystemNotification::send(
                     userId: $manager->id,
                     title: "KPI Menunggu Approval: {$kpi->employee->name}",

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
+use App\Models\KpiEvidence;
 use App\Models\ImportBatch;
 use App\Models\KpiPeriod;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Modules\Approval\ApprovalService;
 use App\Modules\Assessment\AssessmentService;
 use App\Modules\Import\CashierImportService;
 use App\Modules\Review\ReviewService;
+use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -54,11 +56,12 @@ class KpiWorkflowTest extends TestCase
         $this->assertNotNull($kpi);
         $this->assertEquals('draft', $kpi->status);
 
-        // 1. Supervisor supplies the non-rubric values; employee has no write path
+        // 1. Employee supplies the non-rubric values; Supervisor only reviews.
         foreach ($kpi->items as $item) {
-            if ($item->formula_key_snapshot !== 'rubric') {
+            if ($item->formula_key_snapshot !== 'rubric'
+                && strtolower((string) $item->source_type_snapshot) === 'employee') {
                 $targetVal = $item->target_value_snapshot ?? 100;
-                $this->assessmentService->saveItemDraft($item, (float) $targetVal, null, 'Test input', $spvUser->id);
+                $this->assessmentService->saveItemDraft($item, (float) $targetVal, null, 'Test input', $teknisiUser->id);
             }
         }
 
@@ -66,7 +69,7 @@ class KpiWorkflowTest extends TestCase
         $evidenceItem = $kpi->items()->where('evidence_req_snapshot', true)->first();
         if ($evidenceItem) {
             $fakeFile = UploadedFile::fake()->create('laporan_servis.pdf', 500, 'application/pdf');
-            $evidence = $this->assessmentService->uploadEvidence($evidenceItem, $fakeFile, 'Bukti servis bulanan', $spvUser->id);
+            $evidence = $this->assessmentService->uploadEvidence($evidenceItem, $fakeFile, 'Bukti servis bulanan', $teknisiUser->id);
             $evidence->update([
                 'scan_status' => 'clean',
                 'scanned_at' => now(),
@@ -74,8 +77,8 @@ class KpiWorkflowTest extends TestCase
             ]);
         }
 
-        // 2. Submit KPI through the assigned Supervisor
-        $submitRes = $this->assessmentService->submitKpi($kpi, $spvUser->id);
+        // 2. Submit KPI as the owner
+        $submitRes = $this->assessmentService->submitKpi($kpi, $teknisiUser->id);
         $this->assertTrue($submitRes['success']);
         $kpi->refresh();
         $this->assertEquals('submitted', $kpi->status);
@@ -135,7 +138,7 @@ class KpiWorkflowTest extends TestCase
         }
     }
 
-    public function test_manager_can_assess_all_kpi_items_before_approval(): void
+    public function test_manager_assessment_cannot_be_self_approved(): void
     {
         $managerUser = User::where('email', 'manager@toko.com')->first();
         $period = KpiPeriod::where('status', 'OPEN')->first();
@@ -143,6 +146,7 @@ class KpiWorkflowTest extends TestCase
         $kpi = EmployeeKpi::where('period_id', $period->id)
             ->where('employee_id', $teknisiEmp->id)
             ->firstOrFail();
+        app(\App\Modules\Assessment\OperationalKpiSyncService::class)->syncPeriodOperationalData($period);
 
         $kpi->update(['status' => 'pending_approval']);
         $kpi->items()->update(['status' => 'verified']);
@@ -164,7 +168,10 @@ class KpiWorkflowTest extends TestCase
             } else {
                 $this->postJson(
                     "/api/v1/manager/approval/{$kpi->id}/items/{$item->id}/assess",
-                    ['actual_decimal' => (float) ($item->target_value_snapshot ?? 0)]
+                    [
+                        'actual_decimal' => (float) ($item->target_value_snapshot ?? 0),
+                        'note' => 'Penilaian Manager pada test workflow',
+                    ]
                 )->assertOk()->assertJsonPath('success', true);
             }
         }
@@ -172,8 +179,30 @@ class KpiWorkflowTest extends TestCase
         $this->assertSame(0, $kpi->items()->where('status', '!=', 'assessed')->count());
 
         $this->postJson("/api/v1/manager/approval/{$kpi->id}/approve")
-            ->assertOk()
-            ->assertJsonPath('data.status', 'approved');
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Pemisahan tugas (SoD): approver tidak boleh menjadi reviewer KPI yang sama.');
+    }
+
+    public function test_admin_cannot_review_or_approve_employee_kpi(): void
+    {
+        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $employee = Employee::whereHas('user', fn ($query) => $query->where('email', 'teknisi@toko.com'))->firstOrFail();
+        $kpi = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $employee->id)->firstOrFail();
+
+        $this->assertFalse(KpiWorkflow::canReviewKpi($admin, $kpi));
+        $this->assertFalse(KpiWorkflow::canManageKpi($admin, $kpi));
+
+        $admin->assignRole('owner_manager', 'supervisor');
+        $this->assertFalse(KpiWorkflow::canReviewKpi($admin->fresh(), $kpi));
+        $this->assertFalse(KpiWorkflow::canManageKpi($admin->fresh(), $kpi));
+
+        $kpi->update(['status' => 'pending_approval']);
+        $kpi->items()->update(['status' => 'verified']);
+
+        $this->actingAs($admin)->get("/app/employee-kpis/{$kpi->id}/assessment")->assertForbidden();
+        $this->actingAs($admin, 'sanctum')->getJson('/api/v1/manager/queue')->assertForbidden();
     }
 
     public function test_duplicate_import_hash_rejection(): void

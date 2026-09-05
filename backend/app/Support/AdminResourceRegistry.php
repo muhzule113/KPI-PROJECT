@@ -20,6 +20,7 @@ use App\Models\Position;
 use App\Models\ServiceTicket;
 use App\Models\Sparepart;
 use App\Models\StockOpname;
+use App\Models\User;
 use App\Modules\Approval\ApprovalService;
 use App\Modules\Assessment\AdminWorkLogKpiSyncService;
 use App\Modules\Assessment\AttendanceKpiSyncService;
@@ -35,6 +36,7 @@ use App\Support\KpiWorkflow;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Role;
 
 final class AdminResourceRegistry
 {
@@ -46,6 +48,46 @@ final class AdminResourceRegistry
     public static function definitions(): array
     {
         return [
+            'users' => [
+                'model' => User::class,
+                'label' => 'Pengguna',
+                'plural_label' => 'Pengguna Sistem',
+                'description' => 'Kelola akun login dan peran akses aplikasi.',
+                'permission' => ['roles' => ['super_admin'], 'positions' => []],
+                'search' => ['name', 'email'],
+                'with' => ['roles'],
+                'order_by' => 'name',
+                'columns' => [
+                    ['key' => 'name', 'label' => 'Nama', 'emphasis' => true],
+                    ['key' => 'email', 'label' => 'Email'],
+                    ['key' => 'roles_label', 'label' => 'Peran', 'placeholder' => 'Belum ada peran'],
+                    ['key' => 'created_at', 'label' => 'Dibuat', 'type' => 'date'],
+                ],
+                'fields' => [
+                    ['name' => 'name', 'label' => 'Nama Lengkap', 'type' => 'text', 'required' => true],
+                    ['name' => 'email', 'label' => 'Email Login', 'type' => 'email', 'required' => true],
+                    ['name' => 'password', 'label' => 'Password', 'type' => 'password', 'required' => false, 'sensitive' => true, 'help' => 'Wajib diisi saat membuat akun. Kosongkan saat edit jika tidak ingin mengganti password.'],
+                    ['name' => 'role_ids', 'label' => 'Peran Akses', 'type' => 'checkbox-list', 'required' => true],
+                ],
+                'rules' => static fn (?User $record): array => [
+                    'name' => ['required', 'string', 'max:255'],
+                    'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($record?->getKey())],
+                    'password' => [$record ? 'nullable' : 'required', 'string', 'min:8'],
+                    'role_ids' => ['required', 'array', 'min:1'],
+                    'role_ids.*' => ['integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('guard_name', 'web'))],
+                ],
+                'options' => [
+                    'role_ids' => static fn (?Model $record = null): array => self::roleOptions(),
+                ],
+                'relationships' => ['role_ids' => 'roles'],
+                'prepare' => static function (array $data, Request $request, ?Model $record): array {
+                    if ($record && blank($data['password'] ?? null)) {
+                        $data['password'] = $record->getRawOriginal('password');
+                    }
+
+                    return $data;
+                },
+            ],
             'employees' => [
                 'model' => Employee::class,
                 'label' => 'Karyawan',
@@ -166,10 +208,24 @@ final class AdminResourceRegistry
                 'model' => Attendance::class,
                 'label' => 'Absensi',
                 'plural_label' => 'Absensi & Kehadiran',
-                'description' => 'Catat kehadiran harian dan sinkronkan data ke KPI.',
+                'description' => 'Satu catatan per karyawan per hari kerja pada periode OPEN. Senin–Jumat; tanpa catatan dihitung Alpha. Hadir/Terlambat dihitung hadir, sedangkan Izin/Sakit dikeluarkan dari pembagi KPI.',
                 'permission' => ['roles' => ['owner_manager'], 'positions' => ['POS-ADM']],
+                'can_create' => static fn (): bool => KpiPeriod::active() !== null,
+                'can_edit' => static fn (): bool => KpiPeriod::active() !== null,
                 'search' => ['employee.name', 'status', 'note'],
                 'with' => ['employee', 'branch'],
+                'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    if (!$period) {
+                        $query->whereIn('id', []);
+                        return;
+                    }
+
+                    $query->whereBetween('attendance_date', [
+                        $period->start_date->toDateString(),
+                        $period->end_date->toDateString(),
+                    ]);
+                },
                 'columns' => [
                     ['key' => 'employee.name', 'label' => 'Karyawan', 'emphasis' => true],
                     ['key' => 'attendance_date', 'label' => 'Tanggal', 'type' => 'date'],
@@ -184,55 +240,125 @@ final class AdminResourceRegistry
                     ['key' => 'check_out_time', 'label' => 'Jam Keluar', 'type' => 'time', 'placeholder' => '—'],
                 ],
                 'fields' => [
-                    ['name' => 'employee_id', 'label' => 'Karyawan', 'type' => 'select', 'required' => true],
-                    ['name' => 'attendance_date', 'label' => 'Tanggal', 'type' => 'date', 'required' => true, 'default' => date('Y-m-d')],
-                    ['name' => 'status', 'label' => 'Status Kehadiran', 'type' => 'select', 'required' => true, 'options' => [
+                    ['name' => 'employee_id', 'label' => 'Karyawan', 'type' => 'select', 'required' => true, 'help' => 'Hanya karyawan aktif pada cabang yang ikut periode OPEN.'],
+                    ['name' => 'attendance_date', 'label' => 'Tanggal', 'type' => 'date', 'required' => true, 'default' => KpiPeriod::active()?->start_date?->toDateString(), 'help' => 'Harus berada di antara tanggal mulai dan selesai periode OPEN. Akhir pekan tidak masuk perhitungan KPI.'],
+                    ['name' => 'status', 'label' => 'Status Kehadiran', 'type' => 'select', 'required' => true, 'help' => 'Hadir/Terlambat = masuk kerja; Izin/Sakit = beralasan dan dikeluarkan dari pembagi; Alpha = tidak hadir.', 'options' => [
                         ['value' => Attendance::STATUS_PRESENT, 'label' => 'Hadir'],
                         ['value' => Attendance::STATUS_LATE, 'label' => 'Terlambat'],
                         ['value' => Attendance::STATUS_PERMISSION, 'label' => 'Izin'],
                         ['value' => Attendance::STATUS_SICK_LEAVE, 'label' => 'Sakit'],
                         ['value' => Attendance::STATUS_ABSENT, 'label' => 'Alpha'],
                     ]],
-                    ['name' => 'check_in_time', 'label' => 'Jam Masuk', 'type' => 'time'],
+                    ['name' => 'check_in_time', 'label' => 'Jam Masuk', 'type' => 'time', 'help' => 'Wajib diisi untuk status Hadir atau Terlambat.'],
                     ['name' => 'check_out_time', 'label' => 'Jam Keluar', 'type' => 'time'],
-                    ['name' => 'note', 'label' => 'Catatan', 'type' => 'textarea'],
+                    ['name' => 'note', 'label' => 'Catatan', 'type' => 'textarea', 'help' => 'Wajib diisi untuk status Izin, Sakit, atau Alpha.'],
                 ],
                 'rules' => static fn (?Attendance $record): array => [
-                    'employee_id' => ['required', 'string', 'exists:employees,id'],
-                    'attendance_date' => ['required', 'date'],
-                    'status' => ['required', Rule::in([
-                        Attendance::STATUS_PRESENT,
-                        Attendance::STATUS_LATE,
-                        Attendance::STATUS_PERMISSION,
-                        Attendance::STATUS_SICK_LEAVE,
-                        Attendance::STATUS_ABSENT,
-                    ])],
-                    'check_in_time' => ['nullable', 'date_format:H:i'],
+                    'employee_id' => [
+                        'required',
+                        'string',
+                        Rule::exists('employees', 'id')->where(fn ($query) => $query->where('status', 'active')),
+                        Rule::unique('attendances', 'employee_id')
+                            ->where(fn ($query) => $query->where('attendance_date', request('attendance_date')))
+                            ->ignore($record?->getKey()),
+                        static function (string $attribute, mixed $value, \Closure $fail): void {
+                            $period = KpiPeriod::active();
+                            if (!$period) {
+                                $fail('Absensi hanya dapat dicatat saat ada periode KPI OPEN.');
+                                return;
+                            }
+
+                            $isEligible = Employee::query()
+                                ->whereKey($value)
+                                ->where('status', 'active')
+                                ->whereIn('branch_id', $period->branches()->pluck('branches.id'))
+                                ->exists();
+                            if (!$isEligible) {
+                                $fail('Karyawan harus aktif dan berada pada cabang peserta periode OPEN.');
+                            }
+                        },
+                    ],
+                    'attendance_date' => [
+                        'required',
+                        'date_format:Y-m-d',
+                        static function (string $attribute, mixed $value, \Closure $fail): void {
+                            $period = KpiPeriod::active();
+                            if (!$period) {
+                                $fail('Absensi hanya dapat dicatat saat ada periode KPI OPEN.');
+                                return;
+                            }
+
+                            try {
+                                $date = \Illuminate\Support\Carbon::createFromFormat('!Y-m-d', (string) $value);
+                            } catch (\Throwable) {
+                                return;
+                            }
+
+                            if ($date->lt($period->start_date) || $date->gt($period->end_date)) {
+                                $fail("Tanggal absensi harus berada dalam periode {$period->name} ({$period->start_date->format('d M Y')}–{$period->end_date->format('d M Y')}).");
+                            } elseif ($date->isFuture()) {
+                                $fail('Absensi tidak dapat dicatat untuk tanggal yang belum terjadi.');
+                            }
+                        },
+                    ],
+                    'status' => ['required', Rule::in(Attendance::STATUSES)],
+                    'check_in_time' => [Rule::requiredIf(fn (): bool => in_array(request('status'), Attendance::WORKED_STATUSES, true)), 'nullable', 'date_format:H:i'],
                     'check_out_time' => ['nullable', 'date_format:H:i'],
-                    'note' => ['nullable', 'string'],
+                    'note' => [Rule::requiredIf(fn (): bool => in_array(request('status'), [...Attendance::EXCUSED_STATUSES, Attendance::STATUS_ABSENT], true)), 'nullable', 'string', 'max:255'],
                 ],
                 'options' => [
-                    'employee_id' => static fn (?Model $record = null): array => self::employeeOptions($record),
+                    'employee_id' => static fn (?Model $record = null, $user = null): array => self::attendanceEmployeeOptions($user),
                 ],
                 'prepare' => static function (array $data, Request $request, ?Model $record): array {
                     if (!empty($data['employee_id'])) {
                         $data['branch_id'] = Employee::find($data['employee_id'])?->branch_id;
+                    }
+                    if (in_array($data['status'] ?? null, [...Attendance::EXCUSED_STATUSES, Attendance::STATUS_ABSENT], true)) {
+                        $data['check_in_time'] = null;
+                        $data['check_out_time'] = null;
                     }
                     $data['recorded_by'] ??= $request->user()?->getKey();
 
                     return $data;
                 },
                 'persist' => ['branch_id', 'recorded_by'],
+                'after_create' => static function (Model $record): void {
+                    if ($period = KpiPeriod::active()) {
+                        app(AttendanceKpiSyncService::class)->syncPeriodAttendanceData($period);
+                    }
+                },
+                'after_update' => static function (Model $record): void {
+                    if ($period = KpiPeriod::active()) {
+                        app(AttendanceKpiSyncService::class)->syncPeriodAttendanceData($period);
+                    }
+                },
+                'after_delete' => static function (Model $record): void {
+                    if ($period = KpiPeriod::active()) {
+                        app(AttendanceKpiSyncService::class)->syncPeriodAttendanceData($period);
+                    }
+                },
                 'actions' => [
                     'fill_today' => [
                         'scope' => 'header',
                         'label' => 'Tandai hadir hari ini',
                         'variant' => 'outline',
-                        'confirm' => 'Tandai semua karyawan aktif hadir hari ini?',
+                        'confirm' => 'Tandai semua karyawan aktif pada cabang periode ini hadir hari ini?',
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $date = now()->toDateString();
+                            $period = KpiPeriod::active();
+                            abort_if(!$period, 422, 'Absensi hanya dapat dicatat saat ada periode KPI OPEN.');
+
+                            $today = now();
+                            abort_unless($today->betweenIncluded($period->start_date, $period->end_date), 422, "Hari ini berada di luar periode {$period->name}.");
+                            abort_if($today->isWeekend(), 422, 'Hari ini bukan hari kerja. Absensi hanya dicatat Senin sampai Jumat.');
+
+                            $date = $today->toDateString();
+                            $employees = self::attendanceEmployeeQuery($period, $request->user())->get();
+                            if ($employees->isEmpty()) {
+                                return 'Tidak ada karyawan aktif pada cabang peserta periode ini.';
+                            }
+
                             $created = 0;
-                            Employee::query()->where('status', 'active')->get()->each(function (Employee $employee) use ($date, &$created, $request): void {
+                            $employees->each(function (Employee $employee) use ($date, &$created, $request): void {
                                 if (!Attendance::query()->where('employee_id', $employee->id)->where('attendance_date', $date)->exists()) {
                                     Attendance::create([
                                         'employee_id' => $employee->id,
@@ -245,10 +371,7 @@ final class AdminResourceRegistry
                                     $created++;
                                 }
                             });
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
-                            $syncMessage = $period
-                                ? app(AttendanceKpiSyncService::class)->syncPeriodAttendanceData($period)['message']
-                                : 'Tidak ada periode KPI OPEN untuk disinkronkan.';
+                            $syncMessage = app(AttendanceKpiSyncService::class)->syncPeriodAttendanceData($period)['message'];
 
                             return "{$created} karyawan ditandai hadir. {$syncMessage}";
                         },
@@ -259,7 +382,7 @@ final class AdminResourceRegistry
                         'variant' => 'secondary',
                         'confirm' => 'Sinkronkan data absensi ke KPI sekarang?',
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
+                            $period = KpiPeriod::active();
                             abort_if(!$period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
 
                             return app(AttendanceKpiSyncService::class)->syncPeriodAttendanceData($period)['message'];
@@ -275,6 +398,10 @@ final class AdminResourceRegistry
                 'permission' => ['roles' => [], 'positions' => ['POS-GUD']],
                 'search' => ['code', 'period.name', 'status'],
                 'with' => ['period'],
+                'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    $period ? $query->where('period_id', $period->getKey()) : $query->whereIn('id', []);
+                },
                 'with_count' => ['items'],
                 'columns' => [
                     ['key' => 'code', 'label' => 'Kode', 'emphasis' => true],
@@ -327,7 +454,7 @@ final class AdminResourceRegistry
                         'variant' => 'secondary',
                         'confirm' => 'Sinkronkan hasil stok opname ke KPI sekarang?',
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
+                            $period = KpiPeriod::active();
                             abort_if(!$period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
 
                             return app(InventoryKpiSyncService::class)->syncPeriodInventoryData($period)['message'];
@@ -359,6 +486,10 @@ final class AdminResourceRegistry
                 'permission' => ['roles' => [], 'positions' => ['POS-ADM']],
                 'search' => ['employee.name', 'notes'],
                 'with' => ['employee', 'period'],
+                'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    $period ? $query->where('period_id', $period->getKey()) : $query->whereIn('id', []);
+                },
                 'columns' => [
                     ['key' => 'employee.name', 'label' => 'Admin', 'emphasis' => true],
                     ['key' => 'work_date', 'label' => 'Tanggal', 'type' => 'date'],
@@ -394,7 +525,9 @@ final class AdminResourceRegistry
                     'employee_id' => static fn (?Model $record = null): array => self::employeeOptions($record),
                 ],
                 'prepare' => static function (array $data, Request $request, ?Model $record): array {
-                    $data['period_id'] ??= KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->value('id');
+                    $period = KpiPeriod::active();
+                    abort_unless($period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
+                    $data['period_id'] ??= $period->getKey();
                     $data['recorded_by'] ??= $request->user()?->getKey();
 
                     return $data;
@@ -407,7 +540,7 @@ final class AdminResourceRegistry
                         'variant' => 'secondary',
                         'confirm' => 'Sinkronkan work-log admin ke KPI sekarang?',
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
+                            $period = KpiPeriod::active();
                             abort_if(!$period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
 
                             return app(AdminWorkLogKpiSyncService::class)->syncPeriodWorkLogData($period)['message'];
@@ -423,6 +556,18 @@ final class AdminResourceRegistry
                 'permission' => ['roles' => ['owner_manager', 'supervisor'], 'positions' => []],
                 'search' => ['code', 'employee.name', 'channel', 'description', 'status'],
                 'with' => ['employee', 'serviceTicket'],
+                'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    if (!$period) {
+                        $query->whereIn('id', []);
+                        return;
+                    }
+
+                    $query->whereBetween('complaint_date', [
+                        $period->start_date->toDateString(),
+                        $period->end_date->toDateString(),
+                    ]);
+                },
                 'columns' => [
                     ['key' => 'code', 'label' => 'Kode', 'emphasis' => true],
                     ['key' => 'complaint_date', 'label' => 'Tanggal', 'type' => 'date'],
@@ -508,7 +653,7 @@ final class AdminResourceRegistry
                         'variant' => 'secondary',
                         'confirm' => 'Sinkronkan data komplain ke KPI sekarang?',
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
+                            $period = KpiPeriod::active();
                             abort_if(!$period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
 
                             return app(ComplaintKpiSyncService::class)->syncPeriodComplaintData($period)['message'];
@@ -524,6 +669,10 @@ final class AdminResourceRegistry
                 'permission' => ['roles' => ['supervisor'], 'positions' => []],
                 'search' => ['supervisor.name', 'employee.name', 'topic', 'notes'],
                 'with' => ['supervisor', 'employee', 'period'],
+                'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    $period ? $query->where('period_id', $period->getKey()) : $query->whereIn('id', []);
+                },
                 'columns' => [
                     ['key' => 'coaching_date', 'label' => 'Tanggal', 'type' => 'date'],
                     ['key' => 'supervisor.name', 'label' => 'Supervisor'],
@@ -555,7 +704,9 @@ final class AdminResourceRegistry
                     'employee_id' => static fn (?Model $record = null): array => self::employeeOptions($record),
                 ],
                 'prepare' => static function (array $data, Request $request, ?Model $record): array {
-                    $data['period_id'] ??= KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->value('id');
+                    $period = KpiPeriod::active();
+                    abort_unless($period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
+                    $data['period_id'] ??= $period->getKey();
                     $data['recorded_by'] ??= $request->user()?->getKey();
 
                     return $data;
@@ -568,7 +719,7 @@ final class AdminResourceRegistry
                         'variant' => 'secondary',
                         'confirm' => 'Sinkronkan data coaching ke KPI sekarang?',
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
+                            $period = KpiPeriod::active();
                             abort_if(!$period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
 
                             return app(CoachingKpiSyncService::class)->syncPeriodCoachingData($period)['message'];
@@ -651,7 +802,7 @@ final class AdminResourceRegistry
                     ['name' => 'technician_employee_id', 'label' => 'Teknisi yang Ditugaskan', 'type' => 'select'],
                     ['name' => 'status', 'label' => 'Status Pengerjaan', 'type' => 'select', 'required' => true, 'default' => 'intake'],
                     ['name' => 'result_status', 'label' => 'Hasil Servis', 'type' => 'select', 'default' => 'pending', 'options' => [
-                        ['value' => 'pending', 'label' => 'Menunggu Hasil'], ['value' => 'success', 'label' => 'Berhasil Diperbaiki'], ['value' => 'unrepairable', 'label' => 'Tidak Dapat Diperbaiki'], ['value' => 'warranty_return', 'label' => 'Retur Garansi'],
+                        ['value' => 'pending', 'label' => 'Menunggu Hasil'], ['value' => 'success', 'label' => 'Berhasil Diperbaiki'], ['value' => 'unrepairable', 'label' => 'Tidak Dapat Diperbaiki'],
                     ]],
                     ['name' => 'estimated_cost', 'label' => 'Estimasi Biaya (Rp)', 'type' => 'number', 'default' => 0],
                     ['name' => 'final_cost', 'label' => 'Biaya Final (Rp)', 'type' => 'number', 'default' => 0],
@@ -673,7 +824,7 @@ final class AdminResourceRegistry
                     'physical_condition' => ['nullable', 'string'],
                     'technician_employee_id' => ['nullable', 'string', 'exists:employees,id'],
                     'status' => ['required', Rule::in(array_keys(ServiceTicket::TRANSITIONS))],
-                    'result_status' => ['nullable', Rule::in(['pending', 'success', 'unrepairable', 'warranty_return'])],
+                    'result_status' => ['nullable', Rule::in(['pending', 'success', 'unrepairable'])],
                     'estimated_cost' => ['nullable', 'numeric', 'min:0'],
                     'final_cost' => ['nullable', 'numeric', 'min:0'],
                     'estimated_completion_at' => ['nullable', 'date'],
@@ -696,10 +847,31 @@ final class AdminResourceRegistry
                 ],
                 'prepare' => static function (array $data, Request $request, ?Model $record): array {
                     $data['ticket_number'] ??= ServiceTicketNumber::next();
-                    $data['period_id'] ??= KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->value('id');
+                    $period = KpiPeriod::active();
+                    if (!array_key_exists('period_id', $data) && $period) {
+                        $data['period_id'] = $period->getKey();
+                    }
                     $data['branch_id'] ??= $request->user()?->employee?->branch_id;
                     $user = $request->user();
                     $position = $user?->employee?->position?->code;
+
+                    if (!empty($data['intake_by_employee_id'])) {
+                        $intake = Employee::with('position')->whereKey($data['intake_by_employee_id'])->first();
+                        $sameIntake = $record
+                            && (string) $record->intake_by_employee_id === (string) $intake?->getKey();
+                        abort_unless($intake
+                            && $intake->position?->code === 'POS-CS'
+                            && ($intake->status === 'active' || $sameIntake), 422, 'Pelayan penerima harus karyawan aktif pada posisi Pelayan.');
+                        if (!$user?->hasAnyRole(['owner_manager', 'super_admin'])
+                            && (string) $intake->branch_id !== (string) $user?->employee?->branch_id) {
+                            abort(403, 'Pelayan berada di luar cakupan cabang Anda.');
+                        }
+                        if ($data['branch_id'] !== null
+                            && (string) $data['branch_id'] !== (string) $intake->branch_id) {
+                            abort(422, 'Cabang tiket harus sama dengan cabang Pelayan penerima.');
+                        }
+                        $data['branch_id'] = $intake->branch_id;
+                    }
                     if ($position === 'POS-CS' && !$record) {
                         $data['intake_by_employee_id'] = $user->employee?->getKey();
                         $data['branch_id'] = $user->employee?->branch_id;
@@ -726,23 +898,61 @@ final class AdminResourceRegistry
                 },
                 'persist' => ['period_id', 'branch_id', 'cashier_employee_id'],
                 'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    if ($period) {
+                        $query->where(function ($periodQuery) use ($period): void {
+                            $periodQuery->where('period_id', $period->getKey())
+                                ->orWhereNull('period_id');
+                        });
+                    }
+
                     if (!$user || !$user->hasAnyRole(['owner_manager', 'super_admin'])) {
                         $query->where('branch_id', $user?->employee?->branch_id);
                     }
                 },
                 'after_create' => static function (Model $record): void {
-                    if ($record->period) {
-                        app(OperationalKpiSyncService::class)->syncPeriodOperationalData($record->period);
+                    if ($period = $record->period ?? KpiPeriod::active()) {
+                        app(OperationalKpiSyncService::class)->syncPeriodOperationalData($period);
                     }
                 },
                 'before_update' => static function (Model $record, Request $request): void {
+                    $user = $request->user();
+                    $position = $user?->employee?->position?->code;
+                    if ($position === 'POS-TEK') {
+                        foreach (['customer_name', 'customer_phone', 'customer_address', 'device_brand', 'device_model', 'imei_or_serial', 'passcode_or_pattern', 'initial_complaint', 'customer_needs', 'physical_condition', 'intake_by_employee_id', 'technician_employee_id', 'result_status', 'estimated_cost', 'final_cost', 'estimated_completion_at'] as $field) {
+                            if ($request->has($field) && (string) $request->input($field) !== (string) $record->getAttribute($field)) {
+                                throw new \RuntimeException('Teknisi hanya dapat mengubah status progress dan catatan teknis melalui alur tiket.');
+                            }
+                        }
+                        if ($request->input('status') === 'completed') {
+                            throw new \RuntimeException('Teknisi menyelesaikan tiket melalui endpoint QC agar checklist wajib tervalidasi.');
+                        }
+                    } elseif (in_array($position, ['POS-CS', 'POS-KSR'], true)) {
+                        foreach (['status', 'result_status', 'technician_employee_id', 'diagnosis_notes', 'action_notes', 'final_cost', 'estimated_cost'] as $field) {
+                            if ($request->has($field) && (string) $request->input($field) !== (string) $record->getAttribute($field)) {
+                                throw new \RuntimeException('Pelayan/Kasir tidak dapat mengubah status atau catatan teknis tiket.');
+                            }
+                        }
+                    }
                     if ($request->filled('status')) {
                         $record->assertTransition($request->string('status')->toString());
                     }
+                    if ($request->input('result_status') === 'warranty_return') {
+                        throw new \RuntimeException('Retur garansi harus dibuat sebagai tiket baru yang ditautkan ke tiket asal.');
+                    }
+                    if ($request->input('status') === 'completed') {
+                        $qc = $request->input('qc_checklist_json', $record->qc_checklist_json);
+                        $required = ['display', 'touch', 'camera', 'mic', 'speaker', 'cellular', 'charging', 'biometric'];
+                        $diagnosis = $request->input('diagnosis_notes', $record->diagnosis_notes);
+                        $action = $request->input('action_notes', $record->action_notes);
+                        if (!$diagnosis || !$action || !is_array($qc) || array_diff($required, array_keys($qc))) {
+                            throw new \RuntimeException('Tiket tidak dapat diselesaikan tanpa diagnosis, tindakan, dan checklist QC lengkap.');
+                        }
+                    }
                 },
                 'after_update' => static function (Model $record): void {
-                    if ($record->period) {
-                        app(OperationalKpiSyncService::class)->syncPeriodOperationalData($record->period);
+                    if ($period = $record->period ?? KpiPeriod::active()) {
+                        app(OperationalKpiSyncService::class)->syncPeriodOperationalData($period);
                     }
                 },
                 'can_create' => static fn ($user, ?Model $record = null): bool => MenuAccess::can($user, ['owner_manager', 'super_admin'], ['POS-KSR', 'POS-CS']),
@@ -760,16 +970,8 @@ final class AdminResourceRegistry
                     return $position === 'POS-TEK' && $record->technician_employee_id === $user->employee?->id;
                 },
                 'can_delete' => static function ($user, ?Model $record = null): bool {
-                    if (!MenuAccess::can($user, ['owner_manager', 'super_admin'], ['POS-KSR'])) {
-                        return false;
-                    }
-
-                    if (!$record || $user->hasAnyRole(['owner_manager', 'super_admin'])) {
-                        return true;
-                    }
-
-                    return $record->branch_id !== null
-                        && (string) $record->branch_id === (string) $user->employee?->branch_id;
+                    return $user?->hasAnyRole(['owner_manager', 'super_admin']) === true
+                        && (!$record || $record->status === 'intake');
                 },
                 'actions' => [
                     'sync_kpi' => [
@@ -782,7 +984,7 @@ final class AdminResourceRegistry
                             'positions' => [],
                         ],
                         'handler' => static function (Request $request, ?Model $record): string {
-                            $period = KpiPeriod::query()->where('status', 'OPEN')->orderByDesc('id')->first();
+                            $period = KpiPeriod::active();
                             abort_if(!$period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
 
                             return app(OperationalKpiSyncService::class)->syncPeriodOperationalData($period)['message'];
@@ -1009,9 +1211,19 @@ final class AdminResourceRegistry
                         'visible' => static fn (Model $record, $user): bool => $record->status === 'OPEN',
                         'handler' => static function (Request $request, Model $record): string { app(PeriodService::class)->closeSubmission($record); return 'Pengisian periode ditutup.'; },
                     ],
+                    'start_review' => [
+                        'scope' => 'row', 'label' => 'Mulai review', 'variant' => 'outline', 'confirm' => 'Mulai review Supervisor untuk periode ini?',
+                        'visible' => static fn (Model $record, $user): bool => $record->status === 'SUBMISSION_CLOSED',
+                        'handler' => static function (Request $request, Model $record): string { app(PeriodService::class)->startReview($record); return 'Periode masuk tahap review.'; },
+                    ],
+                    'start_approval' => [
+                        'scope' => 'row', 'label' => 'Mulai approval', 'variant' => 'outline', 'confirm' => 'Teruskan periode ke approval Manager?',
+                        'visible' => static fn (Model $record, $user): bool => $record->status === 'IN_REVIEW',
+                        'handler' => static function (Request $request, Model $record): string { app(PeriodService::class)->startApproval($record); return 'Periode menunggu approval Manager.'; },
+                    ],
                     'publish' => [
                         'scope' => 'row', 'label' => 'Publish hasil', 'variant' => 'outline', 'confirm' => 'Publish hasil periode ini?',
-                        'visible' => static fn (Model $record, $user): bool => in_array($record->status, ['OPEN', 'SUBMISSION_CLOSED', 'WAITING_APPROVAL'], true),
+                        'visible' => static fn (Model $record, $user): bool => $record->status === 'WAITING_APPROVAL',
                         'handler' => static function (Request $request, Model $record): string { app(PeriodService::class)->publishPeriod($record); return 'Hasil periode telah dipublish.'; },
                     ],
                     'lock' => [
@@ -1061,12 +1273,12 @@ final class AdminResourceRegistry
                     ],
                     'approve' => [
                         'scope' => 'row', 'label' => 'Approve final', 'variant' => 'default', 'confirm' => 'Setujui dan kunci KPI ini?',
-                        'visible' => static fn (Model $record, $user): bool => in_array($record->status, ['pending_approval', 'verified'], true),
+                        'visible' => static fn (Model $record, $user): bool => in_array($record->status, ['pending_approval', 'verified'], true) && KpiWorkflow::canManageKpi($user, $record),
                         'handler' => static fn (Request $request, Model $record): string => app(ApprovalService::class)->approve($record, null, $request->user()?->getKey())['message'],
                     ],
                     'return_to_supervisor' => [
                         'scope' => 'row', 'label' => 'Kembalikan', 'variant' => 'destructive',
-                        'visible' => static fn (Model $record, $user): bool => $record->status === 'pending_approval',
+                        'visible' => static fn (Model $record, $user): bool => $record->status === 'pending_approval' && KpiWorkflow::canManageKpi($user, $record),
                         'prompt' => ['name' => 'reason', 'label' => 'Alasan pengembalian ke Supervisor'],
                         'handler' => static function (Request $request, Model $record): string {
                             $data = $request->validate(['reason' => ['required', 'string', 'min:3']]);
@@ -1104,7 +1316,7 @@ final class AdminResourceRegistry
                 'actions' => [
                     'approve' => [
                         'scope' => 'row', 'label' => 'Setujui & terapkan', 'variant' => 'default', 'confirm' => 'Terapkan koreksi dan hitung ulang KPI?',
-                        'visible' => static fn (Model $record, $user): bool => $record->status === 'pending',
+                        'visible' => static fn (Model $record, $user): bool => $record->status === 'pending' && KpiWorkflow::canApproveCorrection($user, $record),
                         'handler' => static function (Request $request, Model $record): string {
                             app(ApprovalService::class)->approveCorrection($record, $request->user()?->getKey());
                             return 'Koreksi diterapkan dan KPI diperbarui.';
@@ -1112,7 +1324,7 @@ final class AdminResourceRegistry
                     ],
                     'reject' => [
                         'scope' => 'row', 'label' => 'Tolak', 'variant' => 'destructive',
-                        'visible' => static fn (Model $record, $user): bool => $record->status === 'pending',
+                        'visible' => static fn (Model $record, $user): bool => $record->status === 'pending' && KpiWorkflow::canApproveCorrection($user, $record),
                         'prompt' => ['name' => 'reason', 'label' => 'Alasan penolakan (opsional)'],
                         'handler' => static function (Request $request, Model $record): string {
                             $reason = $request->input('reason');
@@ -1130,6 +1342,10 @@ final class AdminResourceRegistry
                 'permission' => ['roles' => [], 'positions' => ['POS-KSR']],
                 'search' => ['file_name', 'period.name', 'status'],
                 'with' => ['period'],
+                'scope' => static function ($query, $user): void {
+                    $period = KpiPeriod::active();
+                    $period ? $query->where('period_id', $period->getKey()) : $query->whereIn('id', []);
+                },
                 'columns' => [
                     ['key' => 'file_name', 'label' => 'Nama File', 'emphasis' => true],
                     ['key' => 'period.name', 'label' => 'Periode'],
@@ -1171,10 +1387,13 @@ final class AdminResourceRegistry
                 'search' => ['employee.name', 'period.name', 'status'],
                 'with' => ['employee.position', 'period'],
                 'scope' => static function ($query, $user): void {
-                    $query->whereIn('status', ['submitted', 'under_review']);
-                    if ($user && !$user->hasRole('super_admin')) {
-                        $query->where('supervisor_id_snapshot', $user->employee?->id);
+                    if (!$user || $user->hasRole('super_admin') || !$user->hasRole('supervisor')) {
+                        $query->whereIn('id', []);
+                        return;
                     }
+
+                    $query->whereIn('status', ['submitted', 'under_review'])
+                        ->where('supervisor_id_snapshot', $user?->employee?->id);
                 },
                 'columns' => [
                     ['key' => 'employee.name', 'label' => 'Karyawan', 'emphasis' => true],
@@ -1191,6 +1410,7 @@ final class AdminResourceRegistry
                 'actions' => [
                     'review' => [
                         'scope' => 'row', 'label' => 'Buka review', 'variant' => 'default', 'type' => 'link',
+                        'visible' => static fn (Model $record, $user): bool => KpiWorkflow::canReviewKpi($user, $record),
                         'record_url' => '/app/supervisor-reviews/:record/review',
                     ],
                 ],
@@ -1264,28 +1484,69 @@ final class AdminResourceRegistry
             ->all();
     }
 
-    private static function periodOptions(): array
+    private static function attendanceEmployeeOptions($user = null): array
     {
-        return KpiPeriod::query()
-            ->orderByDesc('year')
-            ->orderByDesc('month')
-            ->get(['id', 'name', 'status'])
-            ->map(fn (KpiPeriod $period): array => [
-                'value' => (string) $period->getKey(),
-                'label' => "{$period->name} ({$period->status})",
+        $period = KpiPeriod::active();
+        if (!$period) {
+            return [];
+        }
+
+        return self::attendanceEmployeeQuery($period, $user)
+            ->orderBy('name')
+            ->get(['id', 'name', 'employee_number'])
+            ->map(fn (Employee $employee): array => [
+                'value' => (string) $employee->getKey(),
+                'label' => $employee->employee_number . ' · ' . $employee->name,
             ])
             ->all();
     }
 
+    private static function attendanceEmployeeQuery(KpiPeriod $period, $user)
+    {
+        return Employee::query()
+            ->where('status', 'active')
+            ->whereIn('branch_id', $period->branches()->pluck('branches.id'))
+            ->when(
+                $user && !$user->hasAnyRole(['owner_manager', 'super_admin']),
+                fn ($query) => $query->where('branch_id', $user->employee?->branch_id),
+            );
+    }
+
+    private static function periodOptions(): array
+    {
+        $period = KpiPeriod::active();
+
+        return $period ? [[
+            'value' => (string) $period->getKey(),
+            'label' => "{$period->name} ({$period->status})",
+        ]] : [];
+    }
+
     private static function serviceTicketOptions(): array
     {
-        return ServiceTicket::query()
+        $period = KpiPeriod::active();
+
+        return $period ? ServiceTicket::query()
+            ->where('period_id', $period->getKey())
             ->orderByDesc('created_at')
             ->limit(200)
             ->get(['id', 'ticket_number', 'customer_name'])
             ->map(fn (ServiceTicket $ticket): array => [
                 'value' => (string) $ticket->getKey(),
                 'label' => "{$ticket->ticket_number} · {$ticket->customer_name}",
+            ])
+            ->all() : [];
+    }
+
+    private static function roleOptions(): array
+    {
+        return Role::query()
+            ->where('guard_name', 'web')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Role $role): array => [
+                'value' => (string) $role->getKey(),
+                'label' => $role->name,
             ])
             ->all();
     }

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useFeedback } from '@/components/feedback/ActionFeedback';
-import AppLayout from '@/layouts/AppLayout';
 
 const statusLabels = {
     verified: 'Terverifikasi',
@@ -67,7 +66,7 @@ export default function ManagerAssessment({ kpi }) {
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title={`Penilaian Manager ${kpi.employee.name}`} />
             <div className="min-h-[calc(100dvh-76px)] bg-muted/15 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-[1440px] space-y-6">
@@ -128,6 +127,6 @@ export default function ManagerAssessment({ kpi }) {
                     </Card>
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }

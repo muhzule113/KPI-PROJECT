@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     Bell,
@@ -35,6 +36,29 @@ export default function Topbar({
     const csrfToken = typeof document === 'undefined'
         ? ''
         : document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+
+    const refreshCsrfAndSubmit = async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+
+        try {
+            const response = await fetch('/csrf-token', {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!response.ok || response.redirected || !response.headers.get('content-type')?.includes('application/json')) {
+                window.location.assign('/login');
+                return;
+            }
+
+            const { token } = await response.json();
+            form.elements._token.value = token;
+            HTMLFormElement.prototype.submit.call(form);
+        } catch {
+            window.location.reload();
+        }
+    };
 
     return (
         <header className="sticky top-0 z-30 flex min-h-[76px] items-center justify-between gap-4 border-b border-border/80 bg-background/95 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
@@ -110,8 +134,10 @@ export default function Topbar({
                                         </>
                                     );
 
+                                    const NotificationLink = notification.action_url?.startsWith('/') ? Link : 'a';
+
                                     return notification.action_url ? (
-                                        <a
+                                        <NotificationLink
                                             key={notification.id}
                                             href={notification.action_url}
                                             className="flex gap-3 rounded-xl px-3 py-3 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -119,7 +145,7 @@ export default function Topbar({
                                             onClick={() => setNotificationOpen(false)}
                                         >
                                             {content}
-                                        </a>
+                                        </NotificationLink>
                                     ) : (
                                         <div key={notification.id} className="flex gap-3 rounded-xl px-3 py-3" role="menuitem">
                                             {content}
@@ -152,10 +178,10 @@ export default function Topbar({
                                 <p className="truncate text-sm font-semibold text-popover-foreground">{user?.name ?? 'Pengguna'}</p>
                                 <p className="truncate text-xs text-muted-foreground">{user?.email ?? ''}</p>
                             </div>
-                            <a href="/app" className="mt-2 flex min-h-11 items-center rounded-xl px-3 text-sm text-popover-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" role="menuitem">
+                            <Link href="/app" className="mt-2 flex min-h-11 items-center rounded-xl px-3 text-sm text-popover-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" role="menuitem">
                                 Kembali ke dashboard
-                            </a>
-                            <form method="POST" action="/logout">
+                            </Link>
+                            <form method="POST" action="/logout" onSubmit={refreshCsrfAndSubmit}>
                                 <input type="hidden" name="_token" value={csrfToken} />
                                 <button type="submit" className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:hover:bg-rose-950/30" role="menuitem">
                                     <LogOut className="size-4" />

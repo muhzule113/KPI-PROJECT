@@ -140,4 +140,16 @@ class KpiCalculationEngineTest extends TestCase
         $this->assertFalse($res->isSuccess);
         $this->assertEquals('unscorable', $res->status);
     }
+
+    public function test_zero_tolerance_does_not_guess_missing_limits(): void
+    {
+        $item = new EmployeeKpiItem([
+            'weight_snapshot' => 20.00,
+            'actual_decimal' => 10.00,
+        ]);
+
+        $res = $this->zeroCalc->calculate($item);
+        $this->assertFalse($res->isSuccess);
+        $this->assertSame('unscorable', $res->status);
+    }
 }

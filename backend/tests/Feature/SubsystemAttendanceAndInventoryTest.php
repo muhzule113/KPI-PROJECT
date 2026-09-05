@@ -85,6 +85,76 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         $this->assertGreaterThan(0.0, (float) $gud07->actual_decimal);
     }
 
+    public function test_attendance_sync_excludes_permission_and_sick_leave_from_ratio(): void
+    {
+        $empGud = Employee::where('email', 'gudang@toko.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $excusedStatuses = [Attendance::STATUS_PERMISSION, Attendance::STATUS_SICK_LEAVE];
+        $excusedIndex = 0;
+
+        $date = $period->start_date->copy();
+        while ($date->lte($period->end_date)) {
+            if (!$date->isWeekend()) {
+                $status = $excusedIndex < count($excusedStatuses)
+                    ? $excusedStatuses[$excusedIndex++]
+                    : Attendance::STATUS_PRESENT;
+
+                Attendance::create([
+                    'employee_id' => $empGud->id,
+                    'branch_id' => $empGud->branch_id,
+                    'attendance_date' => $date->toDateString(),
+                    'status' => $status,
+                    'check_in_time' => $status === Attendance::STATUS_PRESENT ? '08:00:00' : null,
+                    'note' => $status === Attendance::STATUS_PRESENT ? null : 'Disetujui atasan',
+                ]);
+            }
+            $date->addDay();
+        }
+
+        $this->assertSame(100.0, app(AttendanceKpiSyncService::class)->calculateAttendanceRate($empGud, $period));
+    }
+
+    public function test_attendance_sync_removes_stale_daily_value_when_day_becomes_excused(): void
+    {
+        $empGud = Employee::where('email', 'gudang@toko.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $date = $period->start_date->copy();
+        while ($date->isWeekend()) {
+            $date->addDay();
+        }
+
+        $attendance = Attendance::create([
+            'employee_id' => $empGud->id,
+            'branch_id' => $empGud->branch_id,
+            'attendance_date' => $date->toDateString(),
+            'status' => Attendance::STATUS_PRESENT,
+            'check_in_time' => '08:00:00',
+        ]);
+        $sync = app(AttendanceKpiSyncService::class);
+        $sync->syncPeriodAttendanceData($period);
+
+        $item = EmployeeKpi::where('period_id', $period->id)
+            ->where('employee_id', $empGud->id)
+            ->firstOrFail()
+            ->items
+            ->firstWhere('definition_code_snapshot', 'GUD-07');
+        $entry = $item->dailyEntries()->whereDate('entry_date', $date)->firstOrFail();
+        $this->assertSame(100.0, (float) $entry->system_actual_decimal);
+
+        $attendance->update([
+            'status' => Attendance::STATUS_PERMISSION,
+            'check_in_time' => null,
+            'note' => 'Izin resmi',
+        ]);
+        $sync->syncPeriodAttendanceData($period);
+
+        $entry->refresh();
+        $this->assertNull($entry->system_actual_decimal);
+        $this->assertSame('draft', $entry->entry_status);
+        $this->assertSame('pending', $entry->supervisor_status);
+        $this->assertSame('pending', $entry->manager_status);
+    }
+
     public function test_opname_complete_adjusts_stock_and_syncs_gudang_kpi(): void
     {
         $empGud = Employee::where('email', 'gudang@toko.com')->first();

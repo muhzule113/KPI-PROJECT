@@ -16,13 +16,26 @@ class Attendance extends Model
     public const STATUS_SICK_LEAVE = 'sick_leave';
     public const STATUS_ABSENT = 'absent';
 
-    /** Status yang tetap dihitung sebagai "hadir" untuk kehadiran & disiplin */
-    public const ATTENDED_STATUSES = [
+    /** Status yang benar-benar masuk kerja dan menjadi pembilang rasio. */
+    public const WORKED_STATUSES = [
         self::STATUS_PRESENT,
         self::STATUS_LATE,
+    ];
+
+    /** Status beralasan yang dikeluarkan dari pembagi rasio. */
+    public const EXCUSED_STATUSES = [
         self::STATUS_PERMISSION,
         self::STATUS_SICK_LEAVE,
     ];
+
+    public const STATUSES = [
+        ...self::WORKED_STATUSES,
+        ...self::EXCUSED_STATUSES,
+        self::STATUS_ABSENT,
+    ];
+
+    /** Alias kompatibilitas untuk pemanggil lama. */
+    public const ATTENDED_STATUSES = self::WORKED_STATUSES;
 
     protected $fillable = [
         'employee_id',

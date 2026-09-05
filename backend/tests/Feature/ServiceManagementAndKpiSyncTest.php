@@ -118,4 +118,23 @@ class ServiceManagementAndKpiSyncTest extends TestCase
             'subject_id' => $ticketId,
         ]);
     }
+
+    public function test_manager_or_admin_created_ticket_inherits_pelayan_branch(): void
+    {
+        $manager = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $pelayan = Employee::where('email', 'cs@toko.com')->firstOrFail();
+
+        $response = $this->actingAs($manager, 'sanctum')->postJson('/api/v1/operational/tickets', [
+            'customer_name' => 'Branch Inheritance Test',
+            'customer_phone' => '081234567800',
+            'device_brand' => 'Samsung',
+            'device_model' => 'Galaxy A54',
+            'initial_complaint' => 'Layar tidak menyala',
+            'pelayan_employee_id' => $pelayan->id,
+        ]);
+
+        $response->assertCreated();
+        $ticket = ServiceTicket::findOrFail($response->json('data.id'));
+        $this->assertSame((string) $pelayan->branch_id, (string) $ticket->branch_id);
+    }
 }

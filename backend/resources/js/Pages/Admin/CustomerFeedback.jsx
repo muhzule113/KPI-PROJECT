@@ -6,7 +6,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import AppLayout from '@/layouts/AppLayout';
 
 const statusLabels = {
     completed: 'Siap diserahkan',
@@ -38,7 +37,7 @@ export default function CustomerFeedback({ tickets = [], selected_ticket: select
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title="Feedback Pelanggan" />
             <div className="min-h-[calc(100dvh-76px)] bg-muted/15 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-[1280px] space-y-6">
@@ -176,7 +175,7 @@ export default function CustomerFeedback({ tickets = [], selected_ticket: select
                     </Card>
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }
 

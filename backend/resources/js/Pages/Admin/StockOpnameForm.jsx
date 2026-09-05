@@ -6,13 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useFeedback } from '@/components/feedback/ActionFeedback';
-import AppLayout from '@/layouts/AppLayout';
 
 export default function StockOpnameForm(props) {
     return (
-        <AppLayout>
+        <>
             <StockOpnameContent {...props} />
-        </AppLayout>
+        </>
     );
 }
 

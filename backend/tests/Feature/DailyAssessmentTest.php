@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
+use App\Models\EmployeeKpiItem;
 use App\Models\KpiDailyEntry;
+use App\Models\KpiEvidence;
 use App\Models\KpiPeriod;
+use App\Models\ServiceTicket;
 use App\Models\SystemNotification;
 use App\Models\User;
 use App\Modules\Assessment\DailyAssessmentService;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -27,7 +29,7 @@ class DailyAssessmentTest extends TestCase
         $this->service = app(DailyAssessmentService::class);
     }
 
-    public function test_employee_can_only_view_daily_kpi_and_cannot_write(): void
+    public function test_employee_can_view_and_save_owned_daily_kpi(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
@@ -43,41 +45,69 @@ class DailyAssessmentTest extends TestCase
         $day = $this->service->employeeDay($employee, $date);
 
         $this->assertNotEmpty($day['entries']);
-        $this->assertTrue($day['entries']->every(fn (KpiDailyEntry $entry) => $entry->entry_status === 'submitted'));
-        $legacyEntry = $day['entries']->first();
-        $legacyEntry->employee_actual_decimal = 100;
-        $this->assertNull($legacyEntry->effectiveActualDecimal());
-        $this->expectException(AuthorizationException::class);
+        $employeeItem = $day['kpi']->items->firstWhere('definition_code_snapshot', 'TEK-01');
+        $entry = $day['entries']->firstWhere('employee_kpi_item_id', $employeeItem->id);
+        $this->assertSame('draft', $entry->entry_status);
 
-        $this->service->saveEmployeeDay(
-            user: $employee,
-            date: $date,
-            items: [],
-            submit: true
-        );
+        $saved = $this->service->saveEmployeeDay($employee, $date, [[
+            'item_id' => $employeeItem->id,
+            'actual_decimal' => 12,
+            'note' => 'Input harian teknisi',
+        ]]);
+        $savedEntry = $saved['entries']->firstWhere('employee_kpi_item_id', $employeeItem->id);
+        $this->assertSame(12.0, (float) $savedEntry->employee_actual_decimal);
+        $this->assertSame('draft', $savedEntry->entry_status);
     }
 
-    public function test_supervisor_and_manager_can_complete_daily_review_without_employee_input(): void
+    public function test_supervisor_and_manager_can_complete_daily_review_after_employee_input(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
         $manager = User::where('email', 'manager@toko.com')->firstOrFail();
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
         $period->update([
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->addDay()->toDateString(),
             'submission_deadline' => now()->addDay(),
             'review_deadline' => now()->addDays(2),
             'approval_deadline' => now()->addDays(3),
         ]);
 
-        $date = now()->toDateString();
+        $date = ServiceTicket::whereNotNull('completed_at')
+            ->orderBy('completed_at')
+            ->firstOrFail()
+            ->completed_at
+            ->toDateString();
         $employeeRecord = Employee::where('user_id', $employee->id)->firstOrFail();
         $kpi = EmployeeKpi::where('period_id', $period->id)
             ->where('employee_id', $employeeRecord->id)
             ->firstOrFail();
 
-        $this->service->employeeDay($employee, $date);
+        $evidenceItem = $kpi->items()->where('evidence_req_snapshot', true)->firstOrFail();
+        KpiEvidence::create([
+            'employee_kpi_item_id' => $evidenceItem->id,
+            'file_path' => 'tests/daily-input.pdf',
+            'file_name' => 'daily-input.pdf',
+            'file_size' => 100,
+            'mime_type' => 'application/pdf',
+            'sha256_hash' => hash('sha256', 'daily-input'),
+            'scan_status' => 'clean',
+            'scanned_at' => now(),
+            'scan_note' => 'Test',
+            'uploaded_by' => $employee->id,
+            'description' => 'Evidence input harian',
+        ]);
+        $employeeItems = $kpi->items()
+            ->where('source_type_snapshot', 'employee')
+            ->where('formula_key_snapshot', '!=', 'rubric')
+            ->get();
+        $this->service->saveEmployeeDay(
+            $employee,
+            $date,
+            $employeeItems->map(fn (EmployeeKpiItem $item): array => [
+                'item_id' => $item->id,
+                'actual_decimal' => 80,
+            ])->all(),
+            true
+        );
         $queue = $this->service->supervisorQueue($supervisor, $date);
         $employeeQueue = $queue->filter(fn (KpiDailyEntry $entry) => (string) $entry->item->employee_kpi_id === (string) $kpi->id)->values();
         $this->assertCount($kpi->items()->count(), $employeeQueue);
@@ -94,7 +124,7 @@ class DailyAssessmentTest extends TestCase
                 user: $supervisor,
                 entryId: $entry->id,
                 decision: 'approved',
-                actualDecimal: $answers ? null : 80,
+                actualDecimal: $answers || $entry->item->isSystemSourced() ? null : 80,
                 answers: $answers
             );
         }
@@ -113,7 +143,7 @@ class DailyAssessmentTest extends TestCase
                 user: $manager,
                 entryId: $entry->id,
                 decision: 'approved',
-                actualDecimal: $answers ? null : 80,
+                actualDecimal: $answers || $entry->item->isSystemSourced() ? null : 80,
                 answers: $answers
             );
         }
@@ -145,7 +175,7 @@ class DailyAssessmentTest extends TestCase
             $this->service->assessManager($manager, $entry->id, 'approved', 45);
             $this->fail('Manager seharusnya menunggu persetujuan Supervisor.');
         } catch (\Exception $exception) {
-            $this->assertSame('Penilaian Supervisor harus disetujui terlebih dahulu.', $exception->getMessage());
+            $this->assertSame('Entri harian belum siap untuk direview.', $exception->getMessage());
         }
 
         try {
@@ -163,14 +193,16 @@ class DailyAssessmentTest extends TestCase
         $manager = User::where('email', 'manager@toko.com')->firstOrFail();
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
         $period->update([
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->addDay()->toDateString(),
             'submission_deadline' => now()->addDay(),
             'review_deadline' => now()->addDays(2),
             'approval_deadline' => now()->addDays(3),
         ]);
 
-        $date = now()->toDateString();
+        $date = ServiceTicket::whereNotNull('completed_at')
+            ->orderBy('completed_at')
+            ->firstOrFail()
+            ->completed_at
+            ->toDateString();
         $employeeRecord = Employee::where('user_id', $employee->id)->firstOrFail();
         $kpi = EmployeeKpi::where('period_id', $period->id)
             ->where('employee_id', $employeeRecord->id)
@@ -180,12 +212,47 @@ class DailyAssessmentTest extends TestCase
             ->where('period_id', $period->id)
             ->where('supervisor_id_snapshot', $supervisorRecord->id)
             ->get();
-        $expectedQueueEntries = $assignedKpis->sum(fn (EmployeeKpi $assignedKpi) => $assignedKpi->items->count());
+        $evidenceItem = $kpi->items()->where('evidence_req_snapshot', true)->firstOrFail();
+        KpiEvidence::create([
+            'employee_kpi_item_id' => $evidenceItem->id,
+            'file_path' => 'tests/daily-input.pdf',
+            'file_name' => 'daily-input.pdf',
+            'file_size' => 100,
+            'mime_type' => 'application/pdf',
+            'sha256_hash' => hash('sha256', 'daily-input'),
+            'scan_status' => 'clean',
+            'scanned_at' => now(),
+            'scan_note' => 'Test',
+            'uploaded_by' => $employee->id,
+            'description' => 'Evidence input harian',
+        ]);
+        $employeeItems = $kpi->items()
+            ->where('source_type_snapshot', 'employee')
+            ->where('formula_key_snapshot', '!=', 'rubric')
+            ->get();
+        $this->service->saveEmployeeDay(
+            $employee,
+            $date,
+            $employeeItems->map(fn (EmployeeKpiItem $item): array => [
+                'item_id' => $item->id,
+                'actual_decimal' => 80,
+            ])->all(),
+            true
+        );
+        $expectedQueueEntries = $assignedKpis->sum(
+            fn (EmployeeKpi $assignedKpi): int => $assignedKpi->items
+                ->filter(fn (EmployeeKpiItem $item): bool => strtolower((string) $item->source_type_snapshot) !== 'employee'
+                    || (string) $assignedKpi->employee_id === (string) $employeeRecord->id)
+                ->count()
+        );
 
         $queue = $this->service->supervisorQueue($supervisor, $date);
         $employeeQueue = $queue->filter(fn (KpiDailyEntry $entry) => (string) $entry->item->employee_kpi_id === (string) $kpi->id)->values();
         $this->assertCount($expectedQueueEntries, $queue);
-        $this->assertCount($expectedQueueEntries, KpiDailyEntry::whereDate('entry_date', $date)->get());
+        $this->assertSame(
+            $expectedQueueEntries,
+            KpiDailyEntry::whereDate('entry_date', $date)->where('entry_status', 'submitted')->count()
+        );
         $this->assertSame($assignedKpis->count(), SystemNotification::where('type', 'daily_kpi_submitted')->count());
         $this->assertCount($kpi->items()->count(), $employeeQueue);
 
@@ -215,32 +282,39 @@ class DailyAssessmentTest extends TestCase
         $this->assertSame(1, SystemNotification::where('type', 'daily_kpi_reviewed')->count());
     }
 
-    public function test_system_indicator_can_be_confirmed_without_copying_monthly_value_to_daily_entry(): void
+    public function test_system_indicator_uses_daily_value_and_aggregates_after_manager_confirmation(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
         $manager = User::where('email', 'manager@toko.com')->firstOrFail();
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
         $period->update([
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->addDay()->toDateString(),
             'submission_deadline' => now()->addDay(),
             'review_deadline' => now()->addDays(2),
             'approval_deadline' => now()->addDays(3),
         ]);
 
-        $date = now()->toDateString();
+        $date = ServiceTicket::whereNotNull('completed_at')
+            ->orderBy('completed_at')
+            ->firstOrFail()
+            ->completed_at
+            ->toDateString();
         $employeeRecord = Employee::where('user_id', $employee->id)->firstOrFail();
         $kpi = EmployeeKpi::where('period_id', $period->id)
             ->where('employee_id', $employeeRecord->id)
             ->firstOrFail();
-        $item = $kpi->items()->where('definition_code_snapshot', 'TEK-01')->firstOrFail();
-        $item->update(['actual_decimal' => 10]);
+        $item = $kpi->items()->where('definition_code_snapshot', 'TEK-07')->firstOrFail();
+        $item->update(['actual_decimal' => 10, 'actual_json' => ['seed_value' => 10]]);
 
         $this->service->employeeDay($employee, $date);
         $entry = KpiDailyEntry::whereDate('entry_date', $date)
             ->where('employee_kpi_item_id', $item->id)
             ->firstOrFail();
+        $entry->update([
+            'system_actual_decimal' => 10,
+            'system_actual_json' => ['source' => 'test'],
+            'entry_status' => 'submitted',
+        ]);
 
         $supervisorEntry = $this->service->assessSupervisor($supervisor, $entry->id, 'approved');
         $this->assertSame('approved', $supervisorEntry->supervisor_status);
@@ -250,6 +324,6 @@ class DailyAssessmentTest extends TestCase
         $this->assertSame('approved', $managerEntry->manager_status);
         $this->assertNull($managerEntry->manager_actual_decimal);
         $this->assertSame(10.0, (float) $item->fresh()->actual_decimal);
-        $this->assertFalse((bool) data_get($item->fresh()->actual_json, '_daily_aggregate', false));
+        $this->assertTrue((bool) data_get($item->fresh()->actual_json, '_daily_aggregate', false));
     }
 }

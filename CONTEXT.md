@@ -29,3 +29,27 @@ Nilai Manager jika dikoreksi, nilai Supervisor jika tidak dikoreksi Manager, ata
 
 **Agregasi bulanan**:
 Perhitungan nilai periode dari hasil penilaian akhir harian; persentase dan rubrik dirata-ratakan, sedangkan unit hitungan atau uang dijumlahkan.
+
+**Catatan absensi harian**:
+Satu catatan untuk satu karyawan pada satu tanggal di dalam periode KPI yang berstatus `OPEN`.
+_Avoid_: absensi lintas periode aktif atau dua catatan untuk tanggal yang sama
+
+**Hari kerja absensi**:
+Senin sampai Jumat. Kalender hari libur belum dikelola pada MVP, sehingga hari libur nasional tetap mengikuti aturan hari kerja sampai kalender tersebut tersedia.
+
+**Status absensi**:
+`Hadir` dan `Terlambat` adalah hari kerja yang dihitung sebagai hadir; `Izin` dan `Sakit` adalah ketidakhadiran beralasan yang dikeluarkan dari pembagi; `Alpha` dan hari kerja tanpa catatan masuk pembagi tetapi tidak masuk pembilang.
+
+**Rasio kehadiran**:
+`hari Hadir/Terlambat ÷ (hari kerja - hari Izin/Sakit) × 100`. Jika seluruh hari kerja dikecualikan karena Izin/Sakit, rasio tidak dihitung.
+
+## Tanggung jawab role
+
+**Admin sistem**:
+Mengelola konfigurasi, master data, periode, dan monitoring KPI. Admin sistem tidak melakukan review, penilaian, atau approval KPI karyawan.
+
+**Supervisor**:
+Melakukan review dan penilaian anggota tim yang tercatat sebagai bawahannya pada snapshot KPI.
+
+**Manager**:
+Melakukan penilaian akhir dan approval KPI setelah review Supervisor selesai, hanya untuk KPI yang ditugaskan kepadanya.

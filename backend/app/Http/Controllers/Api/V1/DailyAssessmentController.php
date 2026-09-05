@@ -31,6 +31,8 @@ final class DailyAssessmentController extends Controller
                 'success' => true,
                 'data' => $this->employeeDayPayload($day),
             ]);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 403);
         } catch (Exception $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
         }
@@ -38,10 +40,37 @@ final class DailyAssessmentController extends Controller
 
     public function saveEmployeeDay(Request $request): JsonResponse
     {
-        return response()->json([
-            'success' => false,
-            'message' => 'Karyawan tidak mengisi KPI harian. Nilai KPI ditentukan sistem, Supervisor, atau Manager.',
-        ], 403);
+        $data = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'],
+            'submit' => ['sometimes', 'boolean'],
+            'items' => ['required', 'array'],
+            'items.*.item_id' => ['nullable', 'string'],
+            'items.*.id' => ['nullable', 'string'],
+            'items.*.actual_decimal' => ['nullable', 'numeric'],
+            'items.*.actual_json' => ['nullable', 'array'],
+            'items.*.note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $day = $this->dailyAssessmentService->saveEmployeeDay(
+                user: $request->user(),
+                date: $data['date'],
+                items: $data['items'],
+                submit: (bool) ($data['submit'] ?? false)
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => ($data['submit'] ?? false)
+                    ? 'KPI harian berhasil disubmit untuk review.'
+                    : 'Draft KPI harian berhasil disimpan.',
+                'data' => $this->employeeDayPayload($day),
+            ]);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 403);
+        } catch (Exception $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
     }
 
     public function supervisorQueue(Request $request): JsonResponse
@@ -200,9 +229,22 @@ final class DailyAssessmentController extends Controller
                 'source_type' => $item->source_type_snapshot,
                 'rubric' => $item->rubric_snapshot,
                 'system_actual' => $item->systemActualDecimal(),
-                'system_meta' => $item->isSystemSourced() ? $item->actual_json : null,
+                'system_meta' => $entry->system_actual_json ?? ($item->isSystemSourced() ? $item->actual_json : null),
             ],
+            'employee_editable' => strtolower((string) $item->source_type_snapshot) === 'employee'
+                && $item->formula_key_snapshot !== 'rubric'
+                && $entry->supervisor_status !== 'approved'
+                && $entry->manager_status !== 'approved'
+                && ($entry->employee_submitted_at === null
+                    || $entry->supervisor_status === 'revision_required'
+                    || $entry->manager_status === 'revision_required'),
             'entry_status' => $entry->entry_status,
+            'system_actual_decimal' => $entry->system_actual_decimal !== null ? (float) $entry->system_actual_decimal : null,
+            'system_actual_json' => $entry->system_actual_json,
+            'employee_actual_decimal' => $entry->employee_actual_decimal !== null ? (float) $entry->employee_actual_decimal : null,
+            'employee_actual_json' => $entry->employee_actual_json,
+            'employee_note' => $entry->employee_note,
+            'employee_submitted_at' => $entry->employee_submitted_at?->toIso8601String(),
             'supervisor_actual_decimal' => $entry->supervisor_actual_decimal !== null ? (float) $entry->supervisor_actual_decimal : null,
             'supervisor_score_percentage' => $entry->supervisor_score_percentage !== null ? (float) $entry->supervisor_score_percentage : null,
             'supervisor_answers' => $entry->supervisor_answers_json,

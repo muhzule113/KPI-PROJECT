@@ -4,7 +4,6 @@ import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import AdminForm from '@/components/admin/AdminForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import AppLayout from '@/layouts/AppLayout';
 
 export default function ResourceForm({ resource, form: formPayload }) {
     const form = useForm(formPayload.values);
@@ -21,7 +20,7 @@ export default function ResourceForm({ resource, form: formPayload }) {
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title={`${isEdit ? 'Ubah' : 'Tambah'} ${resource.label}`} />
             <div className="min-h-[calc(100dvh-76px)] bg-muted/15 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-4xl space-y-6">
@@ -56,6 +55,6 @@ export default function ResourceForm({ resource, form: formPayload }) {
                     </Card>
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }

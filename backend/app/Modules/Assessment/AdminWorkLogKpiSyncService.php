@@ -40,6 +40,7 @@ class AdminWorkLogKpiSyncService
             if (!$emp || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
 
             $logs = AdminWorkLog::where('employee_id', $emp->id)
+                ->where(fn ($query) => $query->where('period_id', $period->id)->orWhereNull('period_id'))
                 ->whereBetween('work_date', [$period->start_date->toDateString(), $period->end_date->toDateString()])
                 ->get();
 
@@ -97,9 +98,10 @@ class AdminWorkLogKpiSyncService
     protected function setItemActual(EmployeeKpi $kpi, string $code, float $value): bool
     {
         $item = $kpi->items->firstWhere('definition_code_snapshot', $code);
-        if (!$item) return false;
+        if (!$item || !$item->acceptsSystemCalculatedValue()) return false;
 
         $item->actual_decimal = $value;
+        $item->actual_json = ['_system_calculated' => true, 'source' => 'admin_work_log'];
         $item->status = 'draft';
         $item->save();
         $this->calculationEngine->calculateItem($item);

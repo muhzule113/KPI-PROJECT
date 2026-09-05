@@ -85,7 +85,25 @@ class EmployeeKpiItem extends Model
 
     public function isSystemSourced(): bool
     {
-        return strtolower((string) $this->source_type_snapshot) === 'system';
+        return in_array(strtolower((string) $this->source_type_snapshot), ['system', 'cross_role', 'import'], true);
+    }
+
+    /**
+     * System feeds may provide a provisional value for employee-owned facts,
+     * but must stop once a human value or a daily aggregate has been recorded.
+     */
+    public function acceptsSystemCalculatedValue(): bool
+    {
+        if ($this->isSystemSourced()) {
+            return true;
+        }
+
+        if ($this->actual_decimal === null && $this->actual_json === null) {
+            return true;
+        }
+
+        return is_array($this->actual_json)
+            && ($this->actual_json['_system_calculated'] ?? false) === true;
     }
 
     public function systemActualDecimal(): ?float

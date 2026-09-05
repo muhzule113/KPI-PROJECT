@@ -60,7 +60,8 @@ final class KpiWorkflow
 
     public static function canSystemSyncKpi(EmployeeKpi $kpi): bool
     {
-        return in_array($kpi->status, ['draft', 'revision_required'], true);
+        // Nilai sistem harus bisa diperbarui setelah karyawan submit, sebelum review dimulai.
+        return in_array($kpi->status, ['draft', 'submitted', 'revision_required'], true);
     }
 
     public static function assertExpectedVersion(Model $model, mixed $expected): void
@@ -72,12 +73,9 @@ final class KpiWorkflow
 
     public static function canManageKpi(User $user, EmployeeKpi $kpi): bool
     {
-        if ($user->hasRole('super_admin')) {
-            return true;
-        }
-
         $employee = $user->employee;
-        return $user->hasRole('owner_manager')
+        return !$user->hasRole('super_admin')
+            && $user->hasRole('owner_manager')
             && $employee?->status === 'active'
             && (string) $kpi->manager_id_snapshot === (string) $employee->id
             && (string) $kpi->employee?->branch_id === (string) $employee->branch_id;
@@ -85,24 +83,32 @@ final class KpiWorkflow
 
     public static function canReviewKpi(User $user, EmployeeKpi $kpi): bool
     {
-        if ($user->hasRole('super_admin')) {
-            return true;
-        }
-
         $employee = $user->employee;
-        return $user->hasRole('supervisor')
+        return !$user->hasRole('super_admin')
+            && $user->hasRole('supervisor')
             && $employee?->status === 'active'
             && (string) $kpi->supervisor_id_snapshot === (string) $employee->id
             && (string) $kpi->employee?->branch_id === (string) $employee->branch_id;
     }
 
+    public static function canEmployeeWriteKpi(User $user, EmployeeKpi $kpi): bool
+    {
+        $employee = $user->employee;
+
+        return !$user->hasAnyRole(['super_admin', 'auditor', 'kpi_admin'])
+            && $employee?->status === 'active'
+            && (string) $kpi->employee_id === (string) $employee->id;
+    }
+
     /**
-     * KPI actual hanya boleh ditulis oleh sistem, Supervisor yang ditugaskan,
-     * atau Manager yang berwenang. Karyawan tidak pernah menjadi writer KPI.
+     * Nilai KPI dapat ditulis oleh pemilik KPI, reviewer yang ditugaskan, atau
+     * manager yang berwenang. Hak akses tetap dibatasi oleh service per tahap.
      */
     public static function canWriteKpi(User $user, EmployeeKpi $kpi): bool
     {
-        return self::canReviewKpi($user, $kpi) || self::canManageKpi($user, $kpi);
+        return self::canEmployeeWriteKpi($user, $kpi)
+            || self::canReviewKpi($user, $kpi)
+            || self::canManageKpi($user, $kpi);
     }
 
     public static function assertCanWriteKpi(?User $user, EmployeeKpi $kpi): void
@@ -112,13 +118,13 @@ final class KpiWorkflow
             return;
         }
 
-        throw new AuthorizationException('Karyawan tidak dapat mengisi atau mengubah nilai KPI.');
+        throw new AuthorizationException('Anda tidak berwenang mengubah KPI ini.');
     }
 
     public static function canRequestCorrection(User $user, EmployeeKpi $kpi): bool
     {
         if ($user->hasRole('super_admin')) {
-            return true;
+            return false;
         }
 
         $employee = $user->employee;
@@ -137,7 +143,7 @@ final class KpiWorkflow
     public static function canApproveCorrection(User $user, KpiCorrectionRequest $request): bool
     {
         if ($user->hasRole('super_admin')) {
-            return true;
+            return false;
         }
 
         $employee = $user->employee;

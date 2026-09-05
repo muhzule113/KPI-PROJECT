@@ -23,8 +23,12 @@ final class CustomerFeedbackController extends Controller
     public function index(Request $request): Response
     {
         $this->authorizeAdmin($request);
+        $activePeriod = KpiPeriod::active();
 
         $tickets = ServiceTicket::query()
+            ->when($activePeriod, fn ($query) => $query->where(fn ($periodQuery) => $periodQuery
+                ->where('period_id', $activePeriod->getKey())
+                ->orWhereNull('period_id')))
             ->whereIn('status', self::FEEDBACKABLE_STATUSES)
             ->whereDoesntHave('feedback')
             ->orderByDesc('completed_at')
@@ -39,7 +43,17 @@ final class CustomerFeedbackController extends Controller
             ]);
         $selectedTicket = $tickets->firstWhere('id', $request->integer('ticket'));
 
-        $feedbacks = CustomerFeedback::query()
+        $feedbackQuery = CustomerFeedback::query()
+            ->when(
+                $activePeriod,
+                fn ($query) => $query->whereHas('ticket', fn ($ticketQuery) => $ticketQuery
+                    ->where('period_id', $activePeriod->getKey())
+                    ->orWhereNull('period_id')),
+            );
+        $feedbackStats = (clone $feedbackQuery)
+            ->selectRaw('COUNT(*) AS total, AVG(rating) AS average')
+            ->first();
+        $feedbacks = $feedbackQuery
             ->with(['ticket', 'csEmployee'])
             ->latest()
             ->limit(12)
@@ -75,8 +89,8 @@ final class CustomerFeedbackController extends Controller
                 : null,
             'feedbacks' => $feedbacks,
             'stats' => [
-                'total' => CustomerFeedback::query()->count(),
-                'average' => round((float) (CustomerFeedback::query()->avg('rating') ?? 0), 1),
+                'total' => (int) ($feedbackStats?->total ?? 0),
+                'average' => round((float) ($feedbackStats?->average ?? 0), 1),
                 'pending' => $tickets->count(),
             ],
         ]);

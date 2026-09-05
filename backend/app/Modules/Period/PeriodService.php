@@ -38,7 +38,9 @@ class PeriodService
 
         while ($manager && !in_array((string) $manager->id, $visited, true)) {
             $visited[] = (string) $manager->id;
-            if (in_array($manager->position?->code, ['POS-OWN', 'POS-EXEC'], true)) {
+            if ($manager->status === 'active'
+                && (string) $manager->branch_id === (string) $employee->branch_id
+                && in_array($manager->position?->code, ['POS-OWN', 'POS-EXEC'], true)) {
                 return $manager;
             }
             $manager = $manager->supervisor;
@@ -66,6 +68,18 @@ class PeriodService
             $issues[] = 'Tidak ada karyawan aktif pada cabang peserta periode.';
         }
 
+        foreach ($employees as $employee) {
+            $supervisor = $employee->supervisor;
+            if ((!$supervisor || $supervisor->status !== 'active'
+                    || (string) $supervisor->branch_id !== (string) $employee->branch_id)
+                && !in_array($employee->position?->code, ['POS-OWN', 'POS-EXEC'], true)) {
+                $issues[] = "Karyawan '{$employee->name}' belum memiliki Supervisor aktif untuk snapshot.";
+            }
+            if (!$this->managerFor($employee) && !in_array($employee->position?->code, ['POS-OWN', 'POS-EXEC'], true)) {
+                $issues[] = "Karyawan '{$employee->name}' belum memiliki Manager aktif untuk snapshot.";
+            }
+        }
+
         foreach ($employees->pluck('position')->filter()->unique('id') as $position) {
             if (in_array($position->code, ['POS-OWN', 'POS-EXEC'], true)) {
                 continue;
@@ -79,13 +93,36 @@ class PeriodService
                 continue;
             }
 
-            $activeVersion = KpiTemplateVersion::where('kpi_template_id', $template->id)
+            $activeVersion = KpiTemplateVersion::with(['items.rubric.criteria'])
+                ->where('kpi_template_id', $template->id)
                 ->where('status', 'active')
                 ->first();
             if (!$activeVersion) {
                 $issues[] = "Template KPI '{$template->name}' belum memiliki versi aktif.";
             } elseif (abs((float) $activeVersion->total_weight - 100.00) > 0.001) {
                 $issues[] = "Versi aktif Template '{$template->name}' memiliki total bobot {$activeVersion->total_weight}%, harus tepat 100.00%.";
+            } else {
+                foreach ($activeVersion->items as $item) {
+                    $formula = strtolower((string) $item->formula_key);
+                    $target = $item->target_value;
+                    if (in_array($formula, ['higher_is_better', 'lower_is_better'], true)
+                        && ($target === null || (float) $target <= 0)) {
+                        $issues[] = "Indikator '{$item->definition?->name}' pada template '{$template->name}' memiliki target 0/kosong.";
+                    }
+                    $targetData = $item->target_json ?? [];
+                    $params = $item->formula_params ?? [];
+                    if (in_array($formula, ['lower_is_better', 'zero_tolerance'], true)) {
+                        $fullLimit = $targetData['full_score_limit'] ?? $params['full_score_limit'] ?? null;
+                        $failureLimit = $targetData['failure_limit'] ?? $params['failure_limit'] ?? null;
+                        $baseTarget = $formula === 'zero_tolerance' ? $fullLimit : $target;
+                        if ($failureLimit === null || $baseTarget === null || (float) $failureLimit <= (float) $baseTarget) {
+                            $issues[] = "Indikator '{$item->definition?->name}' pada template '{$template->name}' belum memiliki failure limit valid.";
+                        }
+                    }
+                    if ($formula === 'rubric' && (!$item->rubric || $item->rubric->criteria->isEmpty())) {
+                        $issues[] = "Indikator rubrik '{$item->definition?->name}' pada template '{$template->name}' belum memiliki kriteria.";
+                    }
+                }
             }
         }
 
@@ -271,6 +308,70 @@ class PeriodService
                 subjectId: (string) $period->id,
                 before: $before,
                 after: ['status' => 'SUBMISSION_CLOSED']
+            );
+        });
+    }
+
+    public function startReview(KpiPeriod $period): void
+    {
+        DB::transaction(function () use ($period): void {
+            $lockedPeriod = KpiPeriod::whereKey($period->id)->lockForUpdate()->firstOrFail();
+            KpiWorkflow::assertPeriodTransition($lockedPeriod, 'IN_REVIEW');
+            $kpis = $lockedPeriod->employeeKpis()->lockForUpdate()->get();
+            if ($kpis->isEmpty() || $kpis->contains(fn (EmployeeKpi $kpi): bool => in_array($kpi->status, ['draft', 'revision_required'], true))) {
+                throw new Exception('Periode belum dapat direview karena masih ada KPI yang belum disubmit.');
+            }
+
+            foreach ($kpis as $kpi) {
+                if ($kpi->status === 'submitted') {
+                    KpiWorkflow::assertKpiTransition($kpi, 'under_review');
+                    $kpi->status = 'under_review';
+                    $kpi->row_version += 1;
+                    $kpi->save();
+                }
+            }
+
+            $before = ['status' => $lockedPeriod->status];
+            $lockedPeriod->status = 'IN_REVIEW';
+            $lockedPeriod->save();
+            AuditEvent::log(
+                action: 'start_period_review',
+                subjectType: 'KpiPeriod',
+                subjectId: (string) $lockedPeriod->id,
+                before: $before,
+                after: ['status' => 'IN_REVIEW']
+            );
+        });
+    }
+
+    public function startApproval(KpiPeriod $period): void
+    {
+        DB::transaction(function () use ($period): void {
+            $lockedPeriod = KpiPeriod::whereKey($period->id)->lockForUpdate()->firstOrFail();
+            KpiWorkflow::assertPeriodTransition($lockedPeriod, 'WAITING_APPROVAL');
+            $kpis = $lockedPeriod->employeeKpis()->lockForUpdate()->get();
+            if ($kpis->isEmpty() || $kpis->contains(fn (EmployeeKpi $kpi): bool => !in_array($kpi->status, ['verified', 'pending_approval', 'approved', 'locked'], true))) {
+                throw new Exception('Periode belum dapat menunggu approval karena masih ada KPI yang belum diverifikasi.');
+            }
+
+            foreach ($kpis as $kpi) {
+                if ($kpi->status === 'verified') {
+                    KpiWorkflow::assertKpiTransition($kpi, 'pending_approval');
+                    $kpi->status = 'pending_approval';
+                    $kpi->row_version += 1;
+                    $kpi->save();
+                }
+            }
+
+            $before = ['status' => $lockedPeriod->status];
+            $lockedPeriod->status = 'WAITING_APPROVAL';
+            $lockedPeriod->save();
+            AuditEvent::log(
+                action: 'start_period_approval',
+                subjectType: 'KpiPeriod',
+                subjectId: (string) $lockedPeriod->id,
+                before: $before,
+                after: ['status' => 'WAITING_APPROVAL']
             );
         });
     }

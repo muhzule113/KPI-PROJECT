@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { router, usePage } from '@inertiajs/react';
+import { router, usePage, usePoll } from '@inertiajs/react';
 
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
@@ -10,6 +10,10 @@ export default function AppLayout({ children }) {
     const { url } = page;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
+
+    usePoll(30000, {
+        only: ['activePeriod', 'notifications'],
+    });
 
     useEffect(() => {
         const removeStartListener = router.on('start', () => setIsNavigating(true));

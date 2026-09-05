@@ -40,4 +40,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(SystemNotification::class, 'user_id');
     }
+
+    public function getRolesLabelAttribute(): string
+    {
+        return $this->roles->pluck('name')->implode(', ');
+    }
 }

@@ -35,7 +35,9 @@ final class StockOpnameController extends Controller
                     'physical_stock' => $item->physical_stock,
                 ])->values()->all(),
             ],
-            'periods' => KpiPeriod::query()->orderByDesc('year')->orderByDesc('month')->get(['id', 'name'])->map(fn (KpiPeriod $period): array => ['value' => (string) $period->getKey(), 'label' => $period->name])->all(),
+            'periods' => ($activePeriod = KpiPeriod::active())
+                ? [['value' => (string) $activePeriod->getKey(), 'label' => $activePeriod->name]]
+                : [],
         ]);
     }
 
@@ -87,6 +89,12 @@ final class StockOpnameController extends Controller
     {
         abort_unless(MenuAccess::can($request->user(), [], ['POS-GUD']), 403);
 
-        return StockOpname::query()->with(['period', 'items.sparepart'])->findOrFail($record);
+        $periodId = KpiPeriod::active()?->getKey();
+
+        return StockOpname::query()
+            ->with(['period', 'items.sparepart'])
+            ->when($periodId, fn ($query) => $query->where('period_id', $periodId))
+            ->when(!$periodId, fn ($query) => $query->whereIn('id', []))
+            ->findOrFail($record);
     }
 }

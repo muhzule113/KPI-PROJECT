@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\KpiPeriod;
 use App\Support\AdminNavigation;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -37,9 +38,35 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user()?->loadMissing(['employee.position', 'employee.branch', 'roles']);
+        $activePeriod = $user ? KpiPeriod::active() : null;
+        $notifications = $user
+            ? $user->notifications()
+                ->latest()
+                ->limit(5)
+                ->get()
+                ->map(fn ($notification): array => [
+                    'id' => $notification->getKey(),
+                    'title' => $notification->title,
+                    'body' => $notification->body,
+                    'type' => $notification->type,
+                    'action_url' => $notification->action_url,
+                    'is_read' => (bool) $notification->is_read,
+                    'created_at' => $notification->created_at?->toIso8601String(),
+                ])
+                ->values()
+                ->all()
+            : [];
 
         return [
             ...parent::share($request),
+            'activePeriod' => $activePeriod ? [
+                'id' => $activePeriod->getKey(),
+                'name' => $activePeriod->name,
+                'status' => $activePeriod->status,
+                'start_date' => $activePeriod->start_date?->toDateString(),
+                'end_date' => $activePeriod->end_date?->toDateString(),
+            ] : null,
+            'notifications' => $notifications,
             'navigation' => $user ? AdminNavigation::for($user) : [],
             'auth' => [
                 'user' => $user ? [

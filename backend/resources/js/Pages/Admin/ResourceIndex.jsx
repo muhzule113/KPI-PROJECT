@@ -7,18 +7,17 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout';
 import { useFeedback } from '@/components/feedback/ActionFeedback';
 
 export default function ResourceIndex(props) {
     return (
-        <AppLayout>
+        <>
             {props.resource?.key === 'import-batches' ? (
                 <ImportBatchResourceIndexContent {...props} />
             ) : (
                 <ResourceIndexContent {...props} />
             )}
-        </AppLayout>
+        </>
     );
 }
 

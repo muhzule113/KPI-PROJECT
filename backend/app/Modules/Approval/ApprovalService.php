@@ -8,6 +8,7 @@ use App\Models\EmployeeKpiItem;
 use App\Models\KpiActualEntry;
 use App\Models\KpiApproval;
 use App\Models\KpiCorrectionRequest;
+use App\Models\KpiDailyEntry;
 use App\Models\SystemNotification;
 use App\Models\User;
 use App\Modules\Calculation\KpiCalculationEngine;
@@ -26,9 +27,9 @@ class ApprovalService
         $query = EmployeeKpi::with(['employee.position', 'employee.branch', 'period', 'items'])
             ->where('status', 'pending_approval');
 
-        if ($manager && !$manager->hasRole('super_admin')) {
+        if ($manager) {
             $employee = $manager->employee;
-            if (!$employee) {
+            if (!$employee || !$manager->hasRole('owner_manager')) {
                 return collect();
             }
 
@@ -75,6 +76,14 @@ class ApprovalService
             }
             if ($lockedItem->formula_key_snapshot === 'rubric') {
                 throw new Exception('Indikator rubric harus dinilai melalui checklist.');
+            }
+            if ($lockedItem->isSystemSourced() && $lockedItem->systemActualDecimal() === null) {
+                throw new Exception('Nilai sistem belum tersedia. Sinkronkan data operasional terlebih dahulu.');
+            }
+            if ($lockedItem->actual_decimal !== null
+                && abs((float) $lockedItem->actual_decimal - $actualDecimal) > 0.000001
+                && trim((string) $note) === '') {
+                throw new Exception('Koreksi nilai aktual oleh Manager wajib menyertakan catatan.');
             }
 
             $before = [
@@ -139,6 +148,16 @@ class ApprovalService
             }
             if ($approverEmployee->id === $kpi->employee_id) {
                 throw new Exception("Pemisahan tugas (No Self-Approval): Anda tidak dapat menyetujui penilaian KPI Anda sendiri.");
+            }
+            $reviewedByApprover = KpiDailyEntry::whereHas(
+                'item',
+                fn ($query) => $query->where('employee_kpi_id', $kpi->id)
+            )->where(function ($query) use ($approverUser): void {
+                $query->where('supervisor_assessed_by', $approverUser)
+                    ->orWhere('manager_assessed_by', $approverUser);
+            })->exists();
+            if ($reviewedByApprover || $kpi->reviews()->where('reviewer_id', $approverUser)->exists()) {
+                throw new Exception('Pemisahan tugas (SoD): approver tidak boleh menjadi reviewer KPI yang sama.');
             }
             if (!KpiWorkflow::canManageKpi($approver, $kpi)) {
                 throw new Exception('Anda tidak berwenang menyetujui KPI ini.');

@@ -20,7 +20,8 @@ use Illuminate\Support\Facades\DB;
 final class DailyAssessmentService
 {
     public function __construct(
-        protected KpiCalculationEngine $calculationEngine
+        protected KpiCalculationEngine $calculationEngine,
+        protected OperationalKpiSyncService $operationalSync
     ) {}
 
     public function employeeDay(User $user, string $date): array
@@ -50,15 +51,130 @@ final class DailyAssessmentService
         array $items,
         bool $submit = false
     ): array {
-        throw new \Illuminate\Auth\Access\AuthorizationException(
-            'Karyawan tidak mengisi KPI harian. Nilai KPI ditentukan sistem, Supervisor, atau Manager.'
-        );
+        $period = $this->periodForDate($date);
+        $employee = $user->employee;
+        if (!$employee) {
+            throw new Exception('Profil karyawan tidak ditemukan.');
+        }
+
+        $kpi = EmployeeKpi::with(['period', 'employee', 'items.evidences'])
+            ->where('period_id', $period->id)
+            ->where('employee_id', $employee->id)
+            ->first();
+        if (!$kpi) {
+            throw new Exception('Snapshot KPI Anda belum digenerate untuk periode ini.');
+        }
+        if (!KpiWorkflow::canEmployeeWriteKpi($user, $kpi)) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('Anda tidak berwenang mengisi KPI ini.');
+        }
+        KpiWorkflow::assertMutableKpi($kpi);
+        if (!in_array($kpi->status, ['draft', 'submitted', 'revision_required'], true)) {
+            throw new Exception("KPI berstatus '{$kpi->status}' dan tidak dapat diedit.");
+        }
+        if ($period->status !== 'OPEN' || $period->submission_deadline->isPast()) {
+            throw new Exception('Batas waktu pengisian periode ini telah berakhir.');
+        }
+
+        $entryMap = KpiDailyEntry::whereIn('employee_kpi_item_id', $kpi->items->pluck('id'))
+            ->whereDate('entry_date', $date)
+            ->get()
+            ->keyBy('employee_kpi_item_id');
+        $payload = collect($items)->values();
+
+        DB::transaction(function () use ($user, $date, $submit, $kpi, $entryMap, $payload): void {
+            foreach ($payload as $itemData) {
+                if (!is_array($itemData)) {
+                    throw new Exception('Format item KPI harian tidak valid.');
+                }
+
+                $itemId = (string) ($itemData['item_id'] ?? $itemData['id'] ?? '');
+                $item = $kpi->items->first(fn (EmployeeKpiItem $candidate): bool => (string) $candidate->id === $itemId);
+                if (!$item) {
+                    throw new \Illuminate\Auth\Access\AuthorizationException('Indikator KPI bukan milik Anda.');
+                }
+                if (strtolower((string) $item->source_type_snapshot) !== 'employee') {
+                    throw new Exception("Indikator {$item->definition_code_snapshot} diisi oleh sumber resmi lain.");
+                }
+                if ($item->formula_key_snapshot === 'rubric') {
+                    throw new Exception("Indikator {$item->definition_code_snapshot} dinilai Supervisor melalui rubrik.");
+                }
+                if (array_key_exists('actual_decimal', $itemData)
+                    && $itemData['actual_decimal'] !== null
+                    && (!is_numeric($itemData['actual_decimal']) || !is_finite((float) $itemData['actual_decimal']))) {
+                    throw new Exception('Nilai aktual harus berupa angka yang valid.');
+                }
+                if (array_key_exists('actual_json', $itemData)
+                    && $itemData['actual_json'] !== null
+                    && !is_array($itemData['actual_json'])) {
+                    throw new Exception('Rincian nilai aktual harus berupa object/array.');
+                }
+
+                $entry = $entryMap->get($item->id) ?? new KpiDailyEntry([
+                    'employee_kpi_item_id' => $item->id,
+                    'entry_date' => $date,
+                    'entry_status' => 'draft',
+                ]);
+                if ($entry->supervisor_status === 'approved' || $entry->manager_status === 'approved') {
+                    throw new Exception("Indikator {$item->definition_code_snapshot} sedang dalam review dan tidak dapat diubah.");
+                }
+                if ($entry->employee_submitted_at !== null
+                    && $entry->supervisor_status !== 'revision_required'
+                    && $entry->manager_status !== 'revision_required') {
+                    throw new Exception("Indikator {$item->definition_code_snapshot} sudah disubmit dan terkunci.");
+                }
+
+                $entry->employee_actual_decimal = array_key_exists('actual_decimal', $itemData)
+                    && $itemData['actual_decimal'] !== null
+                    ? (float) $itemData['actual_decimal']
+                    : null;
+                $entry->employee_actual_json = $itemData['actual_json'] ?? null;
+                $entry->employee_note = isset($itemData['note']) ? (string) $itemData['note'] : null;
+                $entry->employee_entered_by = $user->id;
+                $entry->employee_submitted_at = $submit ? now() : null;
+                $this->resetAssessments($entry);
+                $entry->entry_status = $submit ? 'submitted' : 'draft';
+                $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
+                $entry->save();
+                $entryMap->put($item->id, $entry);
+            }
+
+            if ($submit) {
+                $missing = [];
+                foreach ($kpi->items->filter(fn (EmployeeKpiItem $item): bool => strtolower((string) $item->source_type_snapshot) === 'employee') as $item) {
+                    $entry = $entryMap->get($item->id);
+                    $hasValue = $entry && ($entry->employee_actual_decimal !== null
+                        || (is_array($entry->employee_actual_json) && $entry->employee_actual_json !== []));
+                    if (!$hasValue) {
+                        $missing[] = "Item '{$item->name_snapshot}' belum memiliki nilai aktual.";
+                    }
+                    if ($item->evidence_req_snapshot
+                        && $item->evidences->whereIn('scan_status', ['clean', null])->isEmpty()) {
+                        $missing[] = "Item '{$item->name_snapshot}' mewajibkan evidence berstatus clean.";
+                    }
+                }
+                if ($missing !== []) {
+                    throw new Exception("Submisi gagal:\n- " . implode("\n- ", $missing));
+                }
+
+                $wasRevision = $kpi->status === 'revision_required';
+                if ($kpi->status !== 'submitted') {
+                    $kpi->status = 'submitted';
+                    $kpi->submitted_at = now();
+                    $kpi->revision_number += $wasRevision ? 1 : 0;
+                    $kpi->row_version += 1;
+                    $kpi->save();
+                }
+            }
+        });
+
+        return $this->employeeDay($user, $date);
     }
 
     public function supervisorQueue(User $user, string $date): Collection
     {
         $period = $this->periodForDate($date);
         $this->assertRole($user, 'supervisor');
+        $this->operationalSync->syncPeriodOperationalData($period);
         $this->ensureAssignedEntries($user, $period, $date, 'supervisor');
 
         return KpiDailyEntry::with([
@@ -71,9 +187,7 @@ final class DailyAssessmentService
             ->whereIn('supervisor_status', ['pending', 'revision_required'])
             ->whereHas('item.employeeKpi', function ($query) use ($user, $period): void {
                 $query->where('period_id', $period->id);
-                if (!$user->hasRole('super_admin')) {
-                    $query->where('supervisor_id_snapshot', $user->employee?->id);
-                }
+                $query->where('supervisor_id_snapshot', $user->employee?->id);
             })
             ->orderBy('id')
             ->get();
@@ -83,6 +197,7 @@ final class DailyAssessmentService
     {
         $period = $this->periodForDate($date);
         $this->assertRole($user, 'manager');
+        $this->operationalSync->syncPeriodOperationalData($period);
         $this->ensureAssignedEntries($user, $period, $date, 'manager');
 
         return KpiDailyEntry::with([
@@ -92,23 +207,38 @@ final class DailyAssessmentService
         ])
             ->whereDate('entry_date', $date)
             ->where('entry_status', 'submitted')
-            ->where('supervisor_status', 'approved')
+            ->where(function ($query): void {
+                $query->where('supervisor_status', 'approved')
+                    ->orWhereHas('item.employeeKpi.employee.position', fn ($positionQuery) => $positionQuery->where('code', 'POS-SPV'));
+            })
             ->whereIn('manager_status', ['pending', 'revision_required', 'approved'])
             ->whereDoesntHave('item.employeeKpi.items.dailyEntries', function ($query) use ($date): void {
                 $query->whereDate('entry_date', $date)
                     ->where(function ($statusQuery): void {
                         $statusQuery->where('entry_status', '!=', 'submitted')
-                            ->orWhere('supervisor_status', '!=', 'approved');
+                            ->orWhere(function ($supervisorQuery): void {
+                                $supervisorQuery->where('supervisor_status', '!=', 'approved')
+                                    ->whereHas('item.employeeKpi.employee.position', fn ($positionQuery) => $positionQuery->where('code', '!=', 'POS-SPV'));
+                            });
                     });
             })
             ->whereHas('item.employeeKpi', function ($query) use ($user, $period): void {
                 $query->where('period_id', $period->id);
-                if (!$user->hasRole('super_admin')) {
-                    $query->where('manager_id_snapshot', $user->employee?->id);
-                }
+                $query->where('manager_id_snapshot', $user->employee?->id);
             })
             ->orderBy('id')
             ->get();
+    }
+
+    public function assessmentDeadline(string $date, string $role): ?Carbon
+    {
+        if (!in_array($role, ['supervisor', 'manager'], true)) {
+            throw new Exception('Peran penilaian harian tidak valid.');
+        }
+
+        $period = $this->periodForDate($date);
+
+        return $role === 'manager' ? $period->approval_deadline : $period->review_deadline;
     }
 
     public function assessSupervisor(
@@ -241,7 +371,9 @@ final class DailyAssessmentService
             if ($entry->entry_status !== 'submitted') {
                 throw new Exception('Entri harian belum siap untuk direview.');
             }
-            if ($role === 'manager' && $entry->supervisor_status !== 'approved') {
+            $managerOwnSupervisorKpi = $role === 'manager'
+                && $kpi->employee?->position?->code === 'POS-SPV';
+            if ($role === 'manager' && $entry->supervisor_status !== 'approved' && !$managerOwnSupervisorKpi) {
                 throw new Exception('Penilaian Supervisor harus disetujui terlebih dahulu.');
             }
             if ($decision === 'revision_required' && trim((string) $note) === '') {
@@ -260,9 +392,39 @@ final class DailyAssessmentService
                     }
                     $isSystemSource = $entry->item->isSystemSourced();
                     $fallback = $role === 'manager'
-                        ? $entry->supervisor_actual_decimal
+                        ? ($entry->supervisor_actual_decimal ?? $entry->employee_actual_decimal)
                         : null;
-                    $actualDecimal = $actualDecimal ?? ($fallback !== null ? (float) $fallback : null);
+                    if ($role === 'supervisor' && !$isSystemSource) {
+                        $employeeActual = $entry->employee_actual_decimal;
+                        if ($employeeActual === null) {
+                            throw new Exception('Nilai aktual karyawan belum disubmit.');
+                        }
+                        if ($actualDecimal !== null && abs($actualDecimal - (float) $employeeActual) > 0.000001) {
+                            throw new Exception('Supervisor tidak dapat mengubah nilai aktual karyawan.');
+                        }
+                        $actualDecimal = (float) $employeeActual;
+                    } else {
+                        $actualDecimal = $actualDecimal ?? ($fallback !== null ? (float) $fallback : null);
+                    }
+                    if ($role === 'manager'
+                        && strtolower((string) $entry->item->source_type_snapshot) === 'employee'
+                        && $entry->employee_actual_decimal === null
+                        && (!is_array($entry->employee_actual_json) || $entry->employee_actual_json === [])) {
+                        throw new Exception('Nilai aktual karyawan belum disubmit.');
+                    }
+                    if ($role === 'manager' && $actualDecimal !== null) {
+                        $baseline = $entry->supervisor_actual_decimal
+                            ?? $entry->employee_actual_decimal
+                            ?? $entry->item->systemActualDecimal();
+                        if ($baseline !== null
+                            && abs((float) $actualDecimal - (float) $baseline) > 0.000001
+                            && trim((string) $note) === '') {
+                            throw new Exception('Koreksi nilai aktual oleh Manager wajib menyertakan catatan.');
+                        }
+                    }
+                    if ($isSystemSource && $entry->item->systemActualDecimal() === null && $actualDecimal !== null) {
+                        throw new Exception('Nilai sistem belum tersedia. Sinkronkan data operasional terlebih dahulu.');
+                    }
                     if ($actualDecimal === null && (!$isSystemSource || $entry->item->systemActualDecimal() === null)) {
                         throw new Exception($isSystemSource
                             ? 'Nilai sistem belum tersedia. Sinkronkan data operasional terlebih dahulu.'
@@ -272,7 +434,12 @@ final class DailyAssessmentService
             }
 
             if ($role === 'supervisor') {
-                $entry->supervisor_actual_decimal = $decision === 'approved' && $entry->item->formula_key_snapshot !== 'rubric' ? $actualDecimal : null;
+                $entry->entry_status = $decision === 'revision_required' ? 'revision_required' : 'submitted';
+                $entry->supervisor_actual_decimal = $decision === 'approved'
+                    && $entry->item->formula_key_snapshot !== 'rubric'
+                    && !$entry->item->isSystemSourced()
+                    ? $actualDecimal
+                    : null;
                 $entry->supervisor_actual_json = $decision === 'approved' ? $actualJson : null;
                 $entry->supervisor_answers_json = $decision === 'approved' ? $normalizedAnswers : null;
                 $entry->supervisor_score_percentage = $decision === 'approved' ? $score : null;
@@ -289,6 +456,7 @@ final class DailyAssessmentService
                 $entry->manager_status = 'pending';
                 $entry->manager_assessed_at = null;
             } else {
+                $entry->entry_status = $decision === 'revision_required' ? 'revision_required' : 'submitted';
                 $entry->manager_actual_decimal = $decision === 'approved' && $entry->item->formula_key_snapshot !== 'rubric' ? $actualDecimal : null;
                 $entry->manager_actual_json = $decision === 'approved' ? $actualJson : null;
                 $entry->manager_answers_json = $decision === 'approved' ? $normalizedAnswers : null;
@@ -362,17 +530,22 @@ final class DailyAssessmentService
                 'employee_kpi_item_id' => $item->id,
                 'entry_date' => $date,
             ], [
-                'entry_status' => 'submitted',
+                'entry_status' => strtolower((string) $item->source_type_snapshot) === 'employee'
+                    ? 'draft'
+                    : 'submitted',
             ]);
         }
 
-        $this->notifySupervisor($kpi, $date);
-
-        return KpiDailyEntry::with('item')
+        $entries = KpiDailyEntry::with('item')
             ->whereIn('employee_kpi_item_id', $kpi->items->pluck('id'))
             ->whereDate('entry_date', $date)
             ->orderBy('id')
             ->get();
+        if ($entries->contains(fn (KpiDailyEntry $entry): bool => $entry->entry_status === 'submitted')) {
+            $this->notifySupervisor($kpi, $date);
+        }
+
+        return $entries;
     }
 
     private function ensureAssignedEntries(User $user, KpiPeriod $period, string $date, string $role): void
@@ -385,10 +558,8 @@ final class DailyAssessmentService
             'supervisorSnapshot.user',
         ])->where('period_id', $period->id);
 
-        if (!$user->hasRole('super_admin')) {
-            $assignmentColumn = $role === 'manager' ? 'manager_id_snapshot' : 'supervisor_id_snapshot';
-            $query->where($assignmentColumn, $user->employee?->id);
-        }
+        $assignmentColumn = $role === 'manager' ? 'manager_id_snapshot' : 'supervisor_id_snapshot';
+        $query->where($assignmentColumn, $user->employee?->id);
 
         $query->get()->each(fn (EmployeeKpi $kpi) => $this->ensureEntries($kpi, $date));
     }
@@ -430,7 +601,11 @@ final class DailyAssessmentService
 
     private function assertRole(User $user, string $role): void
     {
-        $allowed = $role === 'manager' ? ['owner_manager', 'super_admin'] : ['supervisor', 'super_admin'];
+        if ($user->hasRole('super_admin')) {
+            throw new Exception('Admin sistem tidak dapat melakukan penilaian KPI.');
+        }
+
+        $allowed = $role === 'manager' ? ['owner_manager'] : ['supervisor'];
         if (!$user->hasAnyRole($allowed)) {
             throw new Exception('Peran Anda tidak dapat melakukan tindakan ini.');
         }
@@ -462,6 +637,7 @@ final class DailyAssessmentService
             'entry_date' => $entry->entry_date?->toDateString(),
             'entry_status' => $entry->entry_status,
             'employee_actual_decimal' => $entry->employee_actual_decimal,
+            'system_actual_decimal' => $entry->system_actual_decimal,
             'supervisor_actual_decimal' => $entry->supervisor_actual_decimal,
             'supervisor_score_percentage' => $entry->supervisor_score_percentage,
             'supervisor_status' => $entry->supervisor_status,

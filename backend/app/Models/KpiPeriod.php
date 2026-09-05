@@ -65,4 +65,12 @@ class KpiPeriod extends Model
     {
         return $this->status === 'LOCKED';
     }
+
+    public static function active(): ?self
+    {
+        return static::query()
+            ->where('status', 'OPEN')
+            ->orderByDesc('id')
+            ->first();
+    }
 }

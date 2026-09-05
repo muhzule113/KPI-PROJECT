@@ -115,8 +115,8 @@ class MyKpiController extends Controller
         if (!$item || $item->employeeKpi->employee_id !== $employee?->id) {
             return response()->json(['success' => false, 'message' => 'Indikator KPI tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canWriteKpi($request->user(), $item->employeeKpi)) {
-            return response()->json(['success' => false, 'message' => 'Karyawan tidak dapat mengunggah evidence KPI.'], 403);
+        if (!KpiWorkflow::canEmployeeWriteKpi($request->user(), $item->employeeKpi)) {
+            return response()->json(['success' => false, 'message' => 'Hanya pemilik KPI yang dapat mengisi nilai aktual.'], 403);
         }
 
         try {
@@ -201,8 +201,8 @@ class MyKpiController extends Controller
         if (!$kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canWriteKpi($request->user(), $kpi)) {
-            return response()->json(['success' => false, 'message' => 'Karyawan tidak dapat mengirim KPI.'], 403);
+        if (!KpiWorkflow::canEmployeeWriteKpi($request->user(), $kpi)) {
+            return response()->json(['success' => false, 'message' => 'Hanya pemilik KPI yang dapat mengirim KPI.'], 403);
         }
 
         try {

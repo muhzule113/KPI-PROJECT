@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Head, router, usePoll } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     AlertCircle,
     BarChart3,
@@ -17,7 +17,6 @@ import StatusBadge from '@/components/common/StatusBadge';
 import TrendChart from '@/components/data-display/TrendChart';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import InitialsAvatar from '@/components/common/InitialsAvatar';
-import AppLayout from '@/layouts/AppLayout';
 import { Button } from '@/components/ui/button';
 import { formatNumber, formatPercent, formatShortDate } from '@/utils/formatters';
 
@@ -79,10 +78,6 @@ export default function Dashboard({
     filters = {},
     error = null,
 }) {
-    usePoll(30000, {
-        only: ['activePeriod', 'metrics', 'trend', 'topPerformers', 'recentKpis', 'attentionKpis', 'notifications'],
-    });
-
     useEffect(() => {
         if (!window.Echo) {
             return undefined;
@@ -100,27 +95,27 @@ export default function Dashboard({
 
     if (error) {
         return (
-            <AppLayout>
+            <>
                 <Head title="Dashboard" />
                 <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                     <Card>
                         <DataState variant="error" title="Dashboard tidak dapat dimuat" description={error} />
                     </Card>
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
     if (!metrics) {
         return (
-            <AppLayout>
+            <>
                 <Head title="Dashboard" />
                 <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                     <Card>
                         <DataState variant="loading" title="Memuat ringkasan KPI" description="Data dashboard sedang disiapkan dari server." />
                     </Card>
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
@@ -142,7 +137,7 @@ export default function Dashboard({
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title="Dashboard" />
 
             <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -388,6 +383,10 @@ export default function Dashboard({
                                         </>
                                     );
 
+                                    if (notification.action_url?.startsWith('/')) {
+                                        return <Link key={notification.id} href={notification.action_url} className="flex gap-3 rounded-xl px-3 py-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{item}</Link>;
+                                    }
+
                                     return notification.action_url ? (
                                         <a key={notification.id} href={notification.action_url} className="flex gap-3 rounded-xl px-3 py-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                                             {item}
@@ -408,6 +407,6 @@ export default function Dashboard({
                     Metrik dihitung dari skor KPI yang tersedia pada server.
                 </p>
             </div>
-        </AppLayout>
+        </>
     );
 }

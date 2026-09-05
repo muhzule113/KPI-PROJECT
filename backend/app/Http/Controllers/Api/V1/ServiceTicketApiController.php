@@ -32,6 +32,13 @@ class ServiceTicketApiController extends Controller
 
         $query = ServiceTicket::with(['technicianEmployee', 'intakeEmployee', 'cashierEmployee', 'branch', 'feedback'])
             ->orderByDesc('id');
+        $activePeriod = KpiPeriod::active();
+        if ($activePeriod) {
+            $query->where(function ($periodQuery) use ($activePeriod): void {
+                $periodQuery->where('period_id', $activePeriod->getKey())
+                    ->orWhereNull('period_id');
+            });
+        }
 
         // Filter by role and branch scope
         if ($user->hasRole('employee') && $employee?->position?->code === 'POS-TEK') {
@@ -109,7 +116,7 @@ class ServiceTicketApiController extends Controller
             'physical_condition' => 'nullable|string',
             'initial_complaint' => 'required|string',
             'customer_needs' => 'nullable|string',
-            'estimated_cost' => 'nullable|numeric',
+            'estimated_cost' => 'nullable|numeric|min:0',
             'estimated_completion_at' => 'nullable|date',
             'technician_employee_id' => 'nullable|string',
             'pelayan_employee_id' => [$pelayanRequired, 'string', 'exists:employees,id'],
@@ -121,25 +128,11 @@ class ServiceTicketApiController extends Controller
         $pelayanQuery = Employee::whereKey($pelayanEmployeeId)
             ->where('status', 'active')
             ->whereHas('position', fn($query) => $query->where('code', 'POS-CS'));
-        if (!$user->hasAnyRole(['owner_manager', 'super_admin']) && $employee?->branch_id) {
+        if (!$user->hasRole('super_admin') && $employee?->branch_id) {
             $pelayanQuery->where('branch_id', $employee->branch_id);
         }
         $pelayan = $pelayanQuery->first();
 
-        if ($request->filled('technician_employee_id')) {
-            $technicianQuery = Employee::whereKey($request->technician_employee_id)
-                ->where('status', 'active')
-                ->whereHas('position', fn($query) => $query->where('code', 'POS-TEK'));
-            if (!$user->hasAnyRole(['owner_manager', 'super_admin']) && $employee?->branch_id) {
-                $technicianQuery->where('branch_id', $employee->branch_id);
-            }
-            if (!$technicianQuery->exists()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Teknisi yang dipilih bukan Teknisi aktif pada cakupan cabang Anda.',
-                ], 422);
-            }
-        }
         if (!$pelayan) {
             return response()->json([
                 'success' => false,
@@ -147,9 +140,28 @@ class ServiceTicketApiController extends Controller
             ], 422);
         }
 
-        $activePeriod = KpiPeriod::where('status', 'OPEN')->orderByDesc('id')->first();
+        $branchId = $pelayan->branch_id ?? $employee?->branch_id;
+        if (!$branchId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cabang tiket tidak dapat ditentukan dari Pelayan yang dipilih.',
+            ], 422);
+        }
 
-        $ticket = DB::transaction(function () use ($request, $employee, $pelayan, $activePeriod, $user) {
+        if ($request->filled('technician_employee_id') && !Employee::whereKey($request->technician_employee_id)
+            ->where('status', 'active')
+            ->where('branch_id', $branchId)
+            ->whereHas('position', fn ($query) => $query->where('code', 'POS-TEK'))
+            ->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Teknisi yang dipilih harus aktif dan satu cabang dengan Pelayan penerima.',
+            ], 422);
+        }
+
+        $activePeriod = KpiPeriod::active();
+
+        $ticket = DB::transaction(function () use ($request, $employee, $pelayan, $branchId, $activePeriod, $user) {
             $ticketNumber = ServiceTicketNumber::next();
 
             $ticket = ServiceTicket::create([
@@ -166,7 +178,7 @@ class ServiceTicketApiController extends Controller
                 'customer_needs' => $request->customer_needs,
                 'estimated_cost' => $request->estimated_cost ?? 0,
                 'estimated_completion_at' => $request->estimated_completion_at ?? now()->addDays(2),
-                'branch_id' => $employee?->branch_id,
+                'branch_id' => $branchId,
                 'period_id' => $activePeriod?->id,
                 'intake_by_employee_id' => $pelayan->id,
                 'cashier_employee_id' => $employee?->position?->code === 'POS-KSR' ? $employee->id : null,
@@ -356,12 +368,12 @@ class ServiceTicketApiController extends Controller
     public function complete(Request $request, string $id): JsonResponse
     {
         $request->validate([
-            'result_status' => 'required|in:success,unrepairable,warranty_return',
+            'result_status' => 'required|in:success,unrepairable',
             'diagnosis_notes' => 'required|string',
             'action_notes' => 'required|string',
             'qc_checklist' => 'required|array',
             'qc_checklist.*' => 'required|boolean',
-            'final_cost' => 'nullable|numeric',
+            'final_cost' => 'nullable|numeric|min:0',
             'row_version' => 'nullable|integer|min:1',
         ]);
 
@@ -414,7 +426,7 @@ class ServiceTicketApiController extends Controller
 
             $this->auditTicketMutation('completed', $ticket, $before, actorId: $request->user()?->getKey());
 
-            $activePeriod = $ticket->period ?? KpiPeriod::where('status', 'OPEN')->orderByDesc('id')->first();
+            $activePeriod = $ticket->period ?? KpiPeriod::active();
             if ($activePeriod) {
                 $this->syncService->syncPeriodOperationalData($activePeriod);
             }
@@ -433,6 +445,88 @@ class ServiceTicketApiController extends Controller
             'message' => 'Pengerjaan servis berhasil diselesaikan dan dicatat ke metrik KPI Teknisi!',
             'data' => $this->formatTicket($ticket->fresh(['technicianEmployee', 'intakeEmployee'])),
         ]);
+    }
+
+    public function createWarrantyReturn(Request $request, string $id): JsonResponse
+    {
+        $request->validate([
+            'initial_complaint' => 'required|string',
+            'customer_needs' => 'nullable|string',
+            'estimated_completion_at' => 'nullable|date',
+            'technician_employee_id' => 'nullable|string',
+        ]);
+        $user = $request->user()->loadMissing(['employee.position', 'roles']);
+        if (!$this->isServiceNoteAuthorized($user)) {
+            return response()->json(['success' => false, 'message' => 'Hanya Pelayan atau manajemen yang dapat membuat tiket retur.'], 403);
+        }
+
+        $result = DB::transaction(function () use ($request, $id, $user): array {
+            $original = ServiceTicket::whereKey($id)->lockForUpdate()->first();
+            if (!$original) {
+                return ['response' => response()->json(['success' => false, 'message' => 'Tiket asal tidak ditemukan.'], 404)];
+            }
+            if (!$this->authorizeTicketAccess($original)) {
+                return ['response' => response()->json(['success' => false, 'message' => 'Tiket asal berada di luar cakupan Anda.'], 403)];
+            }
+            if (!in_array($original->status, ['completed', 'delivered'], true)) {
+                return ['response' => response()->json(['success' => false, 'message' => 'Retur garansi hanya dapat dibuat dari tiket yang sudah selesai.'], 422)];
+            }
+            if (ServiceTicket::where('warranty_returned_from_ticket_id', $original->id)->exists()) {
+                return ['response' => response()->json(['success' => false, 'message' => 'Tiket asal sudah memiliki tiket retur garansi.'], 422)];
+            }
+
+            $activePeriod = KpiPeriod::active();
+            $employee = $user->employee;
+            $technicianId = $request->input('technician_employee_id') ?: $original->technician_employee_id;
+            if ($technicianId !== null && !Employee::whereKey($technicianId)
+                ->where('status', 'active')
+                ->where('branch_id', $original->branch_id)
+                ->whereHas('position', fn ($query) => $query->where('code', 'POS-TEK'))
+                ->exists()) {
+                return ['response' => response()->json(['success' => false, 'message' => 'Teknisi retur bukan teknisi aktif pada cabang tiket.'], 422)];
+            }
+            $returnTicket = ServiceTicket::create([
+                'ticket_number' => ServiceTicketNumber::next(),
+                'customer_name' => $original->customer_name,
+                'customer_phone' => $original->customer_phone,
+                'customer_address' => $original->customer_address,
+                'device_brand' => $original->device_brand,
+                'device_model' => $original->device_model,
+                'imei_or_serial' => $original->imei_or_serial,
+                'passcode_or_pattern' => $original->passcode_or_pattern,
+                'physical_condition' => $original->physical_condition,
+                'initial_complaint' => $request->initial_complaint,
+                'customer_needs' => $request->customer_needs,
+                'estimated_cost' => 0,
+                'estimated_completion_at' => $request->estimated_completion_at,
+                'branch_id' => $original->branch_id,
+                'period_id' => $activePeriod?->id,
+                'intake_by_employee_id' => $employee?->position?->code === 'POS-CS'
+                    ? $employee->id
+                    : $original->intake_by_employee_id,
+                'technician_employee_id' => $technicianId,
+                'status' => 'intake',
+                'result_status' => 'pending',
+                'is_warranty_return' => true,
+                'warranty_returned_from_ticket_id' => $original->id,
+            ]);
+            $this->auditTicketMutation('warranty_return_created', $returnTicket, null, actorId: $user->getKey());
+            if ($activePeriod) {
+                $this->syncService->syncPeriodOperationalData($activePeriod);
+            }
+
+            return ['ticket' => $returnTicket];
+        });
+
+        if (isset($result['response'])) {
+            return $result['response'];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tiket retur garansi berhasil dibuat dan ditautkan ke tiket asal.',
+            'data' => $this->formatTicket($result['ticket']->fresh(['technicianEmployee', 'intakeEmployee'])),
+        ], 201);
     }
 
     public function pickupAndFeedback(Request $request, string $id): JsonResponse
@@ -509,7 +603,7 @@ class ServiceTicketApiController extends Controller
                 actorId: $user->getKey(),
             );
 
-            $activePeriod = $ticket->period ?? KpiPeriod::where('status', 'OPEN')->orderByDesc('id')->first();
+            $activePeriod = $ticket->period ?? KpiPeriod::active();
             if ($activePeriod) {
                 $this->syncService->syncPeriodOperationalData($activePeriod);
             }
@@ -574,6 +668,12 @@ class ServiceTicketApiController extends Controller
 
         $requestsQuery = SparepartRequest::with(['sparepart', 'ticket', 'technician'])
             ->where('status', 'pending');
+        $activePeriod = KpiPeriod::active();
+        if ($activePeriod) {
+            $requestsQuery->whereHas('ticket', fn ($query) => $query
+                ->where('period_id', $activePeriod->getKey())
+                ->orWhereNull('period_id'));
+        }
         if (!$user->hasAnyRole(['owner_manager', 'super_admin'])) {
             $requestsQuery->whereHas('ticket', fn ($query) => $query->where('branch_id', $user->employee->branch_id))
                 ->whereHas('sparepart', fn ($query) => $query->where('branch_id', $user->employee->branch_id)->orWhereNull('branch_id'));
@@ -675,7 +775,9 @@ class ServiceTicketApiController extends Controller
 
     public function fulfillSparepart(Request $request, string $requestId): JsonResponse
     {
-        $req = SparepartRequest::with('sparepart')->where('id', $requestId)->first();
+        $req = SparepartRequest::with('sparepart')
+            ->where('id', $requestId)
+            ->first();
         if (!$req) {
             return response()->json(['success' => false, 'message' => 'Permintaan tidak ditemukan.'], 404);
         }
@@ -748,7 +850,7 @@ class ServiceTicketApiController extends Controller
         $req->load('sparepart');
 
         // Auto-sync Gudang KPI
-        $activePeriod = KpiPeriod::where('status', 'OPEN')->orderByDesc('id')->first();
+        $activePeriod = KpiPeriod::active();
         if ($activePeriod) {
             $this->syncService->syncPeriodOperationalData($activePeriod);
         }
@@ -797,6 +899,8 @@ class ServiceTicketApiController extends Controller
             'cashier_name' => $t->cashierEmployee?->name ?? 'Belum Dicatat',
             'technician_name' => $t->technicianEmployee?->name ?? 'Belum Ditugaskan',
             'technician_employee_id' => $t->technician_employee_id,
+            'is_warranty_return' => (bool) $t->is_warranty_return,
+            'warranty_returned_from_ticket_id' => $t->warranty_returned_from_ticket_id,
             'created_at' => $t->created_at->toIso8601String(),
             'completed_at' => $t->completed_at?->toIso8601String(),
         ];

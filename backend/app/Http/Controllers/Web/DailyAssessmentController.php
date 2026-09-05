@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\EmployeeKpiItem;
 use App\Models\KpiDailyEntry;
 use App\Modules\Assessment\DailyAssessmentService;
-use App\Support\MenuAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -51,7 +50,18 @@ final class DailyAssessmentController extends Controller
                         'formula' => $item->formula_key_snapshot,
                         'source_type' => $item->source_type_snapshot,
                         'rubric' => $item->rubric_snapshot,
-                        'editable' => false,
+                        'editable' => strtolower((string) $item->source_type_snapshot) === 'employee'
+                            && $item->formula_key_snapshot !== 'rubric'
+                            && !in_array($entry?->supervisor_status, ['approved'], true)
+                            && !in_array($entry?->manager_status, ['approved'], true)
+                            && ($entry?->employee_submitted_at === null
+                                || $entry?->supervisor_status === 'revision_required'
+                                || $entry?->manager_status === 'revision_required'),
+                        'employee_actual' => $entry?->employee_actual_decimal !== null
+                            ? (float) $entry->employee_actual_decimal
+                            : null,
+                        'employee_actual_json' => $entry?->employee_actual_json,
+                        'employee_note' => $entry?->employee_note,
                         'actual' => $entry?->effectiveActualDecimal(),
                         'entry_status' => $entry?->entry_status ?? 'draft',
                         'supervisor_status' => $entry?->supervisor_status ?? 'pending',
@@ -81,20 +91,51 @@ final class DailyAssessmentController extends Controller
 
     public function saveEmployee(Request $request): RedirectResponse
     {
-        abort(403, 'Karyawan tidak mengisi KPI harian. Nilai KPI ditentukan sistem, Supervisor, atau Manager.');
+        $data = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'],
+            'submit' => ['sometimes', 'boolean'],
+            'items' => ['required', 'array'],
+            'items.*.item_id' => ['nullable', 'string'],
+            'items.*.id' => ['nullable', 'string'],
+            'items.*.actual_decimal' => ['nullable', 'numeric'],
+            'items.*.actual_json' => ['nullable', 'array'],
+            'items.*.note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $this->dailyAssessmentService->saveEmployeeDay(
+                user: $request->user(),
+                date: $data['date'],
+                items: $data['items'],
+                submit: (bool) ($data['submit'] ?? false)
+            );
+
+            return redirect("/app/my-kpi/daily?date={$data['date']}")
+                ->with('success', ($data['submit'] ?? false)
+                    ? 'KPI harian berhasil disubmit untuk review.'
+                    : 'Draft KPI harian berhasil disimpan.');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+            abort(403, $exception->getMessage());
+        } catch (\Throwable $exception) {
+            return back()->withInput()->with('error', $exception->getMessage());
+        }
     }
 
     public function supervisorQueue(Request $request): Response
     {
-        abort_unless(MenuAccess::can($request->user(), ['supervisor', 'super_admin'], []), 403);
+        abort_unless($request->user()->hasRole('supervisor') && !$request->user()->hasRole('super_admin'), 403);
         $date = $this->date($request);
 
         try {
             $entries = $this->dailyAssessmentService->supervisorQueue($request->user(), $date);
+            $deadline = $this->dailyAssessmentService->assessmentDeadline($date, 'supervisor');
             $message = null;
+            $canAssess = $deadline === null || ! $deadline->isPast();
         } catch (\Throwable $exception) {
             $entries = collect();
+            $deadline = null;
             $message = $exception->getMessage();
+            $canAssess = false;
         }
 
         return Inertia::render('Admin/DailyAssessmentQueue', [
@@ -104,6 +145,8 @@ final class DailyAssessmentController extends Controller
             'date' => $date,
             'entries' => $entries->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))->values()->all(),
             'message' => $message,
+            'deadline' => $deadline?->toIso8601String(),
+            'canAssess' => $canAssess,
         ]);
     }
 
@@ -131,15 +174,19 @@ final class DailyAssessmentController extends Controller
 
     public function managerQueue(Request $request): Response
     {
-        abort_unless(MenuAccess::can($request->user(), ['owner_manager', 'super_admin'], []), 403);
+        abort_unless($request->user()->hasRole('owner_manager') && !$request->user()->hasRole('super_admin'), 403);
         $date = $this->date($request);
 
         try {
             $entries = $this->dailyAssessmentService->managerQueue($request->user(), $date);
+            $deadline = $this->dailyAssessmentService->assessmentDeadline($date, 'manager');
             $message = null;
+            $canAssess = $deadline === null || ! $deadline->isPast();
         } catch (\Throwable $exception) {
             $entries = collect();
+            $deadline = null;
             $message = $exception->getMessage();
+            $canAssess = false;
         }
 
         return Inertia::render('Admin/DailyAssessmentQueue', [
@@ -149,6 +196,8 @@ final class DailyAssessmentController extends Controller
             'date' => $date,
             'entries' => $entries->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))->values()->all(),
             'message' => $message,
+            'deadline' => $deadline?->toIso8601String(),
+            'canAssess' => $canAssess,
         ]);
     }
 
@@ -220,9 +269,12 @@ final class DailyAssessmentController extends Controller
                 'source_type' => $item->source_type_snapshot,
                 'rubric' => $item->rubric_snapshot,
                 'system_actual' => $item->systemActualDecimal(),
-                'system_meta' => $item->isSystemSourced() ? $item->actual_json : null,
+                'system_meta' => $entry->system_actual_json ?? ($item->isSystemSourced() ? $item->actual_json : null),
             ],
             'entry_status' => $entry->entry_status,
+            'system_actual' => $entry->system_actual_decimal !== null ? (float) $entry->system_actual_decimal : null,
+            'employee_actual' => $entry->employee_actual_decimal !== null ? (float) $entry->employee_actual_decimal : null,
+            'employee_note' => $entry->employee_note,
             'supervisor_actual' => $entry->supervisor_actual_decimal !== null ? (float) $entry->supervisor_actual_decimal : null,
             'supervisor_score' => $entry->supervisor_score_percentage !== null ? (float) $entry->supervisor_score_percentage : null,
             'supervisor_answers' => $entry->supervisor_answers_json,

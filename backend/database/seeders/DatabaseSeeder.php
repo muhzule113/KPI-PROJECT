@@ -139,6 +139,17 @@ class DatabaseSeeder extends Seeder
         foreach ($definitionsData as $d) {
             $kpiDefs[$d['code']] = KpiDefinition::firstOrCreate(['code' => $d['code']], $d);
         }
+        foreach ([
+            'TEK-01' => 'employee', 'TEK-02' => 'employee', 'TEK-03' => 'cross_role', 'TEK-04' => 'employee',
+            'TEK-05' => 'supervisor', 'TEK-06' => 'supervisor', 'TEK-07' => 'system',
+            'CS-01' => 'employee', 'CS-02' => 'employee', 'CS-03' => 'employee', 'CS-04' => 'employee', 'CS-05' => 'cross_role', 'CS-06' => 'system',
+            'ADM-01' => 'employee', 'ADM-02' => 'system', 'ADM-03' => 'employee', 'ADM-04' => 'employee', 'ADM-05' => 'system', 'ADM-06' => 'supervisor',
+            'KSR-01' => 'import', 'KSR-02' => 'import', 'KSR-03' => 'import', 'KSR-04' => 'import', 'KSR-05' => 'supervisor', 'KSR-06' => 'system',
+            'GUD-01' => 'system', 'GUD-02' => 'system', 'GUD-03' => 'system', 'GUD-04' => 'system', 'GUD-05' => 'system', 'GUD-06' => 'supervisor', 'GUD-07' => 'system',
+            'SUP-01' => 'system', 'SUP-02' => 'system', 'SUP-03' => 'system', 'SUP-04' => 'system', 'SUP-05' => 'employee', 'SUP-06' => 'supervisor', 'SUP-07' => 'system',
+        ] as $code => $source) {
+            $kpiDefs[$code]?->update(['source_type' => $source]);
+        }
 
         // 6. Build KPI Templates v1 (100% weights)
         $this->seedTemplates($scheme, $kpiDefs, $posTek, $posCs, $posAdm, $posKsr, $posGud, $posSpv);
@@ -160,10 +171,10 @@ class DatabaseSeeder extends Seeder
         );
 
         $tekItems = [
-            ['code' => 'TEK-01', 'weight' => 25.00, 'target' => 80.00, 'unit' => 'unit', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
-            ['code' => 'TEK-02', 'weight' => 25.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'TEK-03', 'weight' => 15.00, 'target' => 3.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 6.00], 'evidence' => false, 'source' => 'system'],
-            ['code' => 'TEK-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'TEK-01', 'weight' => 25.00, 'target' => 80.00, 'unit' => 'unit', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'TEK-02', 'weight' => 25.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'TEK-03', 'weight' => 15.00, 'target' => 3.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 6.00], 'evidence' => false, 'source' => 'cross_role'],
+            ['code' => 'TEK-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
             ['code' => 'TEK-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Diagnosis kerusakan sesuai prosedur standar',
                 'Penggunaan alat servis & ESD protection sesuai SOP',
@@ -189,12 +200,12 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $csItems = [
-            ['code' => 'CS-01', 'weight' => 25.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
-            ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 8.00], 'evidence' => false, 'source' => 'system'],
-            ['code' => 'CS-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
+            ['code' => 'CS-01', 'weight' => 25.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 8.00], 'evidence' => false, 'source' => 'cross_role'],
+            ['code' => 'CS-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
         ];
         $this->attachTemplateItems($verCs, $csItems, $defs);
 
@@ -205,11 +216,11 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $admItems = [
-            ['code' => 'ADM-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'ADM-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
             ['code' => 'ADM-02', 'weight' => 25.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
-            ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
-            ['code' => 'ADM-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
+            ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'ADM-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'ADM-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Kelengkapan pengarsipan invoice & surat jalan',
                 'Kerapian dokumen fisik & digital',
@@ -225,17 +236,17 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $ksrItems = [
-            ['code' => 'KSR-01', 'weight' => 30.00, 'target' => 99.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'KSR-02', 'weight' => 25.00, 'target' => 0.00, 'unit' => 'Rp', 'formula' => 'zero_tolerance', 'target_json' => ['full_score_limit' => 50000.00, 'failure_limit' => 200000.00], 'evidence' => false, 'source' => 'system'],
-            ['code' => 'KSR-03', 'weight' => 20.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'KSR-04', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'KSR-01', 'weight' => 30.00, 'target' => 99.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'import'],
+            ['code' => 'KSR-02', 'weight' => 25.00, 'target' => 0.00, 'unit' => 'Rp', 'formula' => 'zero_tolerance', 'target_json' => ['full_score_limit' => 50000.00, 'failure_limit' => 200000.00], 'evidence' => false, 'source' => 'import'],
+            ['code' => 'KSR-03', 'weight' => 20.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'import'],
+            ['code' => 'KSR-04', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'import'],
             ['code' => 'KSR-05', 'weight' => 10.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Salam, senyum, sapa kepada pelanggan (3S)',
                 'Ketelitian verifikasi uang tunai & QRIS/Debit',
                 'Pemberian struk & ucapan terima kasih',
                 'Kerapian area kasir & mesin EDC',
             ]],
-            ['code' => 'KSR-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
+            ['code' => 'KSR-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
         ];
         $this->attachTemplateItems($verKsr, $ksrItems, $defs);
 
@@ -256,7 +267,7 @@ class DatabaseSeeder extends Seeder
                 'Kebersihan lantai & sirkulasi udara gudang',
                 'Keamanan penyimpanan komponen bernilai tinggi',
             ]],
-            ['code' => 'GUD-07', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
+            ['code' => 'GUD-07', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
         ];
         $this->attachTemplateItems($verGud, $gudItems, $defs);
 
@@ -271,7 +282,7 @@ class DatabaseSeeder extends Seeder
             ['code' => 'SUP-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'SUP-03', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'SUP-04', 'weight' => 10.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'SUP-05', 'weight' => 10.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'SUP-05', 'weight' => 10.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
             ['code' => 'SUP-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
             ['code' => 'SUP-07', 'weight' => 5.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
         ];
@@ -285,9 +296,7 @@ class DatabaseSeeder extends Seeder
             $def = $defs[$itemData['code']] ?? null;
             if (!$def) continue;
 
-            $source = in_array($itemData['source'], ['employee', 'cross_role', 'import'], true)
-                ? 'system'
-                : $itemData['source'];
+            $source = $itemData['source'];
             $sortOrder = $sort++;
             $tplItem = KpiTemplateItem::updateOrCreate(
                 [

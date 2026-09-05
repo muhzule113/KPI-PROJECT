@@ -22,13 +22,16 @@ final class AdminNavigation
         if ($user->employee && !in_array($positionCode, ['POS-OWN', 'POS-EXEC'], true)) {
             $performance[] = ['label' => 'KPI Harian Saya', 'href' => '/app/my-kpi/daily', 'icon' => 'calendar'];
         }
-        if (MenuAccess::can($user, ['owner_manager', 'super_admin'], [])) {
+        if ($user->hasRole('owner_manager') && !$user->hasRole('super_admin')) {
             $performance[] = ['label' => 'Penilaian KPI', 'href' => '/app/employee-kpis', 'icon' => 'kpi'];
             $performance[] = ['label' => 'Penilaian Manager Harian', 'href' => '/app/manager-daily-assessments', 'icon' => 'assessment'];
             $performance[] = ['label' => 'Periode Penilaian', 'href' => '/app/kpi-periods', 'icon' => 'target'];
             $performance[] = ['label' => 'Koreksi KPI', 'href' => '/app/kpi-correction-requests', 'icon' => 'approval'];
+        } elseif ($user->hasRole('super_admin')) {
+            $performance[] = ['label' => 'Monitoring KPI', 'href' => '/app/employee-kpis', 'icon' => 'kpi'];
+            $performance[] = ['label' => 'Periode Penilaian', 'href' => '/app/kpi-periods', 'icon' => 'target'];
         }
-        if (MenuAccess::can($user, ['supervisor', 'super_admin'], [])) {
+        if ($user->hasRole('supervisor') && !$user->hasRole('super_admin')) {
             $performance[] = ['label' => 'Review KPI Tim', 'href' => '/app/supervisor-reviews', 'icon' => 'assessment'];
             $performance[] = ['label' => 'Review KPI Harian', 'href' => '/app/supervisor-daily-assessments', 'icon' => 'calendar'];
         }
@@ -47,6 +50,7 @@ final class AdminNavigation
             $groups[] = [
                 'label' => 'Organisasi',
                 'items' => [
+                    ['label' => 'Pengguna', 'href' => '/app/users', 'icon' => 'users'],
                     ['label' => 'Karyawan', 'href' => '/app/employees', 'icon' => 'users'],
                     ['label' => 'Jabatan', 'href' => '/app/positions', 'icon' => 'briefcase'],
                     ['label' => 'Cabang Toko', 'href' => '/app/branches', 'icon' => 'store'],

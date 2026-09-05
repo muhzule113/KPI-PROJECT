@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/operational/tickets/{id}/assign', [ServiceTicketApiController::class, 'assignTechnician']);
         Route::post('/operational/tickets/{id}/update-progress', [ServiceTicketApiController::class, 'updateProgress']);
         Route::post('/operational/tickets/{id}/complete', [ServiceTicketApiController::class, 'complete']);
+        Route::post('/operational/tickets/{id}/warranty-return', [ServiceTicketApiController::class, 'createWarrantyReturn']);
         Route::post('/operational/tickets/{id}/feedback', [ServiceTicketApiController::class, 'pickupAndFeedback']);
         Route::get('/operational/spareparts', [ServiceTicketApiController::class, 'spareparts']);
         Route::get('/operational/sparepart-requests', [ServiceTicketApiController::class, 'sparepartRequests']);
@@ -52,16 +53,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/my-kpi/items/{id}', [MyKpiController::class, 'getItem']);
         Route::get('/my-kpi/history', [MyKpiController::class, 'history']);
 
-        // Legacy write endpoints hanya tersedia untuk actor review/approval.
-        Route::middleware('role.require:supervisor|owner_manager|super_admin')->group(function () {
-            Route::post('/my-kpi/daily', [DailyAssessmentController::class, 'saveEmployeeDay']);
-            Route::post('/my-kpi/items/{id}/draft', [MyKpiController::class, 'saveDraft']);
-            Route::post('/my-kpi/items/{id}/evidence', [MyKpiController::class, 'uploadEvidence']);
-            Route::post('/my-kpi/submit', [MyKpiController::class, 'submit']);
-        });
+        // Input KPI milik sendiri tetap tersedia bagi employee, supervisor,
+        // dan role operasional lain yang memiliki snapshot KPI sendiri.
+        Route::post('/my-kpi/daily', [DailyAssessmentController::class, 'saveEmployeeDay']);
+        Route::post('/my-kpi/items/{id}/draft', [MyKpiController::class, 'saveDraft']);
+        Route::post('/my-kpi/items/{id}/evidence', [MyKpiController::class, 'uploadEvidence']);
+        Route::post('/my-kpi/submit', [MyKpiController::class, 'submit']);
 
-        // Supervisor: Review Queue (hanya supervisor & super_admin)
-        Route::middleware('role.require:supervisor|super_admin')->group(function () {
+        // Supervisor: Review Queue (hanya Supervisor yang ditugaskan)
+        Route::middleware('role.require:supervisor')->group(function () {
             Route::get('/supervisor/daily', [DailyAssessmentController::class, 'supervisorQueue']);
             Route::post('/supervisor/daily/{entryId}/assess', [DailyAssessmentController::class, 'assessSupervisor'])
                 ->whereNumber('entryId');
@@ -73,8 +73,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/supervisor/review/{kpiId}/forward', [SupervisorReviewController::class, 'forward']);
         });
 
-        // Manager / Owner: Approval Queue (hanya owner_manager & super_admin)
-        Route::middleware('role.require:owner_manager|super_admin')->group(function () {
+        // Manager / Owner: Approval Queue (hanya Manager yang ditugaskan)
+        Route::middleware('role.require:owner_manager')->group(function () {
             Route::get('/manager/daily', [DailyAssessmentController::class, 'managerQueue']);
             Route::post('/manager/daily/{entryId}/assess', [DailyAssessmentController::class, 'assessManager'])
                 ->whereNumber('entryId');

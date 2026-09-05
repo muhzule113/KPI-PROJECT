@@ -55,31 +55,31 @@ class ApiRoleAuthorizationTest extends TestCase
         $this->actingAs($manager, 'sanctum')->getJson("/api/v1/manager/daily?date={$date}")->assertOk();
     }
 
-    public function test_employee_can_read_kpi_but_cannot_write_any_kpi_endpoint(): void
+    public function test_employee_can_read_and_write_own_daily_kpi(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $kpi = EmployeeKpi::where('employee_id', $employee->employee->id)
             ->whereHas('period', fn ($query) => $query->where('status', 'OPEN'))
             ->firstOrFail();
-        $item = $kpi->items()->firstOrFail();
+        $period = $kpi->period;
+        $period->update(['submission_deadline' => now()->addDay()]);
+        $item = $kpi->items()
+            ->where('source_type_snapshot', 'employee')
+            ->firstOrFail();
+        $date = $period->start_date->toDateString();
 
         $this->actingAs($employee, 'sanctum')
             ->getJson("/api/v1/my-kpi/items/{$item->id}")
             ->assertOk();
         $this->actingAs($employee, 'sanctum')
-            ->postJson("/api/v1/my-kpi/items/{$item->id}/draft", [
-                'actual_decimal' => 100,
-                'row_version' => $item->row_version,
+            ->postJson('/api/v1/my-kpi/daily', [
+                'date' => $date,
+                'items' => [[
+                    'item_id' => $item->id,
+                    'actual_decimal' => 100,
+                ]],
+                'submit' => false,
             ])
-            ->assertForbidden();
-        $this->actingAs($employee, 'sanctum')
-            ->postJson("/api/v1/my-kpi/items/{$item->id}/evidence")
-            ->assertForbidden();
-        $this->actingAs($employee, 'sanctum')
-            ->postJson('/api/v1/my-kpi/submit')
-            ->assertForbidden();
-        $this->actingAs($employee, 'sanctum')
-            ->postJson('/api/v1/my-kpi/daily', ['date' => now()->toDateString()])
-            ->assertForbidden();
+            ->assertOk();
     }
 }

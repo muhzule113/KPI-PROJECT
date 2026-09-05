@@ -20,13 +20,17 @@ class ZeroToleranceCalculator implements CalculatorInterface
         $targetData = $item->target_json_snapshot ?? [];
         $formulaParams = $item->formula_params_snapshot ?? [];
 
-        $fullScoreLimit = isset($targetData['full_score_limit'])
+        $fullScoreLimit = array_key_exists('full_score_limit', $targetData)
             ? (float) $targetData['full_score_limit']
-            : (isset($formulaParams['full_score_limit']) ? (float) $formulaParams['full_score_limit'] : 50000.0);
+            : (array_key_exists('full_score_limit', $formulaParams) ? (float) $formulaParams['full_score_limit'] : null);
 
-        $failureLimit = isset($targetData['failure_limit'])
+        $failureLimit = array_key_exists('failure_limit', $targetData)
             ? (float) $targetData['failure_limit']
-            : (isset($formulaParams['failure_limit']) ? (float) $formulaParams['failure_limit'] : 200000.0);
+            : (array_key_exists('failure_limit', $formulaParams) ? (float) $formulaParams['failure_limit'] : null);
+
+        if ($fullScoreLimit === null || $failureLimit === null) {
+            return CalculationResult::unscorable('Parameter full score limit dan failure limit wajib dikonfigurasi');
+        }
 
         if ($failureLimit <= $fullScoreLimit) {
             return CalculationResult::unscorable('Failure limit harus lebih besar dari full score limit');

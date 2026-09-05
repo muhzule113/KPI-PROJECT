@@ -5,6 +5,8 @@ namespace App\Modules\Assessment;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
+use App\Models\EmployeeKpiItem;
+use App\Models\KpiDailyEntry;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
 use App\Support\KpiWorkflow;
@@ -13,8 +15,9 @@ use App\Support\KpiWorkflow;
  * Subsistem Absensi → KPI Kehadiran & Disiplin.
  * Feed: ADM-05, KSR-06, GUD-07, CS-06 Pelayan (dan SUP-03 via agregasi).
  *
- * Rate = (hari hadir / hari kerja Senin–Jumat dalam periode) × 100.
- * Status hadir: present, late, permission, sick_leave. Absent = tidak hadir.
+ * Rate = hari hadir / hari kerja yang wajib dinilai × 100.
+ * Hari kerja = Senin–Jumat. Hadir/Terlambat menjadi pembilang; Izin/Sakit
+ * dikeluarkan dari pembagi; Alpha dan hari tanpa catatan tetap menjadi 0.
  */
 class AttendanceKpiSyncService
 {
@@ -53,6 +56,7 @@ class AttendanceKpiSyncService
                 $item->status = 'draft';
                 $item->save();
                 $this->calculationEngine->calculateItem($item);
+                $this->syncDailyEntries($item, $emp, $period);
                 $updatedItems++;
             }
             $kpi->calculateProgress();
@@ -70,7 +74,7 @@ class AttendanceKpiSyncService
     public function calculateAttendanceRate(Employee $emp, KpiPeriod $period): ?float
     {
         $start = $period->start_date->copy();
-        $end = $period->end_date->copy();
+        $end = $period->end_date->copy()->min(now()->startOfDay());
 
         if ($start->gt($end)) return null;
 
@@ -83,12 +87,112 @@ class AttendanceKpiSyncService
 
         if ($workingDays === 0) return null;
 
-        $attendedDays = Attendance::where('employee_id', $emp->id)
+        $statusesByDate = Attendance::where('employee_id', $emp->id)
             ->whereBetween('attendance_date', [$start->toDateString(), $end->toDateString()])
-            ->whereIn('status', Attendance::ATTENDED_STATUSES)
-            ->distinct('attendance_date')
-            ->count('attendance_date');
+            ->get(['attendance_date', 'status'])
+            ->keyBy(fn (Attendance $attendance): string => $attendance->attendance_date->toDateString());
 
-        return round(($attendedDays / $workingDays) * 100, 2);
+        $eligibleDays = 0;
+        $attendedDays = 0;
+        $date = $start->copy();
+        while ($date->lte($end)) {
+            if ($date->isWeekend()) {
+                $date->addDay();
+                continue;
+            }
+
+            $status = $statusesByDate->get($date->toDateString())?->status;
+            if (!in_array($status, Attendance::EXCUSED_STATUSES, true)) {
+                $eligibleDays++;
+                if (in_array($status, Attendance::WORKED_STATUSES, true)) {
+                    $attendedDays++;
+                }
+            }
+            $date->addDay();
+        }
+
+        if ($eligibleDays === 0) return null;
+
+        return round(($attendedDays / $eligibleDays) * 100, 2);
+    }
+
+    private function syncDailyEntries(EmployeeKpiItem $item, Employee $emp, KpiPeriod $period): void
+    {
+        $start = $period->start_date->copy();
+        $end = $period->end_date->copy()->min(now()->startOfDay());
+        if ($start->gt($end)) {
+            return;
+        }
+
+        $statuses = Attendance::where('employee_id', $emp->id)
+            ->whereBetween('attendance_date', [$start->toDateString(), $end->toDateString()])
+            ->get(['attendance_date', 'status'])
+            ->keyBy(fn (Attendance $attendance): string => $attendance->attendance_date->toDateString());
+
+        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            $status = $statuses->get($date->toDateString())?->status;
+            $entry = KpiDailyEntry::where('employee_kpi_item_id', $item->id)
+                ->whereDate('entry_date', $date->toDateString())
+                ->first();
+
+            if ($date->isWeekend() || in_array($status, Attendance::EXCUSED_STATUSES, true)) {
+                if ($entry && ($entry->system_actual_decimal !== null
+                    || $entry->employee_actual_decimal !== null
+                    || $entry->employee_actual_json !== null
+                    || $entry->entry_status !== 'draft'
+                    || $entry->supervisor_status !== 'pending'
+                    || $entry->manager_status !== 'pending')) {
+                    $entry->system_actual_decimal = null;
+                    $entry->system_actual_json = [
+                        'attendance_status' => $status ?? Attendance::STATUS_ABSENT,
+                        'excluded_from_ratio' => true,
+                    ];
+                    $entry->employee_actual_decimal = null;
+                    $entry->employee_actual_json = null;
+                    $entry->employee_note = null;
+                    $entry->employee_entered_by = null;
+                    $entry->employee_submitted_at = null;
+                    $entry->entry_status = 'draft';
+                    $entry->supervisor_actual_decimal = null;
+                    $entry->supervisor_actual_json = null;
+                    $entry->supervisor_answers_json = null;
+                    $entry->supervisor_score_percentage = null;
+                    $entry->supervisor_note = null;
+                    $entry->supervisor_assessed_by = null;
+                    $entry->supervisor_status = 'pending';
+                    $entry->supervisor_assessed_at = null;
+                    $entry->manager_actual_decimal = null;
+                    $entry->manager_actual_json = null;
+                    $entry->manager_answers_json = null;
+                    $entry->manager_score_percentage = null;
+                    $entry->manager_note = null;
+                    $entry->manager_assessed_by = null;
+                    $entry->manager_status = 'pending';
+                    $entry->manager_assessed_at = null;
+                    $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
+                    $entry->save();
+                }
+                continue;
+            }
+
+            $value = in_array($status, Attendance::WORKED_STATUSES, true) ? 100.0 : 0.0;
+            $entry ??= KpiDailyEntry::firstOrNew([
+                'employee_kpi_item_id' => $item->id,
+                'entry_date' => $date->toDateString(),
+            ]);
+            $changed = $entry->system_actual_decimal === null
+                || abs((float) $entry->system_actual_decimal - $value) > 0.000001;
+            $entry->system_actual_decimal = $value;
+            $entry->system_actual_json = ['attendance_status' => $status ?? Attendance::STATUS_ABSENT];
+            $entry->entry_status = 'submitted';
+            if ($changed) {
+                $entry->supervisor_status = 'pending';
+                $entry->manager_status = 'pending';
+                $entry->supervisor_actual_decimal = null;
+                $entry->manager_actual_decimal = null;
+            }
+            $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
+            $entry->save();
+        }
     }
 }

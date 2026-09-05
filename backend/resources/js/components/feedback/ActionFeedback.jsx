@@ -183,13 +183,13 @@ export function FeedbackProvider({ children }) {
     };
 
     useEffect(() => {
-        const removeFinishListener = router.on('finish', (event) => {
+        const removeSuccessListener = router.on('success', (event) => {
             const flash = event.detail.page?.props?.flash ?? {};
             const message = flash.error ?? flash.success;
             if (message) showToast(message, flash.error ? 'error' : 'success');
         });
 
-        return () => removeFinishListener();
+        return () => removeSuccessListener();
     }, []);
 
     useEffect(() => () => window.clearTimeout(toastTimer.current), []);

@@ -41,6 +41,7 @@ class CoachingKpiSyncService
             if ($teamSize === 0) continue;
 
             $coachedCount = CoachingLog::where('supervisor_id', $spv->id)
+                ->where(fn ($query) => $query->where('period_id', $period->id)->orWhereNull('period_id'))
                 ->whereBetween('coaching_date', [$period->start_date->toDateString(), $period->end_date->toDateString()])
                 ->distinct('employee_id')
                 ->count('employee_id');
@@ -48,9 +49,10 @@ class CoachingKpiSyncService
             $coverage = round(($coachedCount / $teamSize) * 100, 2);
 
             $item = $kpi->items->firstWhere('definition_code_snapshot', 'SUP-05');
-            if (!$item) continue;
+            if (!$item || !$item->acceptsSystemCalculatedValue()) continue;
 
             $item->actual_decimal = $coverage;
+            $item->actual_json = ['_system_calculated' => true, 'source' => 'coaching_log', 'coached_count' => $coachedCount, 'team_size' => $teamSize];
             $item->status = 'draft';
             $item->save();
             $this->calculationEngine->calculateItem($item);

@@ -17,11 +17,10 @@ final class ImportController extends Controller
     {
         $this->authorize($request);
 
+        $activePeriod = KpiPeriod::active();
+
         return Inertia::render('Admin/ImportUpload', [
-            'periods' => KpiPeriod::query()
-                ->orderByDesc('year')
-                ->orderByDesc('month')
-                ->get(['id', 'name', 'status'])
+            'periods' => ($activePeriod ? collect([$activePeriod]) : collect())
                 ->map(fn (KpiPeriod $period): array => [
                     'value' => (string) $period->getKey(),
                     'label' => "{$period->name} ({$period->status})",
@@ -37,6 +36,8 @@ final class ImportController extends Controller
             'period_id' => ['required', 'integer', 'exists:kpi_periods,id'],
             'report_file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
         ]);
+        $activePeriod = KpiPeriod::active();
+        abort_unless($activePeriod && (int) $data['period_id'] === (int) $activePeriod->getKey(), 422, 'Import hanya dapat dilakukan pada periode KPI yang sedang OPEN.');
 
         try {
             $batch = app(CashierImportService::class)->uploadAndStage(

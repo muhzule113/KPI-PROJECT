@@ -32,6 +32,9 @@ Route::post('/customer-feedback/{ticket}', [CustomerFeedbackController::class, '
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
+      Route::get('/csrf-token', function (Illuminate\Http\Request $request) {
+          return response()->json(['token' => $request->session()->token()]);
+      })->name('csrf-token');
       Route::get('/app', [DashboardController::class, 'index'])->name('app.dashboard');
       Route::get('/app/reports/kpi.csv', [KpiReportController::class, 'export'])->name('app.reports.kpi.export');
       Route::get('/app/reports/kpi.xlsx', [KpiReportController::class, 'exportXlsx'])->name('app.reports.kpi.xlsx');

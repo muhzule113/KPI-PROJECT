@@ -4,7 +4,6 @@ import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout';
 
 export default function KpiCorrectionForm({ kpi }) {
     const form = useForm({ reason: '', items: kpi.items.map((item) => ({ id: item.id, actual: item.actual ?? '' })) });
@@ -15,7 +14,7 @@ export default function KpiCorrectionForm({ kpi }) {
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title="Ajukan Koreksi KPI" />
             <div className="min-h-[calc(100dvh-76px)] bg-muted/15 px-4 py-6 sm:px-6 lg:px-8"><div className="mx-auto max-w-3xl space-y-6">
                 <div><Link href="/app/employee-kpis" className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" />Kembali ke penilaian KPI</Link><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ajukan koreksi KPI</h1><p className="mt-1.5 text-sm text-muted-foreground">{kpi.employee} · {kpi.period}</p></div>
@@ -25,6 +24,6 @@ export default function KpiCorrectionForm({ kpi }) {
                     <div className="flex justify-end gap-2 border-t border-border/70 pt-5"><Button asChild type="button" variant="outline"><Link href="/app/employee-kpis">Batal</Link></Button><Button type="submit" disabled={form.processing}>{form.processing ? <Loader2 className="animate-spin" /> : <Check />}Ajukan koreksi</Button></div>
                 </form></CardContent></Card>
             </div></div>
-        </AppLayout>
+        </>
     );
 }

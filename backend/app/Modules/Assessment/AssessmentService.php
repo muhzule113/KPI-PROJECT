@@ -34,7 +34,13 @@ class AssessmentService
         $actor = $userId !== null
             ? User::with('employee')->find($userId)
             : auth()->user();
-        KpiWorkflow::assertCanWriteKpi($actor, $kpi);
+        if (!$actor || !KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('Hanya pemilik KPI yang dapat mengisi nilai aktual.');
+        }
+        if (strtolower((string) $item->source_type_snapshot) !== 'employee'
+            || $item->formula_key_snapshot === 'rubric') {
+            throw new Exception('Indikator ini diisi oleh sumber resmi lain atau melalui rubrik Supervisor.');
+        }
         KpiWorkflow::assertMutableKpi($kpi);
         KpiWorkflow::assertExpectedVersion($item, $expectedVersion);
 
@@ -48,6 +54,10 @@ class AssessmentService
 
         if ($kpi->status === 'revision_required' && $item->status !== 'revision_required') {
             throw new Exception("Hanya item yang diminta revisi yang dapat diedit kembali.");
+        }
+
+        if (is_array($actualJson)) {
+            unset($actualJson['_system_calculated']);
         }
 
         DB::transaction(function () use ($item, $kpi, $actualDecimal, $actualJson, $notes, $userId) {
@@ -84,7 +94,12 @@ class AssessmentService
         $actor = $userId !== null
             ? User::with('employee')->find($userId)
             : auth()->user();
-        KpiWorkflow::assertCanWriteKpi($actor, $kpi);
+        if (!$actor || !KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('Hanya pemilik KPI yang dapat mengunggah evidence.');
+        }
+        if (strtolower((string) $item->source_type_snapshot) !== 'employee') {
+            throw new Exception('Evidence hanya dapat ditambahkan pada indikator input karyawan.');
+        }
         if (!in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("Tidak dapat mengunggah bukti pada status '{$kpi->status}'.");
         }
@@ -128,7 +143,9 @@ class AssessmentService
         $actor = $userId !== null
             ? User::with('employee')->find($userId)
             : auth()->user();
-        KpiWorkflow::assertCanWriteKpi($actor, $kpi);
+        if (!$actor || !KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('Hanya pemilik KPI yang dapat melakukan submit.');
+        }
         if (!in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("KPI berstatus '{$kpi->status}' dan tidak dapat disubmit.");
         }
@@ -143,12 +160,18 @@ class AssessmentService
         $missingItems = [];
 
         foreach ($kpi->items as $item) {
+            $systemPreview = is_array($item->actual_json)
+                && ($item->actual_json['_system_calculated'] ?? false) === true;
             // Rubrik diisi saat review; indikator numerik wajib sudah memiliki
             // nilai dari sistem atau reviewer sebelum KPI dikirim.
             if ($item->actual_decimal === null
                 && $item->actual_json === null
                 && $item->formula_key_snapshot !== 'rubric') {
                 $missingItems[] = "Item '{$item->name_snapshot}' belum memiliki nilai aktual.";
+            }
+            if (strtolower((string) $item->source_type_snapshot) === 'employee'
+                && $systemPreview) {
+                $missingItems[] = "Item '{$item->name_snapshot}' masih berupa rekap sistem; nilai aktual karyawan wajib diisi.";
             }
 
             // Evidence must exist and complete local security validation.

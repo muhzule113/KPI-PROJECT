@@ -3,7 +3,6 @@ import { ArrowLeft, FileUp, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import AppLayout from '@/layouts/AppLayout';
 
 export default function ImportUpload({ periods }) {
     const form = useForm({ period_id: periods.find((period) => period.status === 'OPEN')?.value ?? periods[0]?.value ?? '', report_file: null });
@@ -14,7 +13,7 @@ export default function ImportUpload({ periods }) {
     };
 
     return (
-        <AppLayout>
+        <>
             <Head title="Upload Laporan Kasir" />
             <div className="min-h-[calc(100dvh-76px)] bg-muted/15 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-2xl space-y-6">
@@ -51,6 +50,6 @@ export default function ImportUpload({ periods }) {
                     </Card>
                 </div>
             </div>
-        </AppLayout>
+        </>
     );
 }

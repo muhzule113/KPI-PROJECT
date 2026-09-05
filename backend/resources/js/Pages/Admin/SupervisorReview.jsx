@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFeedback } from '@/components/feedback/ActionFeedback';
-import AppLayout from '@/layouts/AppLayout';
 
 const itemStatus = {
     verified: 'Terverifikasi',
@@ -18,9 +17,9 @@ const itemStatus = {
 
 export default function SupervisorReview(props) {
     return (
-        <AppLayout>
+        <>
             <SupervisorReviewContent {...props} />
-        </AppLayout>
+        </>
     );
 }
 

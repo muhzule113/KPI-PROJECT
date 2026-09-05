@@ -13,6 +13,13 @@ class KpiDailyEntry extends Model
         'employee_kpi_item_id',
         'entry_date',
         'entry_status',
+        'employee_actual_decimal',
+        'employee_actual_json',
+        'employee_note',
+        'employee_entered_by',
+        'employee_submitted_at',
+        'system_actual_decimal',
+        'system_actual_json',
         'supervisor_actual_decimal',
         'supervisor_actual_json',
         'supervisor_answers_json',
@@ -37,6 +44,8 @@ class KpiDailyEntry extends Model
         'employee_actual_decimal' => 'decimal:2',
         'employee_actual_json' => 'array',
         'employee_submitted_at' => 'datetime',
+        'system_actual_decimal' => 'decimal:6',
+        'system_actual_json' => 'array',
         'supervisor_actual_decimal' => 'decimal:2',
         'supervisor_actual_json' => 'array',
         'supervisor_answers_json' => 'array',
@@ -72,7 +81,7 @@ class KpiDailyEntry extends Model
 
     public function effectiveActualDecimal(): ?float
     {
-        foreach ([$this->manager_actual_decimal, $this->supervisor_actual_decimal] as $value) {
+        foreach ([$this->manager_actual_decimal, $this->supervisor_actual_decimal, $this->employee_actual_decimal, $this->system_actual_decimal] as $value) {
             if ($value !== null) {
                 return (float) $value;
             }
