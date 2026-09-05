@@ -1,0 +1,116 @@
+# ============================================================
+# KPI-PROJECT — Docker Compose (backend)
+# Services: app (nginx+php-fpm) | queue | reverb | db (mysql)
+# Secrets via .env (gitignored) — see .env.example
+# ============================================================
+
+x-app-env: &app-env
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_URL: ${APP_URL:-https://kpi.muhzule.com}
+  APP_KEY: ${APP_KEY:?set APP_KEY in .env}
+  APP_TIMEZONE: Asia/Makassar
+  APP_LOCALE: id
+  DB_CONNECTION: mysql
+  DB_HOST: db
+  DB_PORT: "3306"
+  DB_DATABASE: kpi_management_db
+  DB_USERNAME: kpi_app
+  DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  SESSION_DRIVER: database
+  SESSION_ENCRYPT: "true"
+  SESSION_SECURE_COOKIE: "true"
+  SESSION_SAME_SITE: lax
+  QUEUE_CONNECTION: database
+  CACHE_STORE: database
+  BROADCAST_CONNECTION: reverb
+  FILESYSTEM_DISK: local
+  LOG_CHANNEL: stack
+  LOG_LEVEL: warning
+  MAIL_MAILER: ${MAIL_MAILER:-log}
+  REVERB_APP_ID: ${REVERB_APP_ID:-kpi-app}
+  REVERB_APP_KEY: ${REVERB_APP_KEY:-}
+  REVERB_APP_SECRET: ${REVERB_APP_SECRET:-}
+  REVERB_SERVER_HOST: 0.0.0.0
+  REVERB_SERVER_PORT: "8080"
+  REVERB_HOST: ${REVERB_HOST:-ws.kpi.muhzule.com}
+  REVERB_PORT: "443"
+  REVERB_SCHEME: https
+  REVERB_ALLOWED_ORIGINS: ${APP_URL:-https://kpi.muhzule.com}
+  VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-}
+  VITE_REVERB_HOST: ${REVERB_HOST:-ws.kpi.muhzule.com}
+  VITE_REVERB_PORT: "443"
+  VITE_REVERB_SCHEME: https
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: kpi-backend:latest
+    container_name: kpi-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8085}:80"
+    environment:
+      <<: *app-env
+      CONTAINER_ROLE: app
+    volumes:
+      - kpi-storage:/var/www/html/storage/app/public
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/login || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  queue:
+    image: kpi-backend:latest
+    container_name: kpi-queue
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      CONTAINER_ROLE: queue
+    volumes:
+      - kpi-storage:/var/www/html/storage/app/public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  reverb:
+    image: kpi-backend:latest
+    container_name: kpi-reverb
+    restart: on-failure
+    ports:
+      - "127.0.0.1:${REVERB_BIND_PORT:-8080}:8080"
+    environment:
+      <<: *app-env
+      CONTAINER_ROLE: reverb
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    container_name: kpi-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: kpi_management_db
+      MYSQL_USER: kpi_app
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - kpi-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  kpi-db-data:
+  kpi-storage:

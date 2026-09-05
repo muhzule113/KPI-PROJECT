@@ -2,6 +2,89 @@
 
 Runbook ini menargetkan Ubuntu/Debian dengan Nginx, PHP-FPM, MySQL, dan Supervisor. Tidak ada secret yang disimpan di repository.
 
+> **Alternatif Docker (disarankan untuk VPS dengan Caddy)** — lihat [Docker Deploy](#docker-deploy-rekomendasi).
+
+---
+
+## Docker Deploy (Rekomendasi)
+
+Backend sudah disiapkan untuk jalan sebagai container (nginx + PHP-FPM dalam satu image, multi-stage build). Cocok untuk VPS yang memakai Caddy sebagai reverse proxy (pola yang sama dengan project lain).
+
+Struktur file:
+
+```
+backend/Dockerfile               # multi-stage: composer + vite build -> runtime
+docker-compose.yml               # app + queue + reverb + mysql (di root repo)
+backend/docker/nginx/default.conf
+backend/docker/supervisor/supervisord.conf
+backend/docker/entrypoint.sh     # role-aware: app (migrate+cache) / queue / reverb
+.env.example                     # template env (jangan commit .env)
+backend/.dockerignore            # build context = ./backend
+```
+
+### 1. Persiapkan env
+
+```bash
+cp .env.example .env
+# isi: APP_KEY, DB_PASSWORD, MYSQL_ROOT_PASSWORD, REVERB_APP_KEY/SECRET
+```
+
+Generate secret:
+
+```bash
+echo "APP_KEY=base64:$(openssl rand -base64 32)"
+echo "DB_PASSWORD=$(openssl rand -base64 24)"
+echo "MYSQL_ROOT_PASSWORD=$(openssl rand -base64 24)"
+echo "REVERB_APP_KEY=$(openssl rand -hex 16)"
+echo "REVERB_APP_SECRET=$(openssl rand -hex 16)"
+```
+
+### 2. Build & jalankan
+
+```bash
+docker compose up -d --build
+```
+
+Entrypoint otomatis (role app): tunggu DB → `migrate --force` → `storage:link` → cache config/view → start nginx+php-fpm.
+
+### 3. Caddy
+
+```caddyfile
+kpi.muhzule.com {
+    reverse_proxy 127.0.0.1:8085
+}
+ws.kpi.muhzule.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+### 4. Update (user push -> VPS pull)
+
+```bash
+git pull
+docker compose up -d --build app
+# migrate kalau ada migration baru
+docker compose exec app php artisan migrate --force
+```
+
+### 5. Demo users (hasil db:seed)
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@kpi.com` | `password` |
+| Manager | `manager@toko.com` | `password` |
+| Supervisor | `supervisor@toko.com` | `password` |
+| Teknisi | `teknisi@toko.com` | `password` |
+| Pelayan | `cs@toko.com` | `password` |
+
+> Ganti password demo sebelum dipakai production.
+
+---
+
+## Deploy Native (Nginx + PHP-FPM + Supervisor)
+
+Alternatif tanpa Docker — runbook lengkap di bawah ini.
+
 ## 1. DNS dan paket server
 
 Buat dua record DNS ke IP VPS:
