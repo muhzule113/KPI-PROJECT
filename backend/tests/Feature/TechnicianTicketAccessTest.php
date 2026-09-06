@@ -24,7 +24,7 @@ class TechnicianTicketAccessTest extends TestCase
         }
 
         return ServiceTicket::create([
-            'ticket_number' => 'SRV-TEST-' . random_int(1000, 9999),
+            'ticket_number' => 'SRV-TEST-'.random_int(1000, 9999),
             'customer_name' => 'Test Customer',
             'customer_phone' => '08123456789',
             'device_brand' => 'Apple',
@@ -47,6 +47,36 @@ class TechnicianTicketAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_technician_can_list_unassigned_ticket_to_claim(): void
+    {
+        $userTek = User::where('email', 'teknisi@toko.com')->first();
+        $ticket = $this->makeTicket();
+
+        $response = $this->actingAs($userTek, 'sanctum')
+            ->getJson('/api/v1/operational/tickets')
+            ->assertOk();
+
+        $this->assertTrue(collect($response->json('data'))->contains(
+            fn (array $row): bool => (string) ($row['id'] ?? '') === (string) $ticket->id
+                && in_array('assign', $row['available_actions'] ?? [], true),
+        ));
+    }
+
+    public function test_supervisor_can_list_unassigned_branch_ticket_to_assign(): void
+    {
+        $supervisor = User::where('email', 'supervisor@toko.com')->first();
+        $ticket = $this->makeTicket();
+
+        $response = $this->actingAs($supervisor, 'sanctum')
+            ->getJson('/api/v1/operational/tickets')
+            ->assertOk();
+
+        $this->assertTrue(collect($response->json('data'))->contains(
+            fn (array $row): bool => (string) ($row['id'] ?? '') === (string) $ticket->id
+                && in_array('assign', $row['available_actions'] ?? [], true),
+        ));
+    }
+
     public function test_technician_cannot_access_other_technician_ticket(): void
     {
         $userTek = User::where('email', 'teknisi@toko.com')->first();
@@ -60,7 +90,7 @@ class TechnicianTicketAccessTest extends TestCase
 
         // Buat tiket dengan teknisi selain userTek (pakai id acak yang bukan miliknya)
         $ticketOther = ServiceTicket::create([
-            'ticket_number' => 'SRV-TEST-OTHER-' . random_int(1000, 9999),
+            'ticket_number' => 'SRV-TEST-OTHER-'.random_int(1000, 9999),
             'customer_name' => 'Customer Lain',
             'customer_phone' => '08987654321',
             'device_brand' => 'Samsung',
@@ -82,7 +112,7 @@ class TechnicianTicketAccessTest extends TestCase
         $otherTekEmp = Employee::where('email', 'cs@toko.com')->first();
 
         $ticketOther = ServiceTicket::create([
-            'ticket_number' => 'SRV-TEST-OTHER-2-' . random_int(1000, 9999),
+            'ticket_number' => 'SRV-TEST-OTHER-2-'.random_int(1000, 9999),
             'customer_name' => 'Customer Lain',
             'customer_phone' => '08987654321',
             'device_brand' => 'Samsung',
@@ -95,6 +125,7 @@ class TechnicianTicketAccessTest extends TestCase
 
         $this->actingAs($userTek, 'sanctum')
             ->postJson("/api/v1/operational/tickets/{$ticketOther->id}/complete", [
+                'row_version' => $ticketOther->row_version,
                 'result_status' => 'success',
                 'diagnosis_notes' => 'test',
                 'action_notes' => 'test',
@@ -111,6 +142,7 @@ class TechnicianTicketAccessTest extends TestCase
 
         $this->actingAs($userTek, 'sanctum')
             ->postJson("/api/v1/operational/tickets/{$ticket->id}/assign", [
+                'row_version' => $ticket->row_version,
                 'technician_employee_id' => $empCs->id,
             ])
             ->assertForbidden();
@@ -122,7 +154,7 @@ class TechnicianTicketAccessTest extends TestCase
         $ticket = $this->makeTicket(); // unassigned
 
         $this->actingAs($userTek, 'sanctum')
-            ->postJson("/api/v1/operational/tickets/{$ticket->id}/assign")
+            ->postJson("/api/v1/operational/tickets/{$ticket->id}/assign", ['row_version' => $ticket->row_version])
             ->assertOk();
 
         $this->assertEquals($userTek->employee->id, $ticket->fresh()->technician_employee_id);
@@ -166,13 +198,12 @@ class TechnicianTicketAccessTest extends TestCase
         ]);
     }
 
-    public function test_kasir_can_create_service_note_for_pelayan(): void
+    public function test_kasir_cannot_create_service_ticket_for_pelayan(): void
     {
         $userKasir = User::where('email', 'kasir@toko.com')->first();
-        $empKasir = Employee::where('email', 'kasir@toko.com')->first();
         $pelayan = Employee::where('email', 'cs@toko.com')->first();
 
-        $response = $this->actingAs($userKasir, 'sanctum')
+        $this->actingAs($userKasir, 'sanctum')
             ->postJson('/api/v1/operational/tickets', [
                 'customer_name' => 'Pelanggan Baru',
                 'customer_phone' => '081298765432',
@@ -182,20 +213,10 @@ class TechnicianTicketAccessTest extends TestCase
                 'customer_needs' => 'Butuh HP selesai sebelum hari Sabtu.',
                 'pelayan_employee_id' => $pelayan->id,
             ])
-            ->assertCreated();
-
-        $ticketId = $response->json('data.id');
-
-        $this->assertDatabaseHas('service_tickets', [
-            'id' => $ticketId,
-            'intake_by_employee_id' => $pelayan->id,
-            'cashier_employee_id' => $empKasir->id,
-            'customer_needs' => 'Butuh HP selesai sebelum hari Sabtu.',
-        ]);
-        $this->assertSame('Siti Rahma', $response->json('data.pelayan_name'));
+            ->assertForbidden();
     }
 
-    public function test_kasir_must_record_pelayan_on_service_note(): void
+    public function test_kasir_cannot_create_service_ticket_without_pelayan(): void
     {
         $userKasir = User::where('email', 'kasir@toko.com')->first();
 
@@ -207,7 +228,6 @@ class TechnicianTicketAccessTest extends TestCase
                 'device_model' => 'Galaxy A54',
                 'initial_complaint' => 'Baterai cepat habis',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['pelayan_employee_id']);
+            ->assertForbidden();
     }
 }

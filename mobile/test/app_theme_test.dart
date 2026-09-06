@@ -24,8 +24,8 @@ void main() {
   test('menyediakan theme terang dan gelap dengan brightness yang benar', () {
     expect(AppTheme.lightTheme.brightness, Brightness.light);
     expect(AppTheme.darkTheme.brightness, Brightness.dark);
-    expect(AppTheme.lightTheme.colorScheme.onSurface, const Color(0xFF10231A));
-    expect(AppTheme.darkTheme.colorScheme.onSurface, const Color(0xFFF1F7F3));
+    expect(AppTheme.lightTheme.colorScheme.onSurface, const Color(0xFF17201B));
+    expect(AppTheme.darkTheme.colorScheme.onSurface, const Color(0xFFF0F4F2));
   });
 
   test('palette legacy mengikuti mode terang dan menjaga kontras teks', () {
@@ -34,10 +34,10 @@ void main() {
       systemBrightness: Brightness.dark,
     );
 
-    expect(AppTheme.background, const Color(0xFFF4F8F5));
+    expect(AppTheme.background, const Color(0xFFF5F6F5));
     expect(AppTheme.surface, Colors.white);
-    expect(AppTheme.textInk, const Color(0xFF10231A));
-    expect(AppTheme.textMuted, const Color(0xFF355247));
+    expect(AppTheme.textInk, const Color(0xFF17201B));
+    expect(AppTheme.textMuted, const Color(0xFF5D6B64));
     expect(
       _contrastRatio(AppTheme.textInk, AppTheme.surface),
       greaterThanOrEqualTo(4.5),
@@ -92,13 +92,13 @@ void main() {
       mode: ThemeMode.system,
       systemBrightness: Brightness.light,
     );
-    expect(AppTheme.textInk, const Color(0xFF10231A));
+    expect(AppTheme.textInk, const Color(0xFF17201B));
 
     AppTheme.configure(
       mode: ThemeMode.system,
       systemBrightness: Brightness.dark,
     );
-    expect(AppTheme.textInk, const Color(0xFFF1F7F3));
+    expect(AppTheme.textInk, const Color(0xFFF0F4F2));
   });
 
   test('dark Ops Noir tetap memakai token gelap', () {
@@ -107,9 +107,9 @@ void main() {
       systemBrightness: Brightness.light,
     );
 
-    expect(AppTheme.background, const Color(0xFF07100E));
-    expect(AppTheme.surface, const Color(0xFF111B18));
-    expect(AppTheme.textInk, const Color(0xFFF1F7F3));
+    expect(AppTheme.background, const Color(0xFF0E1210));
+    expect(AppTheme.surface, const Color(0xFF171B19));
+    expect(AppTheme.textInk, const Color(0xFFF0F4F2));
   });
 
   test('memuat mode mengikuti sistem dari storage', () async {

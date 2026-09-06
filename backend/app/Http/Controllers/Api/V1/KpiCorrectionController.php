@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeKpi;
 use App\Models\KpiCorrectionRequest;
+use App\Models\User;
 use App\Modules\Approval\ApprovalService;
+use App\Support\KpiVisibility;
 use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -27,28 +29,11 @@ class KpiCorrectionController extends Controller
             'approver',
         ])->latest();
 
-        if (!$user->hasRole('super_admin')) {
-            $employee = $user->employee;
-            if (!$employee) {
-                return response()->json(['success' => true, 'data' => []]);
-            }
-
-            $query->where(function ($query) use ($user, $employee) {
-                $query->where('requested_by', $user->id)
-                    ->orWhereHas('employeeKpi', function ($kpiQuery) use ($employee) {
-                        $kpiQuery->where(function ($assignmentQuery) use ($employee) {
-                            $assignmentQuery->where('manager_id_snapshot', $employee->id)
-                                ->orWhere('supervisor_id_snapshot', $employee->id);
-                        })->whereHas('employee', fn ($employeeQuery) =>
-                            $employeeQuery->where('branch_id', $employee->branch_id)
-                        );
-                    });
-            });
-        }
+        $query->whereHas('employeeKpi', fn ($kpis) => KpiVisibility::applyScope($kpis, $user));
 
         return response()->json([
             'success' => true,
-            'data' => $query->limit(100)->get()->map(fn (KpiCorrectionRequest $correction) => $this->format($correction)),
+            'data' => $query->limit(100)->get()->map(fn (KpiCorrectionRequest $correction) => $this->format($correction, $user)),
         ]);
     }
 
@@ -59,14 +44,17 @@ class KpiCorrectionController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['required', 'string'],
             'items.*.actual' => ['required', 'numeric'],
+            'evidence' => ['required', 'array', 'min:1'],
+            'evidence.*.type' => ['required', 'string', 'max:30'],
+            'evidence.*.reference' => ['required', 'string', 'max:500'],
         ]);
 
         $kpi = EmployeeKpi::with('employee')->whereKey($kpiId)->first();
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
 
-        if (!KpiWorkflow::canRequestCorrection($request->user(), $kpi)) {
+        if (! KpiWorkflow::canRequestCorrection($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mengajukan koreksi KPI ini.'], 403);
         }
 
@@ -74,14 +62,17 @@ class KpiCorrectionController extends Controller
             $correction = $this->approvalService->requestCorrection(
                 kpi: $kpi,
                 reason: $request->string('reason')->toString(),
-                afterData: ['items' => $request->input('items')],
+                afterData: [
+                    'items' => $request->input('items'),
+                    'evidence' => $request->input('evidence'),
+                ],
                 requesterId: $request->user()->id,
             );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Permintaan koreksi berhasil diajukan.',
-                'data' => $this->format($correction->load(['employeeKpi.employee.position', 'employeeKpi.period', 'requester'])),
+                'data' => $this->format($correction->load(['employeeKpi.employee.position', 'employeeKpi.period', 'requester']), $request->user()),
             ], 201);
         } catch (Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
@@ -93,7 +84,7 @@ class KpiCorrectionController extends Controller
         $correction = KpiCorrectionRequest::with('employeeKpi.employee')
             ->whereKey($correctionId)
             ->first();
-        if (!$correction) {
+        if (! $correction) {
             return response()->json(['success' => false, 'message' => 'Permintaan koreksi tidak ditemukan.'], 404);
         }
 
@@ -119,7 +110,7 @@ class KpiCorrectionController extends Controller
         $correction = KpiCorrectionRequest::with('employeeKpi.employee')
             ->whereKey($correctionId)
             ->first();
-        if (!$correction) {
+        if (! $correction) {
             return response()->json(['success' => false, 'message' => 'Permintaan koreksi tidak ditemukan.'], 404);
         }
 
@@ -140,7 +131,7 @@ class KpiCorrectionController extends Controller
         }
     }
 
-    private function format(KpiCorrectionRequest $correction): array
+    private function format(KpiCorrectionRequest $correction, User $user): array
     {
         return [
             'id' => $correction->id,
@@ -163,8 +154,8 @@ class KpiCorrectionController extends Controller
                 'status' => $correction->employeeKpi->status,
                 'revision_number' => $correction->employeeKpi->revision_number,
             ] : null,
-            'before' => $correction->before_json,
-            'after' => $correction->after_json,
+            'before' => KpiVisibility::scoreVisible($user, $correction->employeeKpi) ? $correction->before_json : null,
+            'after' => KpiVisibility::scoreVisible($user, $correction->employeeKpi) ? $correction->after_json : null,
         ];
     }
 }

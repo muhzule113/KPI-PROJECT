@@ -13,20 +13,42 @@ class CustomerPickupScreen extends StatefulWidget {
 }
 
 class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
-  int _rating = 5;
-  final _commentsController = TextEditingController();
+  String _recipientType = 'customer';
+  final _recipientNameController = TextEditingController();
+  final _notesController = TextEditingController();
   bool _isSubmitting = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _recipientNameController.text =
+        widget.ticket['customer_name']?.toString() ?? '';
+  }
+
+  @override
+  void dispose() {
+    _recipientNameController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submitPickup() async {
+    if (_recipientNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama penerima wajib diisi.')),
+      );
+      return;
+    }
     setState(() => _isSubmitting = true);
 
     try {
       final res = await ApiService.post(
-        '/operational/tickets/${widget.ticket['id']}/feedback',
+        '/operational/tickets/${widget.ticket['id']}/deliver',
         {
-          'rating': _rating,
-          'comments': _commentsController.text.trim(),
-          'feedback_channel': 'in_store',
+          'row_version': widget.ticket['row_version'],
+          'delivery_notes': _notesController.text.trim(),
+          'recipient_type': _recipientType,
+          'recipient_name': _recipientNameController.text.trim(),
         },
       );
 
@@ -34,7 +56,8 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              res['message'] ?? 'Unit berhasil diserahkan dan CSAT tercatat!',
+              res['message'] ??
+                  'Unit berhasil diserahkan. Kirim QR feedback ke customer.',
             ),
             backgroundColor: AppTheme.primary,
           ),
@@ -60,7 +83,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
     final ticket = widget.ticket;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Serah Terima & CSAT Pelanggan')),
+      appBar: AppBar(title: const Text('Serah Terima Unit')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -99,7 +122,7 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
           const SizedBox(height: 24),
 
           Text(
-            'Tingkat Kepuasan Pelanggan (CSAT)',
+            'Bukti Serah-Terima',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -108,78 +131,58 @@ class _CustomerPickupScreenState extends State<CustomerPickupScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Tanyakan kepuasan pelanggan terhadap hasil servis dan pelayanan CS.',
+            'Catat siapa yang menerima unit. Feedback customer dikirim melalui QR atau link terpisah.',
             style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
           ),
           const SizedBox(height: 16),
 
-          // Rating Stars selector
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                final starValue = index + 1;
-                return IconButton(
-                  iconSize: 40,
-                  tooltip: 'Berikan $starValue bintang',
-                  icon: Icon(
-                    starValue <= _rating
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: AppTheme.statusRevision,
-                  ),
-                  onPressed: () => setState(() => _rating = starValue),
-                );
-              }),
-            ),
-          ),
-          Center(
-            child: Text(
-              _ratingLabel(_rating),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                color: AppTheme.statusRevision,
+          OpsSelectionField<String>(
+            label: 'Jenis penerima',
+            sheetTitle: 'Pilih jenis penerima',
+            value: _recipientType,
+            options: const [
+              OpsSelectionOption(
+                value: 'customer',
+                label: 'Customer',
+                icon: Icons.person_outline_rounded,
               ),
-            ),
+              OpsSelectionOption(
+                value: 'representative',
+                label: 'Wakil customer',
+                icon: Icons.people_outline_rounded,
+              ),
+            ],
+            onChanged: (value) => setState(() => _recipientType = value),
           ),
-          const SizedBox(height: 20),
-
+          const SizedBox(height: 16),
           TextField(
-            controller: _commentsController,
-            maxLines: 3,
+            controller: _recipientNameController,
             decoration: const InputDecoration(
-              labelText: 'Ulasan / Testimoni Pelanggan (Opsional)',
-              hintText:
-                  'e.g. Layanan ramah, HP cepat selesai dan normal kembali...',
+              labelText: 'Nama penerima *',
+              prefixIcon: Icon(Icons.person_outline_rounded),
             ),
           ),
           const SizedBox(height: 28),
+          TextField(
+            controller: _notesController,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Catatan penyerahan',
+              helperText:
+                  'Wajib untuk penyerahan oleh Supervisor atau Manager.',
+            ),
+          ),
+          const SizedBox(height: 20),
 
           ElevatedButton.icon(
             icon: const Icon(Icons.check_circle_rounded),
             label: _isSubmitting
                 ? const CircularProgressIndicator(color: Colors.white)
-                : const Text('Konfirmasi Penyerahan & Catat CSAT'),
+                : const Text('Konfirmasi Penyerahan Unit'),
             onPressed: _isSubmitting ? null : _submitPickup,
           ),
         ],
       ),
     );
-  }
-
-  String _ratingLabel(int r) {
-    switch (r) {
-      case 5:
-        return 'Sangat Puas (5/5)';
-      case 4:
-        return 'Puas (4/5)';
-      case 3:
-        return 'Cukup (3/5)';
-      case 2:
-        return 'Kurang Puas (2/5)';
-      default:
-        return 'Kecewa / Komplain (1/5)';
-    }
   }
 }

@@ -11,6 +11,7 @@ use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 class ManagerApprovalController extends Controller
 {
@@ -25,14 +26,14 @@ class ManagerApprovalController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $queue->map(fn($kpi) => [
+            'data' => $queue->map(fn ($kpi) => [
                 'id' => $kpi->id,
                 'employee' => [
                     'id' => $kpi->employee->id,
                     'name' => $kpi->employee->name,
                     'employee_number' => $kpi->employee->employee_number,
-                    'position' => $kpi->employee->position?->name,
-                    'branch' => $kpi->employee->branch?->name,
+                    'position' => $kpi->positionSnapshot?->name,
+                    'branch' => $kpi->branchSnapshot?->name,
                 ],
                 'period' => $kpi->period->name,
                 'status' => $kpi->status,
@@ -54,16 +55,19 @@ class ManagerApprovalController extends Controller
             'items.reviewItems',
             'items.assessment.answers',
             'reviews.reviewer',
-            'calculationRuns' => fn($q) => $q->latest()->limit(1),
+            'calculationRuns' => fn ($q) => $q->latest()->limit(1),
         ])->where('id', $kpiId)->first();
 
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
 
-        if (!KpiWorkflow::canManageKpi($request->user(), $kpi)) {
+        if (! KpiWorkflow::canApproveKpi($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mengakses KPI ini.'], 403);
         }
+
+        $actions = KpiWorkflow::availableActions($request->user(), $kpi);
+        $canAssess = in_array('decide', $actions, true);
 
         $latestCalc = $kpi->calculationRuns->first();
 
@@ -75,17 +79,21 @@ class ManagerApprovalController extends Controller
                     'id' => $kpi->employee->id,
                     'name' => $kpi->employee->name,
                     'employee_number' => $kpi->employee->employee_number,
-                    'position' => $kpi->employee->position?->name,
-                    'branch' => $kpi->employee->branch?->name,
+                    'position' => $kpi->positionSnapshot?->name,
+                    'branch' => $kpi->branchSnapshot?->name,
                 ],
                 'period' => $kpi->period->name,
                 'status' => $kpi->status,
+                'available_actions' => $actions,
+                'is_supervisor_kpi' => $kpi->isSupervisorKpi(),
+                'can_assess' => $canAssess,
+                'can_approve' => in_array('approve', $actions, true),
                 'final_score' => $kpi->final_score !== null ? (float) $kpi->final_score : null,
                 'rating_code' => $kpi->rating_code,
                 'rating_label' => $kpi->rating_label,
                 'verified_at' => $kpi->verified_at?->toIso8601String(),
                 'calculation_explanation' => $latestCalc ? $latestCalc->output_snapshot : null,
-                'items' => $kpi->items->map(fn($item) => [
+                'items' => $kpi->items->map(fn ($item) => [
                     'id' => $item->id,
                     'code' => $item->definition_code_snapshot,
                     'name' => $item->name_snapshot,
@@ -99,20 +107,22 @@ class ManagerApprovalController extends Controller
                     'achievement_percentage' => $item->achievement_percentage !== null ? (float) $item->achievement_percentage : null,
                     'weighted_score' => $item->weighted_score !== null ? (float) $item->weighted_score : null,
                     'status' => $item->status,
+                    'manager_decision' => $item->manager_decision,
+                    'manager_note' => $item->manager_note,
                     'assessment' => $item->assessment ? [
                         'assessed_by' => $item->assessment->assessed_by,
                         'score_points' => (float) $item->assessment->score_points,
                         'total_points' => (float) $item->assessment->total_points,
                         'calculated_achievement' => (float) $item->assessment->calculated_achievement,
-                        'answers' => $item->assessment->answers->map(fn($answer) => [
+                        'answers' => $item->assessment->answers->map(fn ($answer) => [
                             'criterion_id' => $answer->criterion_id,
                             'is_fulfilled' => (bool) $answer->is_fulfilled,
                         ])->values()->all(),
                     ] : null,
-                    'evidences' => $item->evidences->map(fn($e) => [
+                    'evidences' => $item->evidences->map(fn ($e) => [
                         'id' => $e->id,
                         'file_name' => $e->file_name,
-                        'file_url' => route('api.v1.kpi.evidence.download', ['evidenceId' => $e->id]),
+                        'file_url' => URL::temporarySignedRoute('api.v1.kpi.evidence.download', now()->addMinutes(5), ['evidenceId' => $e->id]),
                     ]),
                 ]),
             ],
@@ -122,26 +132,31 @@ class ManagerApprovalController extends Controller
     public function assessItem(Request $request, string $kpiId, string $itemId): JsonResponse
     {
         $request->validate([
-            'actual_decimal' => 'required|numeric',
+            'decision' => 'required|in:valid,needs_correction,data_exception',
+            'actual_decimal' => 'prohibited',
             'note' => 'nullable|string|max:2000',
+            'evidence' => 'nullable|array',
+            'evidence.*.type' => 'required_with:evidence|string|max:30',
+            'evidence.*.reference' => 'required_with:evidence|string|max:500',
         ]);
 
         $item = EmployeeKpiItem::with('employeeKpi.employee')
             ->where('id', $itemId)
             ->where('employee_kpi_id', $kpiId)
             ->first();
-        if (!$item) {
+        if (! $item) {
             return response()->json(['success' => false, 'message' => 'Item tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canManageKpi($request->user(), $item->employeeKpi)) {
+        if (! KpiWorkflow::canManageKpi($request->user(), $item->employeeKpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang menilai KPI ini.'], 403);
         }
 
         try {
-            $updated = $this->approvalService->assessItem(
+            $updated = $this->approvalService->decideItem(
                 item: $item,
-                actualDecimal: (float) $request->input('actual_decimal'),
+                decision: $request->input('decision'),
                 note: $request->input('note'),
+                evidence: $request->input('evidence', []),
                 assessorId: $request->user()->id
             );
 
@@ -154,6 +169,7 @@ class ManagerApprovalController extends Controller
                     'actual_decimal' => $updated->actual_decimal,
                     'achievement_percentage' => $updated->achievement_percentage,
                     'weighted_score' => $updated->weighted_score,
+                    'manager_decision' => $updated->manager_decision,
                 ],
             ]);
         } catch (Exception $e) {
@@ -168,16 +184,18 @@ class ManagerApprovalController extends Controller
             'answers.*.criterion_id' => 'required|integer',
             'answers.*.is_fulfilled' => 'required|boolean',
             'answers.*.notes' => 'nullable|string',
+            'decision' => 'required|in:valid,needs_correction,data_exception',
+            'note' => 'nullable|string|max:2000',
         ]);
 
         $item = EmployeeKpiItem::with('employeeKpi.employee')
             ->where('id', $itemId)
             ->where('employee_kpi_id', $kpiId)
             ->first();
-        if (!$item) {
+        if (! $item) {
             return response()->json(['success' => false, 'message' => 'Item tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canManageKpi($request->user(), $item->employeeKpi)) {
+        if (! KpiWorkflow::canManageKpi($request->user(), $item->employeeKpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang menilai KPI ini.'], 403);
         }
 
@@ -185,7 +203,9 @@ class ManagerApprovalController extends Controller
             $assessment = $this->reviewService->submitRubricAssessment(
                 item: $item,
                 answers: $request->input('answers'),
-                reviewerId: $request->user()->id
+                reviewerId: $request->user()->id,
+                managerDecision: $request->input('decision'),
+                managerNote: $request->input('note')
             );
 
             return response()->json([
@@ -198,6 +218,7 @@ class ManagerApprovalController extends Controller
                     'total_points' => $assessment->total_points,
                     'calculated_achievement' => $assessment->calculated_achievement,
                     'weighted_score' => $item->fresh()->weighted_score,
+                    'manager_decision' => $item->fresh()->manager_decision,
                 ],
             ]);
         } catch (Exception $e) {
@@ -212,16 +233,17 @@ class ManagerApprovalController extends Controller
         ]);
 
         $kpi = EmployeeKpi::where('id', $kpiId)->first();
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
 
-        if (!KpiWorkflow::canManageKpi($request->user(), $kpi)) {
+        if (! KpiWorkflow::canApproveKpi($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang menyetujui KPI ini.'], 403);
         }
 
         try {
             $result = $this->approvalService->approve($kpi, $request->input('note'), $request->user()->id);
+
             return response()->json([
                 'success' => true,
                 'message' => $result['message'],
@@ -245,16 +267,17 @@ class ManagerApprovalController extends Controller
         ]);
 
         $kpi = EmployeeKpi::where('id', $kpiId)->first();
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
 
-        if (!KpiWorkflow::canManageKpi($request->user(), $kpi)) {
+        if (! KpiWorkflow::canApproveKpi($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mengembalikan KPI ini.'], 403);
         }
 
         try {
             $result = $this->approvalService->return($kpi, $request->input('reason'), $request->user()->id);
+
             return response()->json([
                 'success' => true,
                 'message' => $result['message'],

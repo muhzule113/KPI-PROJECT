@@ -108,8 +108,8 @@ function SupervisorReviewContent({ kpi }) {
                             <p className="mt-1 text-sm text-muted-foreground">{kpi.employee.position} · {kpi.employee.branch} · {kpi.period}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" onClick={sendRevision}><RotateCcw />Minta revisi</Button>
-                            <Button type="button" onClick={forward}><Send />Teruskan ke manager</Button>
+                            {(kpi.available_actions ?? []).includes('review') && <Button type="button" variant="outline" onClick={sendRevision}><RotateCcw />Catat bagian yang perlu koreksi</Button>}
+                            {(kpi.available_actions ?? []).includes('forward') && <Button type="button" onClick={forward}><Send />Kirim rekap ke Manager</Button>}
                         </div>
                     </div>
 
@@ -129,7 +129,7 @@ function SupervisorReviewContent({ kpi }) {
                                         {kpi.items.map((item) => {
                                             const criteria = item.rubric?.criteria ?? [];
                                             const selected = rubricAnswers[item.id] ?? [];
-                                            const locked = ['verified', 'assessed'].includes(item.status);
+                                            const locked = ['verified', 'assessed'].includes(item.status) || !(kpi.available_actions ?? []).includes('review');
 
                                             return (
                                                 <tr key={item.id} className="align-top">

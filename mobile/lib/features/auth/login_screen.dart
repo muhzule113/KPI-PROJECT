@@ -298,12 +298,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             runSpacing: 8,
                             children: [
                               _demoChip(
-                                'Teknisi',
-                                'teknisi@toko.com',
-                                AppTheme.primaryBright,
-                                Icons.build_rounded,
-                              ),
-                              _demoChip(
                                 'Supervisor',
                                 'supervisor@toko.com',
                                 AppTheme.statusUnderReview,

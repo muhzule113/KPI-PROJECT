@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
+use App\Models\EmployeeKpi;
 use App\Models\User;
 use App\Support\AdminResourceRegistry;
+use App\Support\CapabilityMatrix;
+use App\Support\KpiVisibility;
 use App\Support\MenuAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -42,8 +45,14 @@ final class AdminResourceController extends Controller
         if ($search !== '') {
             $query->where(function (Builder $query) use ($config, $search): void {
                 foreach ($config['search'] as $field) {
+                    if ($field === 'rating_label') {
+                        $query->orWhere(fn (Builder $scores) => KpiVisibility::visibleScores($scores, request()->user())->where($field, 'like', "%{$search}%"));
+
+                        continue;
+                    }
                     if (str_contains($field, '.')) {
-                        [$relation, $column] = explode('.', $field, 2);
+                        $separator = strrpos($field, '.');
+                        [$relation, $column] = [substr($field, 0, $separator), substr($field, $separator + 1)];
                         $query->orWhereHas($relation, fn (Builder $relationQuery) => $relationQuery->where($column, 'like', "%{$search}%"));
                     } else {
                         $query->orWhere($field, 'like', "%{$search}%");
@@ -118,7 +127,7 @@ final class AdminResourceController extends Controller
         $this->authorize($request, $config, 'edit', $record);
 
         return Inertia::render('Admin/ResourceForm', [
-            'resource' => $this->clientConfig($resource, $config, $request),
+            'resource' => $this->clientConfig($resource, $config, $request, $record),
             'form' => $this->formPayload($config, $record, $request),
         ]);
     }
@@ -160,7 +169,7 @@ final class AdminResourceController extends Controller
                 $this->runHook($config, 'after_delete', $record, $request);
                 $this->auditResourceChange('deleted', $record, $before, $request);
             });
-        } catch (QueryException | \RuntimeException $exception) {
+        } catch (QueryException|\RuntimeException $exception) {
             return back()->with('error', "{$config['label']} tidak dapat dihapus karena masih digunakan.");
         }
 
@@ -190,10 +199,11 @@ final class AdminResourceController extends Controller
     {
         $config = $this->config($resource);
         $definition = $config['actions'][$action] ?? null;
-        abort_if($definition === null || !isset($definition['handler']), 404);
+        abort_if($definition === null || ! isset($definition['handler']), 404);
 
         $model = $record ? $this->findRecord($config, $record, $request->user()) : null;
         $this->authorize($request, $config, 'view', $model);
+        abort_unless(CapabilityMatrix::canAccessResource($request->user(), $resource, 'action'), 403);
         if (isset($definition['visible'])) {
             abort_unless($definition['visible']($model, $request->user()), 403);
         }
@@ -213,7 +223,7 @@ final class AdminResourceController extends Controller
             return $result;
         }
 
-        if (is_array($result) && !empty($result['error'])) {
+        if (is_array($result) && ! empty($result['error'])) {
             return back()->with('error', $result['error']);
         }
 
@@ -222,8 +232,7 @@ final class AdminResourceController extends Controller
 
     private function authorize(Request $request, array $config, string $ability = 'view', ?Model $record = null): void
     {
-        $permission = $config['permission'];
-        $allowed = MenuAccess::can($request->user(), $permission['roles'], $permission['positions']);
+        $allowed = CapabilityMatrix::canAccessResource($request->user(), $config['key'], $ability);
         $rule = $config["can_{$ability}"] ?? true;
 
         if ($allowed && is_callable($rule)) {
@@ -247,7 +256,7 @@ final class AdminResourceController extends Controller
         return $query->findOrFail($key);
     }
 
-    private function clientConfig(string $key, array $config, Request $request): array
+    private function clientConfig(string $key, array $config, Request $request, ?Model $record = null): array
     {
         return [
             'key' => $key,
@@ -255,16 +264,19 @@ final class AdminResourceController extends Controller
             'plural_label' => $config['plural_label'],
             'description' => $config['description'],
             'columns' => $config['columns'],
-            'fields' => array_map(
-                static fn (array $field): array => Arr::except($field, ['options']),
-                $config['fields'],
-            ),
+            'fields' => array_map(function (array $field) use ($request, $record): array {
+                if (isset($field['readOnly']) && is_callable($field['readOnly'])) {
+                    $field['readOnly'] = (bool) ($field['readOnly'])($record, $request->user());
+                }
+
+                return Arr::except($field, ['options']);
+            }, $config['fields']),
             'can_create' => $this->ability($request, $config, 'create'),
             'can_edit' => $this->ability($request, $config, 'edit'),
             'can_delete' => $this->ability($request, $config, 'delete'),
             'header_actions' => collect($config['actions'] ?? [])
                 ->filter(fn (array $action): bool => ($action['scope'] ?? 'row') === 'header')
-                ->filter(fn (array $action): bool => $this->actionAllowed($request, $action))
+                ->filter(fn (array $action): bool => $this->actionAllowed($request, $action, $config))
                 ->map(fn (array $action, string $name): array => $this->actionPayload($name, $action, $key))
                 ->values()
                 ->all(),
@@ -279,7 +291,7 @@ final class AdminResourceController extends Controller
         foreach ($config['fields'] as $field) {
             $value = $record
                 ? (isset($config['relationships'][$field['name']])
-                    ? $record->{$config['relationships'][$field['name']]}()->pluck($record->{$config['relationships'][$field['name']]}()->getRelated()->getTable() . '.id')->values()->all()
+                    ? $record->{$config['relationships'][$field['name']]}()->pluck($record->{$config['relationships'][$field['name']]}()->getRelated()->getTable().'.id')->values()->all()
                     : data_get($record, $field['name']))
                 : ($field['default'] ?? null);
 
@@ -308,6 +320,10 @@ final class AdminResourceController extends Controller
             $options[$field] = $resolver($record, $request->user());
         }
 
+        if ($record && isset($config['form_values'])) {
+            $values = [...$values, ...$config['form_values']($record)];
+        }
+
         return [
             'mode' => $record ? 'edit' : 'create',
             'record_id' => $record?->getKey(),
@@ -322,6 +338,10 @@ final class AdminResourceController extends Controller
 
         foreach ($config['columns'] as $column) {
             $value = data_get($record, $column['key']);
+            if ($record instanceof EmployeeKpi && in_array($column['key'], ['final_score', 'rating_label'], true)
+                && ! KpiVisibility::scoreVisible($request->user(), $record)) {
+                $value = null;
+            }
             $label = $value;
 
             if ($value === null || $value === '') {
@@ -339,7 +359,7 @@ final class AdminResourceController extends Controller
                     default => str_replace('_', ' ', (string) $value),
                 };
             } elseif (($column['type'] ?? null) === 'money') {
-                $label = 'Rp ' . number_format((float) $value, 0, ',', '.');
+                $label = 'Rp '.number_format((float) $value, 0, ',', '.');
             } elseif (($column['type'] ?? null) === 'decimal') {
                 $label = number_format((float) $value, 2, ',', '.');
             } elseif ($value instanceof \DateTimeInterface) {
@@ -351,7 +371,7 @@ final class AdminResourceController extends Controller
             }
 
             if ($value !== null && $value !== '' && ($column['prefix'] ?? null)) {
-                $label = $column['prefix'] . $label;
+                $label = $column['prefix'].$label;
             }
             if ($value !== null && $value !== '' && ($column['suffix'] ?? null)) {
                 $label .= $column['suffix'];
@@ -370,8 +390,8 @@ final class AdminResourceController extends Controller
             'can_delete' => $this->ability($request, $config, 'delete', $record),
             'actions' => collect($config['actions'] ?? [])
                 ->filter(fn (array $action): bool => ($action['scope'] ?? 'row') === 'row')
-                ->filter(fn (array $action): bool => !isset($action['visible']) || $action['visible']($record, $request->user()))
-                ->filter(fn (array $action): bool => $this->actionAllowed($request, $action))
+                ->filter(fn (array $action): bool => ! isset($action['visible']) || $action['visible']($record, $request->user()))
+                ->filter(fn (array $action): bool => $this->actionAllowed($request, $action, $config))
                 ->map(fn (array $action, string $name): array => $this->actionPayload($name, $action, $resource))
                 ->values()
                 ->all(),
@@ -380,6 +400,9 @@ final class AdminResourceController extends Controller
 
     private function ability(Request $request, array $config, string $ability, ?Model $record = null): bool
     {
+        if (! CapabilityMatrix::canAccessResource($request->user(), $config['key'], $ability)) {
+            return false;
+        }
         $rule = $config["can_{$ability}"] ?? true;
 
         return is_callable($rule)
@@ -387,9 +410,12 @@ final class AdminResourceController extends Controller
             : (bool) $rule;
     }
 
-    private function actionAllowed(Request $request, array $action): bool
+    private function actionAllowed(Request $request, array $action, array $config): bool
     {
-        if (!isset($action['permission'])) {
+        if (! CapabilityMatrix::canAccessResource($request->user(), $config['key'], ($action['type'] ?? null) === 'link' ? 'view' : 'action')) {
+            return false;
+        }
+        if (! isset($action['permission'])) {
             return true;
         }
 
@@ -416,11 +442,18 @@ final class AdminResourceController extends Controller
 
     private function auditSnapshot(Model $record): array
     {
-        return Arr::except($record->getAttributes(), [
+        $snapshot = Arr::except($record->getAttributes(), [
             'password',
             'remember_token',
             'passcode_or_pattern',
         ]);
+
+        if ($record instanceof User) {
+            $snapshot['roles'] = $record->roles()->pluck('name')->all();
+            $snapshot['employee_id'] = $record->employee()->value('id');
+        }
+
+        return $snapshot;
     }
 
     private function prepareData(array $config, array $data, Request $request, ?Model $record): array

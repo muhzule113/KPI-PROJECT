@@ -28,7 +28,7 @@ final class ParseCashierImport implements ShouldQueue
     {
         $batch = ImportBatch::query()->findOrFail($this->batchId);
 
-        if (!in_array($batch->status, ['parsing', 'uploaded', 'scanning'], true)) {
+        if ($batch->scan_status !== 'clean' || ! in_array($batch->status, ['parsing', 'uploaded', 'scanning'], true)) {
             return;
         }
 

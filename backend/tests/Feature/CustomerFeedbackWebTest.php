@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\FeedbackFollowUp;
 use App\Models\KpiPeriod;
 use App\Models\ServiceTicket;
 use App\Models\User;
@@ -15,10 +16,10 @@ class CustomerFeedbackWebTest extends TestCase
 
     protected $seed = true;
 
-    public function test_cs_can_generate_a_signed_feedback_qr_for_a_completed_ticket(): void
+    public function test_manager_can_generate_a_signed_feedback_qr_for_a_delivered_ticket(): void
     {
         $ticket = $this->makeCompletedTicket();
-        $user = User::where('email', 'cs@toko.com')->firstOrFail();
+        $user = User::where('email', 'manager@toko.com')->firstOrFail();
 
         $response = $this->actingAs($user)->get('/app/customer-feedback?ticket='.$ticket->id);
 
@@ -34,13 +35,13 @@ class CustomerFeedbackWebTest extends TestCase
     {
         $user = User::where('email', 'teknisi@toko.com')->firstOrFail();
 
-        $this->actingAs($user)->get('/app/customer-feedback')->assertForbidden();
+        $this->actingAs($user)->get('/app/customer-feedback')->assertRedirect('/login');
     }
 
     public function test_customer_can_submit_feedback_from_the_signed_qr_url(): void
     {
         $ticket = $this->makeCompletedTicket();
-        $admin = User::where('email', 'cs@toko.com')->firstOrFail();
+        $admin = User::where('email', 'manager@toko.com')->firstOrFail();
         $qrUrl = $this->actingAs($admin)
             ->get('/app/customer-feedback?ticket='.$ticket->id)
             ->inertiaProps('feedback_url');
@@ -66,13 +67,33 @@ class CustomerFeedbackWebTest extends TestCase
     {
         $ticket = $this->makeCompletedTicket();
         $otherTicket = $this->makeCompletedTicket();
-        $admin = User::where('email', 'cs@toko.com')->firstOrFail();
+        $admin = User::where('email', 'manager@toko.com')->firstOrFail();
         $qrUrl = $this->actingAs($admin)
             ->get('/app/customer-feedback?ticket='.$ticket->id)
             ->inertiaProps('feedback_url');
         $tamperedUrl = str_replace('/customer-feedback/'.$ticket->id, '/customer-feedback/'.$otherTicket->id, $qrUrl);
 
         $this->get($tamperedUrl)->assertForbidden();
+    }
+
+    public function test_low_feedback_creates_follow_up_without_reopening_ticket(): void
+    {
+        $ticket = $this->makeCompletedTicket();
+        $admin = User::where('email', 'manager@toko.com')->firstOrFail();
+        $qrUrl = $this->actingAs($admin)
+            ->get('/app/customer-feedback?ticket='.$ticket->id)
+            ->inertiaProps('feedback_url');
+
+        $this->post($qrUrl, [
+            'rating' => 2,
+            'comments' => 'Perlu ditindaklanjuti.',
+        ])->assertRedirect();
+
+        $followUp = FeedbackFollowUp::where('service_ticket_id', $ticket->id)->firstOrFail();
+        $this->assertSame(FeedbackFollowUp::STATUS_PENDING, $followUp->status);
+        $this->assertSame($ticket->intake_by_employee_id, $followUp->assigned_employee_id);
+        $this->assertNotNull($followUp->due_at);
+        $this->assertDatabaseHas('service_tickets', ['id' => $ticket->id, 'status' => 'delivered']);
     }
 
     private function makeCompletedTicket(): ServiceTicket
@@ -90,9 +111,12 @@ class CustomerFeedbackWebTest extends TestCase
             'branch_id' => 1,
             'period_id' => $period->id,
             'intake_by_employee_id' => $cs->id,
-            'status' => 'completed',
+            'status' => 'delivered',
             'result_status' => 'success',
             'completed_at' => now(),
+            'delivered_at' => now(),
+            'final_cost' => 0,
+            'payment_status' => 'not_required',
         ]);
     }
 }

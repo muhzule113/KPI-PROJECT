@@ -20,7 +20,7 @@ class CashierApiController extends Controller
     {
         // Tolak role yang tidak berwenang sebelum membaca/validasi payload.
         $user = $request->user()->loadMissing('employee');
-        if (!$this->isCashierAuthorized($user)) {
+        if (! $this->isCashierAuthorized($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya Kasir yang dapat mengunggah laporan kasir.',
@@ -28,17 +28,17 @@ class CashierApiController extends Controller
         }
 
         $request->validate([
-            'file' => 'required|file|max:20480|mimes:xlsx,csv,txt',
+            'file' => 'required|file|max:20480|mimes:xlsx,csv,txt,pdf',
             'period_id' => 'required|integer|exists:kpi_periods,id',
         ]);
 
         $period = KpiPeriod::find($request->integer('period_id'));
 
-        if (!$period) {
+        if (! $period) {
             return response()->json(['success' => false, 'message' => 'Periode KPI tidak ditemukan.'], 404);
         }
 
-        if (!$period->isOpen()) {
+        if (! $period->isOpen()) {
             return response()->json(['success' => false, 'message' => 'Import hanya dapat dilakukan pada periode yang sedang OPEN.'], 422);
         }
 
@@ -60,16 +60,47 @@ class CashierApiController extends Controller
         }
     }
 
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user()->loadMissing('employee');
+        if (! $this->isCashierAuthorized($user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya Kasir atau manajemen yang dapat melihat riwayat import.',
+            ], 403);
+        }
+
+        $period = KpiPeriod::active();
+        $managerial = $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
+        $batches = ImportBatch::query()
+            ->with('period')
+            ->when($period, fn ($query) => $query->where('period_id', $period->getKey()))
+            ->when(! $managerial, fn ($query) => $query->where('uploader_id', $user->getKey()))
+            ->latest()
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $batches->map(fn (ImportBatch $batch): array => [
+                ...$this->formatBatch($batch),
+                'period' => $batch->period?->name,
+                'created_at' => $batch->created_at?->toIso8601String(),
+                'confirmed_at' => $batch->confirmed_at?->toIso8601String(),
+            ])->values(),
+        ]);
+    }
+
     public function status(Request $request, string $batchId): JsonResponse
     {
         $batch = ImportBatch::query()->find($batchId);
 
-        if (!$batch) {
+        if (! $batch) {
             return response()->json(['success' => false, 'message' => 'Batch import tidak ditemukan.'], 404);
         }
 
         $user = $request->user()->loadMissing('employee');
-        if (!$this->isCashierAuthorized($user)) {
+        if (! $this->isCashierAuthorized($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya Kasir atau manajemen yang dapat melihat status import.',
@@ -77,7 +108,7 @@ class CashierApiController extends Controller
         }
 
         $isManagerial = $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
-        if (!$isManagerial && (int) $batch->uploader_id !== (int) $user->id) {
+        if (! $isManagerial && (int) $batch->uploader_id !== (int) $user->id) {
             return response()->json([
                 'success' => false,
                 'message' => 'Batch import ini bukan milik Anda.',
@@ -98,12 +129,12 @@ class CashierApiController extends Controller
 
         $batch = ImportBatch::where('id', $batchId)->first();
 
-        if (!$batch) {
+        if (! $batch) {
             return response()->json(['success' => false, 'message' => 'Batch import tidak ditemukan.'], 404);
         }
 
         $user = $request->user()->loadMissing('employee');
-        if (!$this->isCashierAuthorized($user)) {
+        if (! $this->isCashierAuthorized($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya Kasir yang dapat mengonfirmasi import laporan kasir.',
@@ -113,7 +144,7 @@ class CashierApiController extends Controller
         // Ownership: kasir hanya bisa konfirmasi batch yang dia unggah sendiri.
         // Manager / supervisor boleh konfirmasi batch siapa pun (fallback operasional).
         $isManagerial = $user->hasAnyRole(['owner_manager', 'super_admin', 'supervisor']);
-        if (!$isManagerial && $batch->uploader_id !== $user->id) {
+        if (! $isManagerial && $batch->uploader_id !== $user->id) {
             return response()->json([
                 'success' => false,
                 'message' => 'Batch import ini bukan milik Anda.',
@@ -126,6 +157,7 @@ class CashierApiController extends Controller
                 $request->user()->id,
                 $request->boolean('acknowledge_warnings')
             );
+
             return response()->json([
                 'success' => true,
                 'message' => $result['message'],
@@ -150,7 +182,7 @@ class CashierApiController extends Controller
         }
 
         $employee = $user->employee;
-        if (!$employee || !$employee->position) {
+        if (! $employee || ! $employee->position) {
             return false;
         }
 

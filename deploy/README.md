@@ -96,7 +96,7 @@ Gunakan PHP `>= 8.2` dan sesuaikan angka versi pada perintah jika VPS memakai PH
 
 ```bash
 sudo apt update
-sudo apt install -y git unzip nginx mysql-server supervisor certbot python3-certbot-nginx \
+sudo apt install -y git unzip nginx mysql-server supervisor clamav-daemon certbot python3-certbot-nginx \
   php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml \
   php8.3-curl php8.3-zip php8.3-bcmath php8.3-gd
 sudo systemctl enable --now nginx php8.3-fpm mysql supervisor
@@ -128,6 +128,8 @@ nano backend/.env
 ```
 
 Isi domain, kredensial MySQL, `APP_KEY`, dan kredensial Reverb. Jika ini bukan instalasi baru, pertahankan `APP_KEY` production yang sudah digunakan; jangan membuat key baru karena data terenkripsi dan session lama akan tidak terbaca.
+
+Simpan JSON service account Firebase di `/run/secrets/firebase-service-account.json` (mode `0400`, owner `www-data`) dan isi `FCM_PROJECT_ID`. File secret tidak boleh masuk Git. Pastikan daemon ClamAV menerima koneksi lokal pada port yang diatur oleh `CLAMAV_HOST`/`CLAMAV_PORT`.
 
 ## 4. Backup, dependency, migration, dan asset
 
@@ -199,6 +201,8 @@ sudo crontab -u www-data -e
 
 Build release Flutter dengan URL API dan Reverb production. `REVERB_APP_KEY` boleh berada di aplikasi client; `REVERB_APP_SECRET` tidak boleh.
 
+Buat `mobile/android/key.properties` dari secret CI `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, dan `ANDROID_STORE_PASSWORD`. File keystore dan `key.properties` sudah diabaikan Git; build release tidak pernah memakai debug key.
+
 ```bash
 cd mobile
 flutter pub get
@@ -214,6 +218,7 @@ flutter build apk --release \
 
 ```bash
 curl --fail https://kpi.example.com/up
+curl --fail https://kpi.example.com/health/ready
 sudo supervisorctl status kpi-worker kpi-reverb
 cd /var/www/kpi-project/backend
 php artisan queue:failed
@@ -221,3 +226,5 @@ tail -n 100 storage/logs/laravel-$(date +%F).log
 ```
 
 Sebelum release, buat tag commit yang sedang berjalan. Jika perlu rollback aplikasi, checkout tag sebelumnya pada server, install dependency/cache ulang, lalu restart Supervisor. Jangan rollback migration secara membabi buta; gunakan backup SQL dan prosedur migration yang kompatibel.
+
+Urutan rollout: jalankan migrasi additive, aktifkan ClamAV dan queue worker, deploy backend, jalankan `php artisan kpi:audit-repair --apply` untuk periode belum terkunci, deploy mobile, lalu aktifkan kredensial push. Gangguan FCM tidak membatalkan transaksi; notifikasi in-app tetap tersimpan dan job push akan diulang.

@@ -28,7 +28,7 @@ class TeamAggregationKpiTest extends TestCase
 
         // SUP-01: kasih final_score seragam ke SEMUA KPI anggota tim, lalu teknisi=90 & CS=85
         $teamKpis = EmployeeKpi::where('period_id', $period->id)
-            ->whereHas('employee', fn($q) => $q->where('supervisor_id', $empSpv->id))
+            ->whereHas('employee', fn ($q) => $q->where('supervisor_id', $empSpv->id))
             ->get();
         $this->assertGreaterThanOrEqual(2, $teamKpis->count());
 
@@ -47,22 +47,30 @@ class TeamAggregationKpiTest extends TestCase
         }
         $kpiTek->items->first()->update(['achievement_percentage' => 90.0]);
         $expectedAvgAchievement = round(
-            $teamKpis->fresh()->flatMap(fn($k) => $k->items->pluck('achievement_percentage'))->avg(),
+            $teamKpis->fresh()->flatMap(fn ($k) => $k->items->pluck('achievement_percentage'))->avg(),
             2
         );
+        $pending = app(TeamAggregationKpiSyncService::class)->syncPeriodTeamAggregation($period);
+        $this->assertSame(0, $pending['updated_items']);
+        foreach ($teamKpis as $tk) {
+            $tk->update(['status' => 'approved', 'approved_at' => now()]);
+        }
 
         // SUP-03: absensi — semua anggota tim penuh, CS hanya setengah hari kerja
+        $attendanceEnd = $period->end_date->copy()->min(now()->startOfDay());
         $workingDays = 0;
         $date = $period->start_date->copy();
-        while ($date->lte($period->end_date)) {
-            if (!$date->isWeekend()) $workingDays++;
+        while ($date->lte($attendanceEnd)) {
+            if (! $date->isWeekend()) {
+                $workingDays++;
+            }
             $date->addDay();
         }
         $this->assertGreaterThan(0, $workingDays);
 
         $day = $period->start_date->copy();
-        while ($day->lte($period->end_date)) {
-            if (!$day->isWeekend()) {
+        while ($day->lte($attendanceEnd)) {
+            if (! $day->isWeekend()) {
                 Attendance::create([
                     'employee_id' => $empTek->id,
                     'attendance_date' => $day->toDateString(),
@@ -79,8 +87,8 @@ class TeamAggregationKpiTest extends TestCase
         // Karyawan tim lain (selain teknisi & CS) juga full — tandai semua hari kerja
         $others = $teamKpis->whereNotIn('employee_id', [$empTek->id, $empCs->id]);
         $day = $period->start_date->copy();
-        while ($day->lte($period->end_date)) {
-            if (!$day->isWeekend()) {
+        while ($day->lte($attendanceEnd)) {
+            if (! $day->isWeekend()) {
                 foreach ($others as $tk) {
                     Attendance::create([
                         'employee_id' => $tk->employee_id,
@@ -91,13 +99,13 @@ class TeamAggregationKpiTest extends TestCase
             }
             $day->addDay();
         }
-        // CS: hapus setengah hari terakhir → rate ~50%
+        // CS: setengah hari tercatat alpha; catatan yang hilang bukan alpha.
         $csHalf = (int) floor($workingDays / 2);
         Attendance::where('employee_id', $empCs->id)
             ->orderByDesc('attendance_date')
             ->skip($csHalf)
             ->take($workingDays - $csHalf)
-            ->delete();
+            ->get()->each->update(['status' => Attendance::STATUS_ABSENT]);
         $expectedAttendance = round(
             ((($teamKpis->count() - 1) * 100.0) + round(($csHalf / $workingDays) * 100, 2)) / $teamKpis->count(),
             2

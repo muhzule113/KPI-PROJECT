@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\KpiPeriod;
 use App\Support\AdminNavigation;
+use App\Support\CapabilityMatrix;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -44,15 +45,8 @@ class HandleInertiaRequests extends Middleware
                 ->latest()
                 ->limit(5)
                 ->get()
-                ->map(fn ($notification): array => [
-                    'id' => $notification->getKey(),
-                    'title' => $notification->title,
-                    'body' => $notification->body,
-                    'type' => $notification->type,
-                    'action_url' => $notification->action_url,
-                    'is_read' => (bool) $notification->is_read,
-                    'created_at' => $notification->created_at?->toIso8601String(),
-                ])
+                ->map(fn ($notification): ?array => $notification->visiblePayload($user))
+                ->filter()
                 ->values()
                 ->all()
             : [];
@@ -74,6 +68,8 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'roles' => $user->roles->pluck('name')->values()->all(),
+                    'capabilities' => CapabilityMatrix::for($user),
+                    'allowed_platforms' => CapabilityMatrix::allowedPlatforms($user),
                     'employee' => $user->employee ? [
                         'id' => $user->employee->getKey(),
                         'name' => $user->employee->name,

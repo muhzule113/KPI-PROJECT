@@ -2,9 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Employee;
-use App\Models\EmployeeKpi;
-use App\Models\KpiDailyEntry;
 use App\Models\KpiPeriod;
 use App\Models\User;
 use App\Modules\Assessment\DailyAssessmentService;
@@ -18,9 +15,10 @@ class DailyAssessmentEmployeeInputTest extends TestCase
 
     protected $seed = true;
 
-    public function test_employee_can_save_owned_daily_input_but_cannot_write_another_employee_kpi(): void
+    public function test_employee_is_read_only_and_supervisor_records_daily_input(): void
     {
         $user = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
         $period->update([
             'start_date' => now()->toDateString(),
@@ -35,25 +33,23 @@ class DailyAssessmentEmployeeInputTest extends TestCase
         $item = $day['kpi']->items->firstWhere('definition_code_snapshot', 'TEK-01');
 
         $this->assertSame('employee', $item->source_type_snapshot);
-        $this->assertSame('draft', $day['entries']->firstWhere('employee_kpi_item_id', $item->id)->entry_status);
+        $this->assertSame('submitted', $day['entries']->firstWhere('employee_kpi_item_id', $item->id)->entry_status);
 
-        $saved = $service->saveEmployeeDay($user, now()->toDateString(), [[
-            'item_id' => $item->id,
-            'actual_decimal' => 12,
-            'note' => 'Input harian teknisi',
-        ]]);
-        $entry = collect($saved['entries'])->firstWhere('employee_kpi_item_id', $item->id);
-        $this->assertSame(12.0, (float) $entry->employee_actual_decimal);
-        $this->assertSame('draft', $entry->entry_status);
-        $this->assertSame(12.0, $entry->effectiveActualDecimal());
+        try {
+            $service->saveEmployeeDay($user, now()->toDateString(), [[
+                'item_id' => $item->id,
+                'actual_decimal' => 12,
+            ]]);
+            $this->fail('Karyawan tidak boleh mengisi KPI harian.');
+        } catch (AuthorizationException $exception) {
+            $this->assertStringContainsString('Supervisor', $exception->getMessage());
+        }
 
-        $otherKpi = EmployeeKpi::where('period_id', $period->id)
-            ->where('employee_id', '!=', Employee::where('user_id', $user->id)->value('id'))
-            ->firstOrFail();
-        $this->expectException(AuthorizationException::class);
-        $service->saveEmployeeDay($user, now()->toDateString(), [[
-            'item_id' => $otherKpi->items()->firstOrFail()->id,
-            'actual_decimal' => 10,
-        ]]);
+        $queue = $service->supervisorQueue($supervisor, now()->toDateString());
+        $entry = $queue->firstWhere('item.definition_code_snapshot', 'TEK-01');
+        $updated = $service->assessSupervisor($supervisor, $entry->id, 'approved', 12);
+
+        $this->assertSame(12.0, (float) $updated->supervisor_actual_decimal);
+        $this->assertSame('approved', $updated->supervisor_status);
     }
 }

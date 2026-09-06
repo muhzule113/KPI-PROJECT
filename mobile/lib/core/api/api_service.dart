@@ -131,6 +131,48 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  static Future<dynamic> put(
+    String endpoint, [
+    Map<String, dynamic>? body,
+  ]) async {
+    final uri = Uri.parse('$baseUrl$endpoint');
+    final response = await client
+        .put(
+          uri,
+          headers: await _headers(),
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(requestTimeout);
+    return _handleResponse(response);
+  }
+
+  static Future<dynamic> delete(
+    String endpoint, [
+    Map<String, dynamic>? body,
+  ]) async {
+    final uri = Uri.parse('$baseUrl$endpoint');
+    final response = await client
+        .delete(
+          uri,
+          headers: await _headers(),
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(requestTimeout);
+    return _handleResponse(response);
+  }
+
+  static Future<Uint8List> getBytes(String endpoint) async {
+    final uri = Uri.parse('$baseUrl$endpoint');
+    final response = await client
+        .get(uri, headers: await _headers())
+        .timeout(requestTimeout);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return response.bodyBytes;
+    }
+    await _handleResponse(response);
+    throw const ApiException(statusCode: 0, message: 'Unduhan gagal.');
+  }
+
   /// Multipart upload — dipakai untuk upload file (import kasir, evidence, dll).
   /// Kirim [filePath] (mobile/desktop) ATAU [fileBytes]+[fileName] (web).
   /// [fieldName] nama field di backend (default 'file'); [fields] field tambahan (mis. period_id).
@@ -172,7 +214,8 @@ class ApiService {
       return body;
     }
 
-    if (response.statusCode == 401) {
+    if (response.statusCode == 401 ||
+        (body is Map && body['code'] == 'SESSION_REVOKED')) {
       await onUnauthorized?.call();
     }
 

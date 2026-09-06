@@ -75,6 +75,7 @@ class _SparepartScreenState extends State<SparepartScreen> {
     try {
       final res = await ApiService.post(
         '/operational/spareparts/fulfill/${request['id']}',
+        {'row_version': request['ticket']?['row_version']},
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

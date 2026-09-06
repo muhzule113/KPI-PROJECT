@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
-use App\Models\KpiEvidence;
 use App\Models\KpiDailyEntry;
 use App\Models\ServiceTicket;
 use App\Models\User;
@@ -21,7 +20,7 @@ class DailyAssessmentWebTest extends TestCase
 
     public function test_employee_can_open_daily_kpi_page_and_legacy_notification_link(): void
     {
-        $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $employee = User::where('email', 'kasir@toko.com')->firstOrFail();
         $kpi = EmployeeKpi::whereHas('employee', fn ($query) => $query->where('user_id', $employee->id))->firstOrFail();
         $date = $kpi->period->start_date->toDateString();
 
@@ -29,7 +28,7 @@ class DailyAssessmentWebTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Employee/DailyKpi')
-                ->has('items', 7));
+                ->has('items', $kpi->items()->count()));
 
         $this->actingAs($employee)->get("/my-kpi/{$kpi->id}")
             ->assertRedirect('/app/my-kpi/daily');
@@ -71,7 +70,7 @@ class DailyAssessmentWebTest extends TestCase
         $this->assertSame($period->fresh()->review_deadline->toIso8601String(), $page->inertiaProps('deadline'));
     }
 
-    public function test_supervisor_queue_exposes_system_recap_after_employee_submit(): void
+    public function test_supervisor_queue_exposes_system_recap_without_employee_submit(): void
     {
         $employeeUser = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $employee = Employee::where('user_id', $employeeUser->id)->firstOrFail();
@@ -96,35 +95,7 @@ class DailyAssessmentWebTest extends TestCase
             'review_deadline' => now()->addDays(2),
             'approval_deadline' => now()->addDays(3),
         ]);
-        $evidenceItem = $kpi->items()->where('evidence_req_snapshot', true)->firstOrFail();
-        KpiEvidence::create([
-            'employee_kpi_item_id' => $evidenceItem->id,
-            'file_path' => 'tests/daily-input.pdf',
-            'file_name' => 'daily-input.pdf',
-            'file_size' => 100,
-            'mime_type' => 'application/pdf',
-            'sha256_hash' => hash('sha256', 'daily-input'),
-            'scan_status' => 'clean',
-            'scanned_at' => now(),
-            'scan_note' => 'Test',
-            'uploaded_by' => $employeeUser->id,
-            'description' => 'Evidence input harian',
-        ]);
-        app(DailyAssessmentService::class)->saveEmployeeDay(
-            $employeeUser,
-            $date,
-            $kpi->items()
-                ->where('source_type_snapshot', 'employee')
-                ->where('formula_key_snapshot', '!=', 'rubric')
-                ->get()
-                ->map(fn ($employeeItem): array => [
-                    'item_id' => $employeeItem->id,
-                    'actual_decimal' => 80,
-                ])->all(),
-            true
-        );
-
-        $this->actingAs($employeeUser)->get("/app/my-kpi/daily?date={$date}")->assertOk();
+        app(DailyAssessmentService::class)->employeeDay($employeeUser, $date);
         $page = $this->actingAs($supervisor)->get("/app/supervisor-daily-assessments?date={$date}");
         $entry = collect($page->inertiaProps('entries'))->firstWhere('item.code', 'TEK-01');
 

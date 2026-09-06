@@ -3,16 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\Attendance;
+use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
+use App\Models\ServiceTicket;
 use App\Models\Sparepart;
+use App\Models\SparepartRequest;
 use App\Models\StockMovement;
 use App\Models\StockOpname;
-use App\Models\StockOpnameItem;
 use App\Models\User;
 use App\Modules\Assessment\AttendanceKpiSyncService;
 use App\Modules\Assessment\InventoryKpiSyncService;
+use App\Modules\Assessment\OperationalKpiSyncService;
 use App\Modules\Assessment\StockOpnameService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -35,7 +38,7 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         $workingDays = 0;
         $date = $period->start_date->copy();
         while ($date->lte($period->end_date)) {
-            if (!$date->isWeekend()) {
+            if (! $date->isWeekend()) {
                 Attendance::create([
                     'employee_id' => $empGud->id,
                     'branch_id' => $empGud->branch_id,
@@ -59,12 +62,12 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $res['updated_items']);
     }
 
-    public function test_attendance_sync_counts_absent_days(): void
+    public function test_attendance_sync_does_not_treat_missing_records_as_absence(): void
     {
         $empGud = Employee::where('email', 'gudang@toko.com')->first();
         $period = KpiPeriod::where('status', 'OPEN')->first();
 
-        // Hanya 1 hari hadir — sisanya alpha (tidak dicatat)
+        // Satu hari hadir; tanggal tanpa catatan masih menunggu input absensi.
         $firstWorkingDay = $period->start_date->copy();
         while ($firstWorkingDay->isWeekend()) {
             $firstWorkingDay->addDay();
@@ -81,7 +84,7 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         $kpi = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $empGud->id)->first();
         $gud07 = $kpi->items->firstWhere('definition_code_snapshot', 'GUD-07');
 
-        $this->assertLessThan(100.0, (float) $gud07->actual_decimal);
+        $this->assertSame(100.0, (float) $gud07->actual_decimal);
         $this->assertGreaterThan(0.0, (float) $gud07->actual_decimal);
     }
 
@@ -94,7 +97,7 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
 
         $date = $period->start_date->copy();
         while ($date->lte($period->end_date)) {
-            if (!$date->isWeekend()) {
+            if (! $date->isWeekend()) {
                 $status = $excusedIndex < count($excusedStatuses)
                     ? $excusedStatuses[$excusedIndex++]
                     : Attendance::STATUS_PRESENT;
@@ -217,5 +220,67 @@ class SubsystemAttendanceAndInventoryTest extends TestCase
         // GUD-02 is the absolute difference divided by system stock.
         // GUD-05: 1 dari 1 sesi selesai = 100%
         $this->assertEquals(100.0, (float) $gud05->actual_decimal);
+    }
+
+    public function test_inventory_and_fulfillment_facts_are_scoped_to_branch_and_assigned_warehouse(): void
+    {
+        $warehouse = User::where('email', 'gudang@toko.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $branch = Branch::create(['code' => 'TEST-OPNAME-B', 'name' => 'Cabang Opname B']);
+        $period->branches()->attach($branch->id);
+        $otherUser = User::factory()->create();
+        $otherUser->assignRole('employee');
+        $otherEmployee = $warehouse->employee->replicate();
+        $otherEmployee->fill(['user_id' => $otherUser->id, 'branch_id' => $branch->id,
+            'email' => $otherUser->email, 'employee_number' => 'TEST-GUD-B']);
+        $otherEmployee->save();
+        $mainKpi = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $warehouse->employee->id)->firstOrFail();
+        $otherKpi = $mainKpi->replicate();
+        $otherKpi->employee_id = $otherEmployee->id;
+        $otherKpi->branch_id_snapshot = $branch->id;
+        $otherKpi->save();
+        foreach ($mainKpi->items as $item) {
+            $copy = $item->replicate();
+            $copy->employee_kpi_id = $otherKpi->id;
+            $copy->save();
+        }
+        Sparepart::query()->update(['is_critical' => false]);
+        $mainPart = Sparepart::firstOrFail()->replicate();
+        $mainPart->fill(['code' => 'TEST-CRITICAL-A', 'branch_id' => $warehouse->employee->branch_id, 'stock_quantity' => 5, 'is_critical' => true]);
+        $mainPart->save();
+        $otherPart = $mainPart->replicate();
+        $otherPart->fill(['code' => 'TEST-CRITICAL-B', 'branch_id' => $branch->id, 'stock_quantity' => 10]);
+        $otherPart->save();
+        $service = app(StockOpnameService::class);
+        foreach ([[$warehouse, $mainPart, 'TEST-OPN-A'], [$otherUser, $otherPart, 'TEST-OPN-B']] as [$actor, $part, $code]) {
+            $opname = StockOpname::create(['code' => $code, 'period_id' => $period->id, 'created_by' => $actor->id, 'branch_id' => $branch->id]);
+            $this->assertSame((string) $actor->employee->branch_id, (string) $opname->branch_id);
+            $service->snapshotItems($opname);
+            $this->assertTrue($opname->items->every(fn ($item) => (string) $item->sparepart->branch_id === (string) $actor->employee->branch_id));
+            foreach ($opname->items as $item) {
+                $item->update(['physical_stock' => $actor->id === $warehouse->id ? $item->system_stock : 0]);
+            }
+            $service->complete($opname, $actor->id);
+        }
+        $date = $period->start_date->copy()->addHours(8);
+        $templateTicket = ServiceTicket::firstOrFail();
+        foreach ([[$warehouse->employee, $mainPart, 5], [$otherEmployee, $otherPart, 90], [$warehouse->employee, $otherPart, 90]] as $index => [$employee, $part, $minutes]) {
+            $ticket = $templateTicket->replicate();
+            $ticket->fill(['ticket_number' => 'TEST-GUD-SLA-'.$index, 'period_id' => $period->id, 'branch_id' => $part->branch_id]);
+            $ticket->save();
+            $request = SparepartRequest::create(['service_ticket_id' => $ticket->id, 'sparepart_id' => $part->id,
+                'technician_employee_id' => $ticket->technician_employee_id, 'warehouse_employee_id' => $employee->id,
+                'quantity' => 1, 'status' => 'fulfilled', 'requested_at' => $date, 'fulfilled_at' => $date->copy()->addMinutes($minutes)]);
+            $request->forceFill(['created_at' => $date])->save();
+        }
+        app(OperationalKpiSyncService::class)->syncPeriodOperationalData($period);
+        $mainKpi->refresh()->load('items');
+        $otherKpi->refresh()->load('items');
+        $this->assertSame(100.0, (float) $mainKpi->items->firstWhere('definition_code_snapshot', 'GUD-01')->actual_decimal);
+        $this->assertSame(0.0, (float) $otherKpi->items->firstWhere('definition_code_snapshot', 'GUD-01')->actual_decimal);
+        $this->assertSame(100.0, (float) $mainKpi->items->firstWhere('definition_code_snapshot', 'GUD-03')->actual_decimal);
+        $this->assertSame(0.0, (float) $otherKpi->items->firstWhere('definition_code_snapshot', 'GUD-03')->actual_decimal);
+        $this->assertSame(100.0, (float) $mainKpi->items->firstWhere('definition_code_snapshot', 'GUD-04')->actual_decimal);
+        $this->assertSame(0.0, (float) $otherKpi->items->firstWhere('definition_code_snapshot', 'GUD-04')->actual_decimal);
     }
 }

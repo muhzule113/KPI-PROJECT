@@ -17,7 +17,7 @@ use App\Support\KpiWorkflow;
  *
  * Rate = hari hadir / hari kerja yang wajib dinilai × 100.
  * Hari kerja = Senin–Jumat. Hadir/Terlambat menjadi pembilang; Izin/Sakit
- * dikeluarkan dari pembagi; Alpha dan hari tanpa catatan tetap menjadi 0.
+ * dikeluarkan dari pembagi; hari yang belum ditutup belum dihitung sebagai Alpha.
  */
 class AttendanceKpiSyncService
 {
@@ -39,15 +39,18 @@ class AttendanceKpiSyncService
 
         foreach ($kpis as $kpi) {
             $emp = $kpi->employee;
-            if (!$emp) continue;
+            if (! $emp) {
+                continue;
+            }
 
             $items = $kpi->items->whereIn('definition_code_snapshot', self::ATTENDANCE_ITEM_CODES);
-            if ($items->isEmpty()) continue;
+            if ($items->isEmpty()) {
+                continue;
+            }
 
             $rate = $this->calculateAttendanceRate($emp, $period);
-            if ($rate === null) continue;
 
-            if (!KpiWorkflow::canSystemSyncKpi($kpi)) {
+            if (! KpiWorkflow::canSystemSyncKpi($kpi)) {
                 continue;
             }
 
@@ -76,16 +79,22 @@ class AttendanceKpiSyncService
         $start = $period->start_date->copy();
         $end = $period->end_date->copy()->min(now()->startOfDay());
 
-        if ($start->gt($end)) return null;
+        if ($start->gt($end)) {
+            return null;
+        }
 
         $workingDays = 0;
         $date = $start->copy();
         while ($date->lte($end)) {
-            if (!$date->isWeekend()) $workingDays++;
+            if (! $date->isWeekend()) {
+                $workingDays++;
+            }
             $date->addDay();
         }
 
-        if ($workingDays === 0) return null;
+        if ($workingDays === 0) {
+            return null;
+        }
 
         $statusesByDate = Attendance::where('employee_id', $emp->id)
             ->whereBetween('attendance_date', [$start->toDateString(), $end->toDateString()])
@@ -98,11 +107,17 @@ class AttendanceKpiSyncService
         while ($date->lte($end)) {
             if ($date->isWeekend()) {
                 $date->addDay();
+
                 continue;
             }
 
             $status = $statusesByDate->get($date->toDateString())?->status;
-            if (!in_array($status, Attendance::EXCUSED_STATUSES, true)) {
+            if ($status === null) {
+                $date->addDay();
+
+                continue;
+            }
+            if (! in_array($status, Attendance::EXCUSED_STATUSES, true)) {
                 $eligibleDays++;
                 if (in_array($status, Attendance::WORKED_STATUSES, true)) {
                     $attendedDays++;
@@ -111,7 +126,9 @@ class AttendanceKpiSyncService
             $date->addDay();
         }
 
-        if ($eligibleDays === 0) return null;
+        if ($eligibleDays === 0) {
+            return null;
+        }
 
         return round(($attendedDays / $eligibleDays) * 100, 2);
     }
@@ -134,25 +151,37 @@ class AttendanceKpiSyncService
             $entry = KpiDailyEntry::where('employee_kpi_item_id', $item->id)
                 ->whereDate('entry_date', $date->toDateString())
                 ->first();
+            $reviewedStatus = data_get($entry, 'manager_actual_json.attendance_status')
+                ?? data_get($entry, 'supervisor_actual_json.attendance_status');
+            $pendingAttendance = $status === null;
+            if ($pendingAttendance && ! $entry) {
+                $entry = new KpiDailyEntry([
+                    'employee_kpi_item_id' => $item->id,
+                    'entry_date' => $date->toDateString(),
+                ]);
+            }
 
-            if ($date->isWeekend() || in_array($status, Attendance::EXCUSED_STATUSES, true)) {
-                if ($entry && ($entry->system_actual_decimal !== null
+            if ($date->isWeekend() || in_array($status, Attendance::EXCUSED_STATUSES, true) || $pendingAttendance) {
+                $reviewedSameStatus = $reviewedStatus !== null && $reviewedStatus === $status;
+                if ($entry && ! $reviewedSameStatus && ($entry->system_actual_decimal !== null
                     || $entry->employee_actual_decimal !== null
                     || $entry->employee_actual_json !== null
                     || $entry->entry_status !== 'draft'
+                    || $pendingAttendance
                     || $entry->supervisor_status !== 'pending'
                     || $entry->manager_status !== 'pending')) {
                     $entry->system_actual_decimal = null;
                     $entry->system_actual_json = [
-                        'attendance_status' => $status ?? Attendance::STATUS_ABSENT,
-                        'excluded_from_ratio' => true,
+                        'attendance_status' => $pendingAttendance ? 'not_recorded' : ($status ?? Attendance::STATUS_ABSENT),
+                        'excluded_from_ratio' => $date->isWeekend() || in_array($status, Attendance::EXCUSED_STATUSES, true),
+                        'pending_supervisor' => $pendingAttendance,
                     ];
                     $entry->employee_actual_decimal = null;
                     $entry->employee_actual_json = null;
                     $entry->employee_note = null;
                     $entry->employee_entered_by = null;
                     $entry->employee_submitted_at = null;
-                    $entry->entry_status = 'draft';
+                    $entry->entry_status = $pendingAttendance ? 'submitted' : 'draft';
                     $entry->supervisor_actual_decimal = null;
                     $entry->supervisor_actual_json = null;
                     $entry->supervisor_answers_json = null;
@@ -169,9 +198,12 @@ class AttendanceKpiSyncService
                     $entry->manager_assessed_by = null;
                     $entry->manager_status = 'pending';
                     $entry->manager_assessed_at = null;
-                    $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
-                    $entry->save();
+                    if ($entry->isDirty()) {
+                        $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
+                        $entry->save();
+                    }
                 }
+
                 continue;
             }
 
@@ -180,10 +212,11 @@ class AttendanceKpiSyncService
                 'employee_kpi_item_id' => $item->id,
                 'entry_date' => $date->toDateString(),
             ]);
-            $changed = $entry->system_actual_decimal === null
-                || abs((float) $entry->system_actual_decimal - $value) > 0.000001;
+            $changed = ($reviewedStatus === null || $reviewedStatus !== $status)
+                && ($entry->system_actual_decimal === null
+                    || abs((float) $entry->system_actual_decimal - $value) > 0.000001);
             $entry->system_actual_decimal = $value;
-            $entry->system_actual_json = ['attendance_status' => $status ?? Attendance::STATUS_ABSENT];
+            $entry->system_actual_json = ['attendance_status' => $status, 'excluded_from_ratio' => false];
             $entry->entry_status = 'submitted';
             if ($changed) {
                 $entry->supervisor_status = 'pending';
@@ -191,8 +224,10 @@ class AttendanceKpiSyncService
                 $entry->supervisor_actual_decimal = null;
                 $entry->manager_actual_decimal = null;
             }
-            $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
-            $entry->save();
+            if ($entry->isDirty()) {
+                $entry->row_version = ((int) ($entry->row_version ?: 0)) + 1;
+                $entry->save();
+            }
         }
     }
 }

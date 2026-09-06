@@ -55,15 +55,7 @@ final class StockOpnameController extends Controller
             'items.*.physical_stock' => ['required', 'integer', 'min:0'],
         ]);
 
-        $opname->update([
-            'code' => $data['code'] ?: $opname->code,
-            'period_id' => $data['period_id'],
-            'deadline' => $data['deadline'] ?? null,
-        ]);
-        foreach ($data['items'] as $item) {
-            abort_unless($opname->items()->whereKey($item['id'])->exists(), 422, 'Item opname tidak valid.');
-            $opname->items()->whereKey($item['id'])->update(['physical_stock' => $item['physical_stock']]);
-        }
+        app(StockOpnameService::class)->saveCounts($opname, $data, $request->user()->id);
 
         return redirect('/app/stock-opnames')->with('success', 'Data stock opname berhasil disimpan.');
     }
@@ -76,7 +68,7 @@ final class StockOpnameController extends Controller
             $result = app(StockOpnameService::class)->complete($opname, $request->user()->getKey());
             $period = $opname->fresh('period')?->period;
             if ($period && $opname->fresh()->status === StockOpname::STATUS_COMPLETED) {
-                $result['message'] .= ' ' . app(InventoryKpiSyncService::class)->syncPeriodInventoryData($period)['message'];
+                $result['message'] .= ' '.app(InventoryKpiSyncService::class)->syncPeriodInventoryData($period)['message'];
             }
 
             return redirect('/app/stock-opnames')->with('success', $result['message']);
@@ -93,8 +85,10 @@ final class StockOpnameController extends Controller
 
         return StockOpname::query()
             ->with(['period', 'items.sparepart'])
+            ->where('branch_id', $request->user()->employee?->branch_id)
+            ->where('created_by', $request->user()->id)
             ->when($periodId, fn ($query) => $query->where('period_id', $periodId))
-            ->when(!$periodId, fn ($query) => $query->whereIn('id', []))
+            ->when(! $periodId, fn ($query) => $query->whereIn('id', []))
             ->findOrFail($record);
     }
 }

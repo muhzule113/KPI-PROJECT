@@ -7,6 +7,7 @@ use App\Models\Complaint;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
+use App\Models\ServiceTicket;
 use App\Modules\Assessment\CoachingKpiSyncService;
 use App\Modules\Assessment\ComplaintKpiSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,7 +19,7 @@ class ComplaintAndCoachingKpiTest extends TestCase
 
     protected $seed = true;
 
-    public function test_complaint_sync_sets_cs_count_and_supervisor_sla_rate(): void
+    public function test_complaint_sync_sets_cs_complaint_rate_and_supervisor_sla_rate(): void
     {
         $empCs = Employee::where('email', 'cs@toko.com')->first();
         $empTek = Employee::where('email', 'teknisi@toko.com')->first();
@@ -27,8 +28,28 @@ class ComplaintAndCoachingKpiTest extends TestCase
 
         $this->assertNotNull($empCs);
         $this->assertNotNull($empSpv);
+        $period->update([
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->addDays(5)->toDateString(),
+        ]);
 
-        // 3 komplain terhadap CS (2 selesai, 1 tepat waktu) + 1 komplain terhadap Teknisi (selesai tepat waktu)
+        foreach (range(1, 3) as $index) {
+            ServiceTicket::create([
+                'ticket_number' => "SRV-COMPLAINT-00{$index}",
+                'customer_name' => "Customer {$index}",
+                'customer_phone' => '08123456789',
+                'device_brand' => 'Apple',
+                'device_model' => 'iPhone 13',
+                'initial_complaint' => 'Layar bermasalah',
+                'branch_id' => $empCs->branch_id,
+                'period_id' => $period->id,
+                'intake_by_employee_id' => $empCs->id,
+                'status' => ServiceTicket::STATUS_INTAKE,
+                'result_status' => ServiceTicket::RESULT_PENDING,
+            ]);
+        }
+
+        // 3 komplain terhadap 3 tiket CS + 1 komplain terhadap Teknisi.
         $sla1 = $period->start_date->copy()->addDays(4);
         Complaint::create([
             'code' => 'CMP-TEST-001',
@@ -73,11 +94,12 @@ class ComplaintAndCoachingKpiTest extends TestCase
         $res = app(ComplaintKpiSyncService::class)->syncPeriodComplaintData($period);
         $this->assertGreaterThanOrEqual(2, $res['updated_items']);
 
-        // CS-05: 3 komplain terhadap CS
+        // CS-05 is the official complaint count for the period.
         $kpiCs = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $empCs->id)->first();
         $cs05 = $kpiCs->items->firstWhere('definition_code_snapshot', 'CS-05');
         $this->assertNotNull($cs05);
         $this->assertEquals(3.0, (float) $cs05->actual_decimal);
+        $this->assertSame('komplain', $cs05->target_unit_snapshot);
 
         // SUP-04: 4 komplain tim (CS+teknisi), 2 selesai tepat waktu = 50%
         $kpiSpv = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $empSpv->id)->first();

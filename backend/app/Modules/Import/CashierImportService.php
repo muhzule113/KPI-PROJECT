@@ -2,23 +2,25 @@
 
 namespace App\Modules\Import;
 
-use App\Jobs\ParseCashierImport;
+use App\Jobs\ScanQuarantinedFile;
 use App\Models\AuditEvent;
 use App\Models\CashierTransaction;
-use App\Models\Employee;
-use App\Models\EmployeeKpi;
+use App\Models\EmployeePlacement;
 use App\Models\ImportBatch;
 use App\Models\ImportMappingVersion;
 use App\Models\KpiPeriod;
-use App\Modules\Calculation\KpiCalculationEngine;
-use App\Support\KpiWorkflow;
+use App\Models\User;
+use App\Modules\Assessment\CashierKpiSyncService;
+use App\Modules\Security\FileScanService;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use Smalot\PdfParser\Parser as PdfParser;
 
 class CashierImportService
 {
@@ -38,7 +40,7 @@ class CashierImportService
     private const VALID_STATUSES = ['SUCCESS', 'REFUND', 'VOID', 'CANCELLED'];
 
     public function __construct(
-        protected KpiCalculationEngine $calculationEngine
+        protected CashierKpiSyncService $cashierKpiSync,
     ) {}
 
     public function uploadAndStage(
@@ -48,21 +50,38 @@ class CashierImportService
         ?int $uploaderId = null,
         bool $queue = false,
     ): ImportBatch {
-        if (!$period->isOpen()) {
+        if (! $period->isOpen()) {
             throw new Exception('Import hanya dapat dilakukan pada periode yang sedang OPEN.');
         }
 
+        $mapping = ImportMappingVersion::query()->where('is_active', true)
+            ->whereHas('template', fn ($query) => $query->where('is_active', true))
+            ->when($mappingVersionId, fn ($query) => $query->whereKey($mappingVersionId))
+            ->latest('id')->first();
+        if ($mappingVersionId && ! $mapping) {
+            throw new Exception('Versi mapping import tidak aktif atau tidak ditemukan.');
+        }
+        $mappingVersionId = $mapping?->id;
+
+        $sourceApplication = $this->sourceApplication($mappingVersionId);
         $hash = hash_file('sha256', $file->getRealPath());
         $existingBatch = ImportBatch::where('file_hash_sha256', $hash)
-            ->whereIn('status', ['confirmed', 'committed'])
+            ->where('source_application', $sourceApplication)
+            ->where('status', '!=', 'superseded')
             ->first();
 
         if ($existingBatch) {
             throw new Exception("File ini identik (hash SHA-256 sama) dengan batch import #{$existingBatch->id} yang telah berhasil diproses sebelumnya.");
         }
 
-        $path = $file->store('imports/' . date('Y/m'), 'local');
-        $sourceApplication = $this->sourceApplication($mappingVersionId);
+        $path = $file->store('quarantine/imports/'.date('Y/m'), 'local');
+        $actorId = $uploaderId ?? auth()->id();
+        $actor = $actorId ? User::with('employee.placements.position')->find($actorId) : null;
+        $branchId = $actor?->employee?->placements()->effectiveOn(now())->value('branch_id')
+            ?? $period->branches()->orderBy('branches.id')->value('branches.id');
+        if (! $branchId || ! $period->branches()->whereKey($branchId)->exists()) {
+            throw new Exception('Cabang uploader tidak termasuk dalam periode import.');
+        }
 
         $batch = ImportBatch::create([
             'file_name' => $file->getClientOriginalName(),
@@ -71,8 +90,11 @@ class CashierImportService
             'source_application' => $sourceApplication,
             'mapping_version_id' => $mappingVersionId,
             'period_id' => $period->id,
-            'uploader_id' => $uploaderId ?? auth()->id(),
-            'status' => 'parsing',
+            'branch_id' => $branchId,
+            'currency' => 'IDR',
+            'uploader_id' => $actorId,
+            'status' => 'scanning',
+            'scan_status' => 'quarantine',
             'total_rows' => 0,
             'valid_rows' => 0,
             'warning_rows' => 0,
@@ -81,49 +103,59 @@ class CashierImportService
         ]);
 
         if ($queue) {
-            ParseCashierImport::dispatch($batch->id);
+            ScanQuarantinedFile::dispatch('import', (string) $batch->id);
 
             return $batch->fresh();
         }
 
-        $this->parseAndValidate($batch, $file->getRealPath());
+        (new ScanQuarantinedFile('import', (string) $batch->id))
+            ->handle(app(FileScanService::class), $this);
 
         return $batch->fresh();
     }
 
     public function parseAndValidate(ImportBatch $batch, ?string $filePath = null): void
     {
+        if ($batch->scan_status !== 'clean') {
+            throw new Exception('File import belum dinyatakan clean oleh ClamAV.');
+        }
         $realPath = $filePath
             ?? (Storage::disk('local')->exists($batch->file_path)
                 ? Storage::disk('local')->path($batch->file_path)
-                : storage_path('app/' . $batch->file_path));
+                : storage_path('app/'.$batch->file_path));
 
-        if (!file_exists($realPath)) {
+        if (! file_exists($realPath)) {
             $batch->update([
                 'status' => 'failed',
                 'issues_json' => [['severity' => 'error', 'code' => 'file_missing', 'message' => 'File tidak ditemukan di storage.']],
             ]);
+
             return;
         }
 
         try {
-            $spreadsheet = IOFactory::load($realPath);
-            $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+            $rows = $this->readRows($realPath, $batch);
+            if ($rows === null) {
+                return;
+            }
 
             if (count($rows) < 2) {
                 $this->failBatch($batch, 'File kosong atau tidak memiliki baris data setelah header.');
+
                 return;
             }
 
-            $headerColMap = $this->headerMap(array_shift($rows));
+            $headerColMap = $this->headerMap(array_shift($rows), $batch->mappingVersion?->mappings_json ?? []);
             $missingColumns = array_values(array_diff(self::REQUIRED_COLUMNS, array_keys($headerColMap)));
             if ($missingColumns) {
-                $this->failBatch($batch, 'Header wajib tidak lengkap: ' . implode(', ', $missingColumns) . '.');
+                $this->failBatch($batch, 'Header wajib tidak lengkap: '.implode(', ', $missingColumns).'.');
+
                 return;
             }
 
-            $cashiers = Employee::with('position')
-                ->where('status', 'active')
+            $cashiers = EmployeePlacement::with(['employee', 'position'])
+                ->where('branch_id', $batch->branch_id)
+                ->whereHas('position', fn ($query) => $query->where('code', 'POS-KSR'))
                 ->get();
             $period = $batch->period()->firstOrFail();
             $sourceApplication = $batch->source_application ?: self::SOURCE_APPLICATION;
@@ -138,7 +170,7 @@ class CashierImportService
                 }
 
                 $totalRows++;
-                $normalized = $this->normalizeRow($row, $headerColMap, $period, $cashiers, $sourceApplication);
+                $normalized = $this->normalizeRow($row, $headerColMap, $period, $cashiers, $sourceApplication, (int) $batch->branch_id);
                 $businessKey = $normalized['business_key'];
                 $rowIssues = $normalized['issues'];
 
@@ -190,11 +222,13 @@ class CashierImportService
 
             if ($totalRows === 0) {
                 $this->failBatch($batch, 'File tidak memiliki baris transaksi yang dapat diproses.');
+
                 return;
             }
 
             $batch->update([
-                'status' => 'ready_for_preview',
+                'status' => collect($issues)->contains(fn (array $issue): bool => str_starts_with($issue['code'], 'cashier_'))
+                    ? 'needs_mapping' : 'ready_for_preview',
                 'total_rows' => $totalRows,
                 'valid_rows' => $validRows,
                 'warning_rows' => $warningRows,
@@ -235,7 +269,7 @@ class CashierImportService
                 throw new Exception("Batch import berstatus '{$batch->status}' dan tidak siap dikonfirmasi.");
             }
 
-            if (!$batch->period()->where('status', 'OPEN')->exists()) {
+            if (! $batch->period()->where('status', 'OPEN')->exists()) {
                 throw new Exception('Periode import sudah tidak OPEN. Batch tidak dapat dikonfirmasi.');
             }
 
@@ -243,12 +277,12 @@ class CashierImportService
                 throw new Exception('Batch memiliki baris error yang harus diperbaiki sebelum dikonfirmasi.');
             }
 
-            if ($batch->warning_rows > 0 && !$acknowledgeWarnings) {
+            if ($batch->warning_rows > 0 && ! $acknowledgeWarnings) {
                 throw new Exception('Batch memiliki peringatan. Tinjau lalu kirim acknowledge_warnings untuk melanjutkan.');
             }
 
             $rows = $batch->summary_json['normalized_rows'] ?? [];
-            if (!$rows) {
+            if (! $rows) {
                 throw new Exception('Data hasil validasi tidak tersedia. Unggah ulang file untuk membuat preview baru.');
             }
 
@@ -286,7 +320,7 @@ class CashierImportService
                     ]
                 );
 
-                if (!$transaction->wasRecentlyCreated) {
+                if (! $transaction->wasRecentlyCreated) {
                     continue;
                 }
 
@@ -322,7 +356,7 @@ class CashierImportService
             ]);
 
             $batch->refresh();
-            $this->syncCashierKpis($batch, $cashierTotals);
+            $this->cashierKpiSync->syncPeriod($batch->period);
 
             AuditEvent::log(
                 action: 'confirm_cashier_import',
@@ -349,7 +383,8 @@ class CashierImportService
         array $headerColMap,
         KpiPeriod $period,
         $cashiers,
-        string $sourceApplication
+        string $sourceApplication,
+        int $branchId,
     ): array {
         $value = fn (string $key): string => trim((string) ($row[$headerColMap[$key]] ?? ''));
         $txNum = $value('transaction_number');
@@ -362,27 +397,51 @@ class CashierImportService
         $status = strtoupper($value('status'));
         $issues = [];
 
-        if ($txNum === '') $issues[] = ['severity' => 'error', 'code' => 'missing_transaction_number', 'message' => 'Nomor transaksi wajib diisi.'];
-        if (!$date) $issues[] = ['severity' => 'error', 'code' => 'invalid_transaction_date', 'message' => 'Tanggal transaksi tidak valid.'];
+        if ($txNum === '') {
+            $issues[] = ['severity' => 'error', 'code' => 'missing_transaction_number', 'message' => 'Nomor transaksi wajib diisi.'];
+        }
+        if (! $date) {
+            $issues[] = ['severity' => 'error', 'code' => 'invalid_transaction_date', 'message' => 'Tanggal transaksi tidak valid.'];
+        }
         if ($date && ($date->toDateString() < $period->start_date->toDateString() || $date->toDateString() > $period->end_date->toDateString())) {
             $issues[] = ['severity' => 'error', 'code' => 'transaction_date_outside_period', 'message' => 'Tanggal transaksi berada di luar rentang periode KPI.'];
         }
-        if ($cashierName === '') $issues[] = ['severity' => 'error', 'code' => 'missing_cashier', 'message' => 'Kasir wajib diisi dan harus dapat dipetakan.'];
-        if ($amount === null || $amount < 0) $issues[] = ['severity' => 'error', 'code' => 'invalid_amount', 'message' => 'Nominal transaksi tidak valid.'];
-        if ($systemCash === null || $systemCash < 0) $issues[] = ['severity' => 'error', 'code' => 'invalid_system_cash', 'message' => 'Kas sistem tidak valid.'];
-        if ($actualCash === null || $actualCash < 0) $issues[] = ['severity' => 'error', 'code' => 'invalid_actual_cash', 'message' => 'Kas aktual tidak valid.'];
-        if ($duration === null || $duration < 0) $issues[] = ['severity' => 'error', 'code' => 'invalid_duration', 'message' => 'Durasi transaksi tidak valid.'];
-        if (!in_array($status, self::VALID_STATUSES, true)) $issues[] = ['severity' => 'error', 'code' => 'invalid_status', 'message' => 'Status transaksi tidak dikenali.'];
+        if ($cashierName === '') {
+            $issues[] = ['severity' => 'error', 'code' => 'missing_cashier', 'message' => 'Kasir wajib diisi dan harus dapat dipetakan.'];
+        }
+        if ($amount === null || $amount < 0) {
+            $issues[] = ['severity' => 'error', 'code' => 'invalid_amount', 'message' => 'Nominal transaksi tidak valid.'];
+        }
+        if ($systemCash === null || $systemCash < 0) {
+            $issues[] = ['severity' => 'error', 'code' => 'invalid_system_cash', 'message' => 'Kas sistem tidak valid.'];
+        }
+        if ($actualCash === null || $actualCash < 0) {
+            $issues[] = ['severity' => 'error', 'code' => 'invalid_actual_cash', 'message' => 'Kas aktual tidak valid.'];
+        }
+        if ($duration === null || $duration < 0) {
+            $issues[] = ['severity' => 'error', 'code' => 'invalid_duration', 'message' => 'Durasi transaksi tidak valid.'];
+        }
+        if (! in_array($status, self::VALID_STATUSES, true)) {
+            $issues[] = ['severity' => 'error', 'code' => 'invalid_status', 'message' => 'Status transaksi tidak dikenali.'];
+        }
 
-        $matchedCashier = $cashiers->first(function (Employee $employee) use ($cashierName): bool {
-            return strcasecmp(trim($employee->name), $cashierName) === 0
-                || strcasecmp(trim((string) $employee->employee_number), $cashierName) === 0;
-        });
-        if (!$matchedCashier) {
+        $matches = $cashiers->filter(function (EmployeePlacement $placement) use ($cashierName, $date): bool {
+            $employee = $placement->employee;
+
+            return $date && $placement->effective_from->lte($date)
+                && ($placement->effective_until === null || $placement->effective_until->gte($date))
+                && (strcasecmp(trim($employee->name), $cashierName) === 0
+                    || strcasecmp(trim((string) $employee->employee_number), $cashierName) === 0);
+        })->values();
+        $matchedCashier = $matches->count() === 1 ? $matches->first()->employee : null;
+        if ($matches->count() > 1) {
+            $issues[] = ['severity' => 'error', 'code' => 'cashier_ambiguous', 'message' => "Kasir '{$cashierName}' ambigu pada cabang dan tanggal transaksi."];
+        } elseif (! $matchedCashier) {
             $issues[] = ['severity' => 'error', 'code' => 'cashier_unresolved', 'message' => "Kasir '{$cashierName}' tidak ditemukan. Perbaiki mapping sebelum konfirmasi."];
         }
 
-        $businessKey = $sourceApplication . '|' . mb_strtolower($txNum);
+        $businessKey = $sourceApplication.'|'.$branchId.'|'.mb_strtolower($txNum);
+
         return [
             'data' => [
                 'transaction_number' => $txNum,
@@ -403,30 +462,86 @@ class CashierImportService
         ];
     }
 
-    private function headerMap(array $headers): array
+    private function headerMap(array $headers, array $mapping = []): array
     {
         $map = [];
+        $configured = [];
+        foreach ($mapping as $field => $header) {
+            if (in_array($field, self::REQUIRED_COLUMNS, true)) {
+                $configured[preg_replace('/[^a-z0-9]/', '', strtolower((string) $header))] = $field;
+            }
+        }
         foreach ($headers as $column => $header) {
             $name = preg_replace('/[^a-z0-9]/', '', strtolower((string) $header));
-            $field = match (true) {
-                in_array($name, ['noinvoice', 'transaksi', 'notransaksi', 'transactionno', 'transactionnumber', 'invoice', 'nomor']) => 'transaction_number',
-                in_array($name, ['tanggal', 'date', 'transactiondate', 'waktu']) => 'transaction_date',
-                in_array($name, ['kasir', 'namakasir', 'cashier', 'cashiername', 'operator']) => 'cashier_name',
-                in_array($name, ['total', 'grandtotal', 'amount', 'nominal', 'totaltransaksi']) => 'transaction_amount',
-                in_array($name, ['kassistim', 'systemcash', 'kassistem', 'totalsistem']) => 'system_cash_amount',
-                in_array($name, ['kasaktual', 'actualcash', 'kasfisik', 'totalaktual']) => 'actual_cash_amount',
-                in_array($name, ['durasi', 'duration', 'durasidetik', 'seconds']) => 'duration_seconds',
-                in_array($name, ['status', 'tipe', 'state']) => 'status',
-                default => null,
-            };
-            if ($field) $map[$field] = $column;
+            $canonical = array_search($name, array_map(static fn ($field) => str_replace('_', '', $field), self::REQUIRED_COLUMNS), true);
+            $field = $configured[$name] ?? ($canonical !== false ? self::REQUIRED_COLUMNS[$canonical] : null);
+            if ($configured) {
+                $field = $configured[$name] ?? null;
+            } else {
+                $field ??= match (true) {
+                    in_array($name, ['noinvoice', 'transaksi', 'notransaksi', 'transactionno', 'transactionnumber', 'invoice', 'nomor']) => 'transaction_number',
+                    in_array($name, ['tanggal', 'date', 'transactiondate', 'waktu']) => 'transaction_date',
+                    in_array($name, ['kasir', 'namakasir', 'cashier', 'cashiername', 'operator']) => 'cashier_name',
+                    in_array($name, ['total', 'grandtotal', 'amount', 'nominal', 'totaltransaksi']) => 'transaction_amount',
+                    in_array($name, ['kassistim', 'systemcash', 'kassistem', 'totalsistem']) => 'system_cash_amount',
+                    in_array($name, ['kasaktual', 'actualcash', 'kasfisik', 'totalaktual']) => 'actual_cash_amount',
+                    in_array($name, ['durasi', 'duration', 'durasidetik', 'seconds']) => 'duration_seconds',
+                    in_array($name, ['status', 'tipe', 'state']) => 'status',
+                    default => null,
+                };
+            }
+            if ($field && isset($map[$field])) {
+                throw new Exception('Header laporan memetakan lebih dari satu kolom ke '.$field.'.');
+            }
+            if ($field) {
+                $map[$field] = $column;
+            }
         }
+
         return $map;
+    }
+
+    private function readRows(string $path, ImportBatch $batch): ?array
+    {
+        if (strtolower(pathinfo($batch->file_name, PATHINFO_EXTENSION)) !== 'pdf') {
+            return IOFactory::load($path)->getActiveSheet()->toArray(null, true, true, true);
+        }
+
+        $text = trim((new PdfParser)->parseFile($path)->getText());
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', $text) ?: [])));
+        if (count($lines) < 2) {
+            $batch->update([
+                'status' => 'needs_review',
+                'issues_json' => [[
+                    'severity' => 'error', 'code' => 'ocr_required',
+                    'message' => 'PDF tidak memiliki tabel teks yang dapat dibaca. OCR/manual review diperlukan.',
+                ]],
+            ]);
+
+            return null;
+        }
+
+        $header = $lines[0];
+        $delimiter = collect(["\t", ';', ',', '|'])->sortByDesc(fn (string $candidate): int => substr_count($header, $candidate))->first();
+        $parts = $delimiter && substr_count($header, $delimiter) > 0
+            ? fn (string $line): array => str_getcsv($line, $delimiter)
+            : fn (string $line): array => preg_split('/\s{2,}/', trim($line)) ?: [];
+
+        return array_map(function (string $line) use ($parts): array {
+            $row = [];
+            foreach ($parts($line) as $index => $value) {
+                $row[Coordinate::stringFromColumnIndex($index + 1)] = $value;
+            }
+
+            return $row;
+        }, $lines);
     }
 
     private function parseDate(mixed $value): ?Carbon
     {
-        if ($value === null || trim((string) $value) === '') return null;
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
         try {
             return is_numeric($value) ? Carbon::instance(ExcelDate::excelToDateTimeObject((float) $value)) : Carbon::parse((string) $value);
         } catch (Exception) {
@@ -437,36 +552,45 @@ class CashierImportService
     private function parseMoney(mixed $value): ?float
     {
         $value = trim((string) $value);
-        if ($value === '') return null;
+        if ($value === '') {
+            return null;
+        }
         $value = preg_replace('/[^0-9,.-]/', '', $value);
-        if ($value === '' || $value === '-') return null;
+        if ($value === '' || $value === '-') {
+            return null;
+        }
         $lastComma = strrpos($value, ',');
         $lastDot = strrpos($value, '.');
         if ($lastComma !== false && $lastDot !== false) {
             $decimal = max($lastComma, $lastDot);
-            $value = str_replace([',', '.'], '', substr($value, 0, $decimal)) . '.' . substr($value, $decimal + 1);
+            $value = str_replace([',', '.'], '', substr($value, 0, $decimal)).'.'.substr($value, $decimal + 1);
         } elseif ($lastComma !== false && strlen($value) - $lastComma - 1 === 2) {
-            $value = str_replace('.', '', substr($value, 0, $lastComma)) . '.' . substr($value, $lastComma + 1);
+            $value = str_replace('.', '', substr($value, 0, $lastComma)).'.'.substr($value, $lastComma + 1);
         } else {
             $value = str_replace(',', '', $value);
         }
+
         return is_numeric($value) ? (float) $value : null;
     }
 
     private function parseInteger(mixed $value): ?int
     {
         $value = trim((string) $value);
+
         return $value !== '' && preg_match('/^\d+$/', $value) ? (int) $value : null;
     }
 
     private function isEmptyRow(array $row): bool
     {
-        return !array_filter($row, fn ($value) => trim((string) $value) !== '');
+        return ! array_filter($row, fn ($value) => trim((string) $value) !== '');
     }
 
     private function sourceApplication(?int $mappingVersionId): string
     {
-        if (!$mappingVersionId) return self::SOURCE_APPLICATION;
+        if (! $mappingVersionId) {
+            return self::SOURCE_APPLICATION;
+        }
+
         return (string) (ImportMappingVersion::with('template')->find($mappingVersionId)?->template?->source_application ?: self::SOURCE_APPLICATION);
     }
 
@@ -476,31 +600,5 @@ class CashierImportService
             'status' => 'failed',
             'issues_json' => [['severity' => 'error', 'code' => 'invalid_file', 'message' => $message]],
         ]);
-    }
-
-    private function syncCashierKpis(ImportBatch $batch, array $cashierTotals): void
-    {
-        foreach ($cashierTotals as $empId => $totals) {
-            $employeeKpi = EmployeeKpi::where('period_id', $batch->period_id)
-                ->where('employee_id', $empId)
-                ->first();
-            if (!$employeeKpi || !KpiWorkflow::canSystemSyncKpi($employeeKpi)) continue;
-
-            $this->updateKpiItem($employeeKpi, 'KSR-01', $totals['eligible_tx'] > 0 ? ($totals['valid_tx'] / $totals['eligible_tx']) * 100 : null);
-            $this->updateKpiItem($employeeKpi, 'KSR-02', $totals['eligible_tx'] > 0 ? $totals['total_diff'] : null);
-            $this->updateKpiItem($employeeKpi, 'KSR-03', $batch->confirmed_at?->lessThanOrEqualTo($batch->period->submission_deadline) ? 100.0 : 0.0);
-            $this->updateKpiItem($employeeKpi, 'KSR-04', $totals['duration_count'] > 0 ? ($totals['duration_within_sla'] / $totals['duration_count']) * 100 : null);
-            $employeeKpi->calculateProgress();
-        }
-    }
-
-    private function updateKpiItem(EmployeeKpi $employeeKpi, string $code, ?float $actual): void
-    {
-        $item = $employeeKpi->items()->where('definition_code_snapshot', $code)->first();
-        if (!$item || $actual === null) return;
-        $item->actual_decimal = round($actual, 2);
-        $item->status = 'verified';
-        $item->save();
-        $this->calculationEngine->calculateItem($item);
     }
 }

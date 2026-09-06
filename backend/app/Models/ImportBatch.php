@@ -17,8 +17,14 @@ class ImportBatch extends Model
         'source_application',
         'mapping_version_id',
         'period_id',
+        'branch_id',
+        'currency',
         'uploader_id',
         'status',
+        'scan_status',
+        'scanned_at',
+        'scan_note',
+        'superseded_by_id',
         'total_rows',
         'valid_rows',
         'warning_rows',
@@ -41,6 +47,7 @@ class ImportBatch extends Model
         'issues_json' => 'array',
         'confirmed_at' => 'datetime',
         'warnings_acknowledged_at' => 'datetime',
+        'scanned_at' => 'datetime',
     ];
 
     public function period()
@@ -51,6 +58,11 @@ class ImportBatch extends Model
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploader_id');
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function mappingVersion()

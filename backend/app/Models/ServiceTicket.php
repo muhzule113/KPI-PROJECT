@@ -12,33 +12,90 @@ class ServiceTicket extends Model
 {
     use HasFactory;
 
+    protected $attributes = ['row_version' => 1];
+
+    public const STATUS_INTAKE = 'intake';
+
+    public const STATUS_DIAGNOSING = 'diagnosing';
+
+    public const STATUS_WAITING_SPAREPART = 'waiting_sparepart';
+
+    public const STATUS_IN_PROGRESS = 'in_progress';
+
+    public const STATUS_QC_READY = 'qc_ready';
+
+    public const STATUS_COMPLETED = 'completed';
+
+    public const STATUS_DELIVERED = 'delivered';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const ESTIMATED_COST_EDITABLE_STATUSES = [
+        self::STATUS_INTAKE,
+        self::STATUS_DIAGNOSING,
+        self::STATUS_WAITING_SPAREPART,
+        self::STATUS_IN_PROGRESS,
+        self::STATUS_QC_READY,
+    ];
+
+    public const RESULT_PENDING = 'pending';
+
+    public const RESULT_SUCCESS = 'success';
+
+    public const RESULT_UNREPAIRABLE = 'unrepairable';
+
+    public const RESULT_CUSTOMER_DECLINED = 'customer_declined';
+
+    public const REQUIRED_QC_KEYS = [
+        'display', 'touch', 'camera', 'mic', 'speaker', 'cellular', 'charging', 'biometric',
+    ];
+
+    public const SLA_WORKDAYS = [
+        'light' => 1,
+        'medium' => 3,
+        'heavy' => 7,
+    ];
+
     public const TRANSITIONS = [
-        'intake' => ['diagnosing'],
-        'diagnosing' => ['waiting_sparepart', 'in_progress', 'qc_ready', 'cancelled_unrepairable'],
-        'waiting_sparepart' => ['in_progress', 'cancelled_unrepairable'],
-        'in_progress' => ['waiting_sparepart', 'qc_ready', 'cancelled_unrepairable'],
-        'qc_ready' => ['completed', 'cancelled_unrepairable'],
-        'completed' => ['delivered'],
-        'delivered' => [],
-        'cancelled_unrepairable' => [],
+        self::STATUS_INTAKE => [self::STATUS_DIAGNOSING, self::STATUS_CANCELLED],
+        self::STATUS_DIAGNOSING => [self::STATUS_WAITING_SPAREPART, self::STATUS_IN_PROGRESS, self::STATUS_QC_READY, self::STATUS_COMPLETED],
+        self::STATUS_WAITING_SPAREPART => [self::STATUS_IN_PROGRESS, self::STATUS_COMPLETED],
+        self::STATUS_IN_PROGRESS => [self::STATUS_WAITING_SPAREPART, self::STATUS_QC_READY, self::STATUS_COMPLETED],
+        self::STATUS_QC_READY => [self::STATUS_COMPLETED],
+        self::STATUS_COMPLETED => [self::STATUS_DELIVERED],
+        self::STATUS_DELIVERED => [],
+        self::STATUS_CANCELLED => [],
     ];
 
     public function assertTransition(string $nextStatus): void
     {
-        if ($nextStatus !== $this->status && !in_array($nextStatus, self::TRANSITIONS[$this->status] ?? [], true)) {
+        if ($nextStatus !== $this->status && ! in_array($nextStatus, self::TRANSITIONS[$this->status] ?? [], true)) {
             throw new \RuntimeException("Tiket berstatus '{$this->status}' tidak dapat diubah menjadi '{$nextStatus}'.");
         }
     }
 
     public function isFinal(): bool
     {
-        return in_array($this->status, ['delivered', 'cancelled_unrepairable'], true);
+        return in_array($this->status, [self::STATUS_DELIVERED, self::STATUS_CANCELLED], true);
+    }
+
+    public function hasPendingSparepartRequests(): bool
+    {
+        return $this->sparepartRequests()->where('status', 'pending')->exists();
+    }
+
+    public function hasUnconfirmedSparepartRequests(): bool
+    {
+        return $this->sparepartRequests()
+            ->where('status', 'fulfilled')
+            ->whereNull('confirmed_at')
+            ->exists();
     }
 
     protected static function booted(): void
     {
         static::saving(function (ServiceTicket $ticket): void {
-            if (!in_array($ticket->status, ['completed', 'delivered'], true)) {
+            if (! in_array($ticket->status, ['completed', 'delivered'], true)) {
                 return;
             }
 
@@ -48,8 +105,6 @@ class ServiceTicket extends Model
             }
         });
     }
-
-
 
     protected $fillable = [
         'ticket_number',
@@ -82,6 +137,39 @@ class ServiceTicket extends Model
         'started_at',
         'completed_at',
         'delivered_at',
+        'customer_consent_status',
+        'customer_consent_at',
+        'customer_consent_by_employee_id',
+        'customer_consent_notes',
+        'payment_status',
+        'paid_amount',
+        'payment_recorded_at',
+        'payment_recorded_by_employee_id',
+        'payment_exception_type',
+        'payment_exception_reason',
+        'payment_exception_approved_by_user_id',
+        'payment_exception_approved_at',
+        'delivery_recipient_type',
+        'delivery_recipient_name',
+        'delivered_by_employee_id',
+        'delivery_notes',
+        'unrepairable_reason',
+        'customer_declined_reason',
+        'cancellation_reason',
+        'technical_evidence_json',
+        'service_category',
+        'service_complexity',
+        'sla_version',
+        'sla_baseline_due_at',
+        'sla_due_at',
+        'sla_breached_at',
+        'sparepart_wait_minutes',
+        'sla_snapshot_json',
+        'warranty_expires_at',
+        'warranty_review_status',
+        'warranty_review_reason',
+        'warranty_reviewed_by_user_id',
+        'warranty_reviewed_at',
     ];
 
     protected $casts = [
@@ -94,6 +182,19 @@ class ServiceTicket extends Model
         'qc_checklist_json' => 'array',
         'row_version' => 'integer',
         'is_warranty_return' => 'boolean',
+        'passcode_or_pattern' => 'encrypted',
+        'customer_consent_at' => 'datetime',
+        'paid_amount' => 'decimal:2',
+        'payment_recorded_at' => 'datetime',
+        'payment_exception_approved_at' => 'datetime',
+        'technical_evidence_json' => 'array',
+        'sla_baseline_due_at' => 'datetime',
+        'sla_due_at' => 'datetime',
+        'sla_breached_at' => 'datetime',
+        'sparepart_wait_minutes' => 'integer',
+        'sla_snapshot_json' => 'array',
+        'warranty_expires_at' => 'datetime',
+        'warranty_reviewed_at' => 'datetime',
     ];
 
     public function branch(): BelongsTo
@@ -134,6 +235,11 @@ class ServiceTicket extends Model
     public function feedback(): HasOne
     {
         return $this->hasOne(CustomerFeedback::class);
+    }
+
+    public function feedbackFollowUp(): HasOne
+    {
+        return $this->hasOne(FeedbackFollowUp::class);
     }
 
     public function originalTicket(): BelongsTo

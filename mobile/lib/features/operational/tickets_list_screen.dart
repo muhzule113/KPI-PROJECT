@@ -60,6 +60,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 'in_progress',
                 'diagnosing',
                 'waiting_sparepart',
+                'qc_ready',
               ].contains(t['status'])) ||
           (_selectedFilter == 'completed' && t['status'] == 'completed') ||
           (_selectedFilter == 'delivered' && t['status'] == 'delivered');
@@ -81,8 +82,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final isTeknisi = auth.isTeknisi;
-    final isCs = auth.isCs;
+    final isCs = auth.hasCapability('tickets.create');
+    final canManageTickets = auth.canManageTickets;
+    final canSuperviseTickets = auth.canSuperviseTickets;
 
     return Scaffold(
       appBar: AppBar(
@@ -96,37 +98,6 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SparepartScreen()),
                 );
-              },
-            ),
-          if (auth.isManager)
-            IconButton(
-              icon: const Icon(Icons.sync_rounded),
-              tooltip: 'Sync ke KPI',
-              onPressed: () async {
-                try {
-                  final res = await ApiService.post('/operational/sync-kpi');
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          res['message'] ??
-                              'KPI berhasil disinkronkan dari tiket operasional!',
-                        ),
-                        backgroundColor: AppTheme.primary,
-                      ),
-                    );
-                    _loadTickets();
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e.toString()),
-                        backgroundColor: AppTheme.statusDanger,
-                      ),
-                    );
-                  }
-                }
               },
             ),
         ],
@@ -259,7 +230,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             else
               ..._filteredTickets.map((t) {
                 final status = t['status'] ?? 'intake';
-                final isCompleted = status == 'completed';
+                final canDeliver = List<String>.from(
+                  t['available_actions'] ?? const [],
+                ).contains('deliver');
 
                 return OpsReveal(
                   delay: Duration(
@@ -268,17 +241,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                   child: OpsCard(
                     padding: EdgeInsets.zero,
                     onTap: () async {
-                      if (isTeknisi && status != 'delivered') {
-                        final updated = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TicketProgressScreen(
-                              ticketId: t['id'].toString(),
-                            ),
-                          ),
-                        );
-                        if (updated == true) _loadTickets();
-                      } else if (isCs && isCompleted) {
+                      if (canDeliver) {
                         final delivered = await Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -286,7 +249,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                           ),
                         );
                         if (delivered == true) _loadTickets();
-                      } else {
+                      } else if (canManageTickets) {
                         final updated = await Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -296,6 +259,15 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                           ),
                         );
                         if (updated == true) _loadTickets();
+                      } else {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TicketProgressScreen(
+                              ticketId: t['id'].toString(),
+                            ),
+                          ),
+                        );
                       }
                     },
                     child: Padding(
@@ -391,13 +363,13 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                                   color: AppTheme.primaryBright,
                                 ),
                               ),
-                              if (isCs && isCompleted)
+                              if (canDeliver)
                                 ElevatedButton.icon(
                                   icon: const Icon(
                                     Icons.handshake_rounded,
                                     size: 14,
                                   ),
-                                  label: const Text('Serahkan & CSAT'),
+                                  label: const Text('Serahkan Unit'),
                                   style: ElevatedButton.styleFrom(
                                     minimumSize: const Size(0, 32),
                                     padding: const EdgeInsets.symmetric(
@@ -415,7 +387,9 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
                                     if (delivered == true) _loadTickets();
                                   },
                                 )
-                              else if (isTeknisi && status != 'delivered')
+                              else if ((canManageTickets ||
+                                      canSuperviseTickets) &&
+                                  status != 'delivered')
                                 Icon(
                                   Icons.arrow_forward_ios_rounded,
                                   size: 14,
@@ -466,8 +440,8 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         return 'Selesai Sukses';
       case 'delivered':
         return 'Diserahkan';
-      case 'cancelled_unrepairable':
-        return 'Gagal / Batal';
+      case 'cancelled':
+        return 'Dibatalkan';
       default:
         return status;
     }
@@ -484,7 +458,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         return Icons.search_rounded;
       case 'waiting_sparepart':
         return Icons.inventory_2_rounded;
-      case 'cancelled_unrepairable':
+      case 'cancelled':
         return Icons.cancel_rounded;
       default:
         return Icons.schedule_rounded;
@@ -501,7 +475,7 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
         return AppTheme.primary;
       case 'waiting_sparepart':
         return AppTheme.statusRevision;
-      case 'cancelled_unrepairable':
+      case 'cancelled':
         return AppTheme.statusDanger;
       default:
         return AppTheme.textMuted;

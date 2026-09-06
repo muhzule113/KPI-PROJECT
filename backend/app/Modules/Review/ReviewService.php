@@ -12,6 +12,7 @@ use App\Models\KpiReview;
 use App\Models\KpiReviewItem;
 use App\Models\SystemNotification;
 use App\Models\User;
+use App\Modules\Assessment\DailyAssessmentService;
 use App\Modules\Calculation\KpiCalculationEngine;
 use App\Support\KpiWorkflow;
 use Exception;
@@ -26,7 +27,8 @@ class ReviewService
     public function getReviewQueue(int $supervisorUserId)
     {
         $supervisor = Employee::where('user_id', $supervisorUserId)->first();
-        if (!$supervisor) {
+        $user = User::find($supervisorUserId);
+        if (! $supervisor || ! $user) {
             return collect();
         }
 
@@ -35,7 +37,7 @@ class ReviewService
             ->whereIn('status', ['submitted', 'under_review', 'revision_required', 'verified'])
             ->orderByRaw("FIELD(status, 'submitted', 'under_review', 'revision_required', 'verified')")
             ->orderByDesc('submitted_at')
-            ->get();
+            ->get()->filter(fn (EmployeeKpi $kpi): bool => KpiWorkflow::canReviewKpi($user, $kpi))->values();
     }
 
     public function verifyItem(
@@ -48,20 +50,20 @@ class ReviewService
         $kpi = $item->employeeKpi;
         $reviewer = User::with('employee')->find($reviewerId ?? auth()->id());
 
-        if (!$reviewer || !KpiWorkflow::canReviewKpi($reviewer, $kpi)) {
+        if (! $reviewer || ! KpiWorkflow::canReviewKpi($reviewer, $kpi)) {
             throw new Exception('Anda tidak berwenang mereview KPI ini.');
         }
 
-        if (!in_array($decision, ['valid', 'revision_required'], true)) {
+        if (! in_array($decision, ['valid', 'revision_required'], true)) {
             throw new Exception('Keputusan review tidak valid.');
         }
 
-        if (!in_array($kpi->status, ['submitted', 'under_review', 'revision_required'], true)) {
+        if (! in_array($kpi->status, ['submitted', 'under_review', 'revision_required'], true)) {
             throw new Exception("KPI berstatus '{$kpi->status}' tidak dapat direview.");
         }
 
         if ($decision === 'revision_required' && empty($reason)) {
-            throw new Exception("Permintaan revisi wajib menyertakan alasan yang jelas.");
+            throw new Exception('Permintaan revisi wajib menyertakan alasan yang jelas.');
         }
 
         DB::transaction(function () use ($item, $kpi, $decision, $note, $reason, $reviewerId) {
@@ -72,10 +74,10 @@ class ReviewService
                 ->firstOrFail();
             $reviewer = User::with('employee')->find($reviewerUser);
 
-            if (!$reviewer || !\App\Support\KpiWorkflow::canReviewKpi($reviewer, $lockedKpi)) {
+            if (! $reviewer || ! KpiWorkflow::canReviewKpi($reviewer, $lockedKpi)) {
                 throw new Exception('Anda tidak berwenang mereview KPI ini.');
             }
-            if (!in_array($lockedKpi->status, ['submitted', 'under_review', 'revision_required'], true)) {
+            if (! in_array($lockedKpi->status, ['submitted', 'under_review', 'revision_required'], true)) {
                 throw new Exception("KPI berstatus '{$lockedKpi->status}' tidak dapat direview.");
             }
 
@@ -104,11 +106,14 @@ class ReviewService
             );
 
             $item->status = $decision === 'valid' ? 'verified' : 'revision_required';
+            $item->manager_decision = null;
+            $item->manager_decided_at = null;
+            $item->manager_decided_by = null;
             $item->row_version += 1;
             $item->save();
 
             if ($lockedKpi->status === 'submitted') {
-                \App\Support\KpiWorkflow::assertKpiTransition($lockedKpi, 'under_review');
+                KpiWorkflow::assertKpiTransition($lockedKpi, 'under_review');
                 $lockedKpi->status = 'under_review';
                 $lockedKpi->save();
             }
@@ -117,22 +122,33 @@ class ReviewService
         });
 
         $item->refresh();
+
         return $item;
     }
 
     public function submitRubricAssessment(
         EmployeeKpiItem $item,
         array $answers, // array of ['criterion_id' => int, 'is_fulfilled' => bool, 'notes' => ?string]
-        ?int $reviewerId = null
+        ?int $reviewerId = null,
+        ?string $managerDecision = null,
+        ?string $managerNote = null,
     ): KpiAssessment {
         $item->loadMissing('employeeKpi.employee');
         $kpi = $item->employeeKpi;
         $reviewerUser = $reviewerId ?? auth()->id();
         $reviewer = User::with('employee')->find($reviewerUser);
-        $managerCanAssess = $reviewer && KpiWorkflow::canManageKpi($reviewer, $kpi);
+        $managerCanAssess = $reviewer && $kpi->isSupervisorKpi() && KpiWorkflow::canManageKpi($reviewer, $kpi);
         $supervisorCanAssess = $reviewer && KpiWorkflow::canReviewKpi($reviewer, $kpi);
-        if (!$reviewer || (!$managerCanAssess && !$supervisorCanAssess)) {
+        if (! $reviewer || (! $managerCanAssess && ! $supervisorCanAssess)) {
             throw new Exception('Anda tidak berwenang mereview KPI ini.');
+        }
+        if ($managerCanAssess && ! in_array($managerDecision, ['valid', 'needs_correction', 'data_exception'], true)) {
+            throw new Exception('Keputusan Manager untuk rubric tidak valid.');
+        }
+        if ($managerCanAssess
+            && in_array($managerDecision, ['needs_correction', 'data_exception'], true)
+            && trim((string) $managerNote) === '') {
+            throw new Exception('Catatan wajib diisi untuk rubric yang bermasalah.');
         }
         $criteria = collect($item->rubric_snapshot['criteria'] ?? [])->keyBy(fn (array $criterion) => (string) $criterion['id']);
         $answerIds = collect($answers)->map(fn ($answer) => (string) ($answer['criterion_id'] ?? ''));
@@ -148,7 +164,7 @@ class ReviewService
 
         $answers = collect($answers)->map(function (array $answer) use ($criteria): array {
             $criterion = $criteria->get((string) ($answer['criterion_id'] ?? ''));
-            if (!$criterion) {
+            if (! $criterion) {
                 throw new Exception('Kriteria rubrik tidak valid untuk item ini.');
             }
 
@@ -165,21 +181,21 @@ class ReviewService
             throw new Exception('Semua kriteria rubrik wajib dinilai.');
         }
 
-        return DB::transaction(function () use ($item, $kpi, $answers, $reviewerUser) {
+        return DB::transaction(function () use ($item, $kpi, $answers, $reviewerUser, $managerCanAssess, $managerDecision, $managerNote) {
             $lockedKpi = EmployeeKpi::with('employee')
                 ->whereKey($kpi->id)
                 ->lockForUpdate()
                 ->firstOrFail();
             $reviewer = User::with('employee')->find($reviewerUser);
-            $managerCanAssess = $reviewer && \App\Support\KpiWorkflow::canManageKpi($reviewer, $lockedKpi);
-            $supervisorCanAssess = $reviewer && \App\Support\KpiWorkflow::canReviewKpi($reviewer, $lockedKpi);
-            if (!$reviewer || (!$managerCanAssess && !$supervisorCanAssess)) {
+            $managerCanAssess = $reviewer && $lockedKpi->isSupervisorKpi() && KpiWorkflow::canManageKpi($reviewer, $lockedKpi);
+            $supervisorCanAssess = $reviewer && KpiWorkflow::canReviewKpi($reviewer, $lockedKpi);
+            if (! $reviewer || (! $managerCanAssess && ! $supervisorCanAssess)) {
                 throw new Exception('Anda tidak berwenang mereview KPI ini.');
             }
             $allowedStatuses = $managerCanAssess
-                ? ['pending_approval']
+                ? ['submitted', 'under_review', 'revision_required', 'pending_approval']
                 : ['submitted', 'under_review', 'revision_required'];
-            if (!in_array($lockedKpi->status, $allowedStatuses, true)) {
+            if (! in_array($lockedKpi->status, $allowedStatuses, true)) {
                 throw new Exception("KPI berstatus '{$lockedKpi->status}' tidak dapat direview.");
             }
 
@@ -189,9 +205,6 @@ class ReviewService
                 ->firstOrFail();
             if ($item->status === 'locked' || in_array($lockedKpi->status, ['approved', 'locked'], true)) {
                 throw new Exception('KPI final tidak dapat dinilai ulang.');
-            }
-            if ($managerCanAssess && !in_array($item->status, ['verified', 'assessed'], true)) {
-                throw new Exception('Indikator belum selesai diverifikasi Supervisor.');
             }
 
             $before = [
@@ -220,6 +233,12 @@ class ReviewService
 
             $rawAch = $totalPoints > 0 ? ($earnedPoints / $totalPoints) * 100.0 : 0.0;
             $achievement = min($rawAch, 100.0);
+            if ($managerCanAssess
+                && $managerDecision === 'valid'
+                && $achievement < 100
+                && trim((string) $managerNote) === '') {
+                throw new Exception('Hasil rubric di bawah target wajib disertai catatan Manager.');
+            }
 
             $assessment = KpiAssessment::updateOrCreate(
                 ['employee_kpi_item_id' => $item->id],
@@ -237,7 +256,7 @@ class ReviewService
 
             foreach ($answers as $ans) {
                 $points = (float) ($ans['points'] ?? 1.0);
-                $isFulfilled = !empty($ans['is_fulfilled']);
+                $isFulfilled = ! empty($ans['is_fulfilled']);
                 KpiAssessmentAnswer::create([
                     'kpi_assessment_id' => $assessment->id,
                     'criterion_id' => $ans['criterion_id'] ?? null,
@@ -249,7 +268,13 @@ class ReviewService
             }
 
             $item->actual_decimal = $achievement;
-            $item->status = $managerCanAssess ? 'assessed' : 'verified';
+            $item->status = $managerCanAssess && $managerDecision !== 'valid' ? 'revision_required' : ($managerCanAssess ? 'assessed' : 'verified');
+            if ($managerCanAssess) {
+                $item->manager_decision = $managerDecision;
+                $item->manager_note = $managerNote;
+                $item->manager_decided_by = $reviewerUser;
+                $item->manager_decided_at = now();
+            }
             $item->row_version += 1;
             $item->save();
 
@@ -283,7 +308,7 @@ class ReviewService
     ): void {
         $reviewerUser = $reviewerId ?? auth()->id();
         $reviewer = User::with('employee')->find($reviewerUser);
-        if (!$reviewer || !KpiWorkflow::canReviewKpi($reviewer, $kpi)) {
+        if (! $reviewer || ! KpiWorkflow::canReviewKpi($reviewer, $kpi)) {
             throw new Exception('Anda tidak berwenang mereview KPI ini.');
         }
         if (trim($generalReason) === '') {
@@ -296,16 +321,16 @@ class ReviewService
                 ->lockForUpdate()
                 ->firstOrFail();
             $reviewer = User::with('employee')->find($reviewerUser);
-            if (!$reviewer || !KpiWorkflow::canReviewKpi($reviewer, $lockedKpi)) {
+            if (! $reviewer || ! KpiWorkflow::canReviewKpi($reviewer, $lockedKpi)) {
                 throw new Exception('Anda tidak berwenang mereview KPI ini.');
             }
-            if (!in_array($lockedKpi->status, ['under_review', 'revision_required'], true)) {
+            if (! in_array($lockedKpi->status, ['under_review', 'revision_required'], true)) {
                 throw new Exception("KPI berstatus '{$lockedKpi->status}' tidak dapat diminta revisi.");
             }
 
             $revisionItems = $lockedKpi->items->where('status', 'revision_required');
             if ($revisionItems->isEmpty()) {
-                throw new Exception("Pilih setidaknya satu indikator yang perlu direvisi sebelum mengirim permintaan revisi.");
+                throw new Exception('Pilih setidaknya satu indikator yang perlu direvisi sebelum mengirim permintaan revisi.');
             }
 
             $beforeStatus = $lockedKpi->status;
@@ -349,7 +374,7 @@ class ReviewService
     ): array {
         $reviewerUser = $reviewerId ?? auth()->id();
         $reviewer = User::with('employee')->find($reviewerUser);
-        if (!$reviewer || !KpiWorkflow::canReviewKpi($reviewer, $kpi)) {
+        if (! $reviewer || ! KpiWorkflow::canReviewKpi($reviewer, $kpi)) {
             throw new Exception('Anda tidak berwenang mereview KPI ini.');
         }
 
@@ -359,14 +384,16 @@ class ReviewService
                 ->lockForUpdate()
                 ->firstOrFail();
             $reviewer = User::with('employee')->find($reviewerUser);
-            if (!$reviewer || !KpiWorkflow::canReviewKpi($reviewer, $lockedKpi)) {
+            if (! $reviewer || ! KpiWorkflow::canReviewKpi($reviewer, $lockedKpi)) {
                 throw new Exception('Anda tidak berwenang mereview KPI ini.');
             }
-            if (!in_array($lockedKpi->status, ['under_review', 'verified'], true)) {
+            if (! in_array($lockedKpi->status, ['submitted', 'under_review', 'revision_required', 'verified'], true)) {
                 throw new Exception("KPI berstatus '{$lockedKpi->status}' tidak dapat diteruskan ke Manager.");
             }
 
-            $unverified = $lockedKpi->items->filter(fn ($item) => !in_array($item->status, ['verified', 'assessed'], true));
+            app(DailyAssessmentService::class)->aggregateKpi($lockedKpi, $reviewerUser);
+            $lockedKpi->refresh()->load('items');
+            $unverified = $lockedKpi->items->filter(fn ($item) => ! in_array($item->status, ['verified', 'assessed'], true));
             if ($unverified->isNotEmpty()) {
                 $names = $unverified->pluck('name_snapshot')->join(', ');
                 throw new Exception("Semua indikator harus diverifikasi sebelum diteruskan ke Manager. Indikator belum selesai: {$names}");
@@ -375,9 +402,7 @@ class ReviewService
             $beforeStatus = $lockedKpi->status;
             KpiWorkflow::assertKpiTransition($lockedKpi, 'pending_approval');
             $calcResult = $this->calculationEngine->calculateKpi($lockedKpi, 'review', $reviewerUser);
-            $unscorable = collect($calcResult['items'])
-                ->filter(fn (array $item) => $item['status'] === 'unscorable');
-            if ($unscorable->isNotEmpty()) {
+            if (! $calcResult['all_calculated']) {
                 throw new Exception('KPI belum dapat diteruskan karena ada indikator yang tidak dapat dihitung atau konfigurasi targetnya belum valid.');
             }
 
@@ -396,7 +421,7 @@ class ReviewService
                     'status' => 'pending_approval',
                     'final_score' => $kpi->final_score,
                     'rating_code' => $kpi->rating_code,
-                    'verified_at' => $kpi->verified_at
+                    'verified_at' => $kpi->verified_at,
                 ],
                 reason: $supervisorNotes,
                 actorId: $reviewerUser
@@ -408,7 +433,7 @@ class ReviewService
                 SystemNotification::send(
                     userId: $manager->id,
                     title: "KPI Menunggu Approval: {$kpi->employee->name}",
-                    body: "Supervisor telah memverifikasi KPI {$kpi->employee->name} ({$kpi->employee->position->name}). Silakan nilai seluruh indikator yang menunggu, lalu lakukan approval final.",
+                    body: "Rekap KPI {$kpi->employee->name} sudah lengkap. Periksa hasil dan bukti, lalu setujui atau kembalikan indikator yang perlu dikoreksi.",
                     type: 'kpi_verified',
                     entityType: 'EmployeeKpi',
                     entityId: (string) $kpi->id,

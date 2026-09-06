@@ -4,7 +4,6 @@ class _OpsPalette {
   final Color primary;
   final Color primaryPressed;
   final Color primaryBright;
-  final Color primaryLime;
   final Color darkSurface;
   final Color background;
   final Color surface;
@@ -28,7 +27,6 @@ class _OpsPalette {
     required this.primary,
     required this.primaryPressed,
     required this.primaryBright,
-    required this.primaryLime,
     required this.darkSurface,
     required this.background,
     required this.surface,
@@ -62,19 +60,18 @@ class AppTheme {
   static const _darkPalette = _OpsPalette(
     primary: primary,
     primaryPressed: Color(0xFF065F46),
-    primaryBright: Color(0xFF35D39E),
-    primaryLime: Color(0xFFBEFF50),
-    darkSurface: Color(0xFF101A17),
-    background: Color(0xFF07100E),
-    surface: Color(0xFF111B18),
-    surfaceElevated: Color(0xFF18241F),
-    surfaceMuted: Color(0xFF20302A),
-    surfaceGlass: Color(0xCC111B18),
+    primaryBright: Color(0xFF38B98B),
+    darkSurface: Color(0xFF202622),
+    background: Color(0xFF0E1210),
+    surface: Color(0xFF171B19),
+    surfaceElevated: Color(0xFF202522),
+    surfaceMuted: Color(0xFF2A302D),
+    surfaceGlass: Color(0xE6171B19),
     shadow: Color(0x66000000),
-    parchment: Color(0xFF1B2924),
-    textInk: Color(0xFFF1F7F3),
-    textMuted: Color(0xFFA9BAB1),
-    border: Color(0xFF2A3B34),
+    parchment: Color(0xFF222825),
+    textInk: Color(0xFFF0F4F2),
+    textMuted: Color(0xFFA9B5AF),
+    border: Color(0xFF35403A),
     statusDraft: Color(0xFF94A3B8),
     statusSubmitted: Color(0xFF60A5FA),
     statusUnderReview: Color(0xFFA78BFA),
@@ -84,24 +81,22 @@ class AppTheme {
     statusDanger: Color(0xFFF87171),
   );
 
-  // Light mode memakai graphite-green, dengan teks sekunder dan batas komponen
-  // yang cukup gelap untuk tetap terbaca di layar terang.
+  // Permukaan netral menjaga hijau sebagai warna aksi, bukan warna latar.
   static const _lightPalette = _OpsPalette(
     primary: primary,
     primaryPressed: Color(0xFF065F46),
-    primaryBright: Color(0xFF047857),
-    primaryLime: Color(0xFF466B12),
-    darkSurface: Color(0xFFDCEAE0),
-    background: Color(0xFFF4F8F5),
+    primaryBright: Color(0xFF0F8061),
+    darkSurface: Color(0xFFE7ECE9),
+    background: Color(0xFFF5F6F5),
     surface: Color(0xFFFFFFFF),
-    surfaceElevated: Color(0xFFEAF3ED),
-    surfaceMuted: Color(0xFFDCE9E0),
+    surfaceElevated: Color(0xFFF0F2F1),
+    surfaceMuted: Color(0xFFE5E9E7),
     surfaceGlass: Color(0xF2FFFFFF),
-    shadow: Color(0x22091B12),
-    parchment: Color(0xFFE8F1EB),
-    textInk: Color(0xFF10231A),
-    textMuted: Color(0xFF355247),
-    border: Color(0xFF718A79),
+    shadow: Color(0x1F101714),
+    parchment: Color(0xFFEEF1EF),
+    textInk: Color(0xFF17201B),
+    textMuted: Color(0xFF5D6B64),
+    border: Color(0xFF7F8A84),
     statusDraft: Color(0xFF475569),
     statusSubmitted: Color(0xFF1D4ED8),
     statusUnderReview: Color(0xFF6D28D9),
@@ -123,7 +118,6 @@ class AppTheme {
 
   static Color get primaryPressed => _active.primaryPressed;
   static Color get primaryBright => _active.primaryBright;
-  static Color get primaryLime => _active.primaryLime;
   static Color get darkSurface => _active.darkSurface;
   static Color get background => _active.background;
   static Color get surface => _active.surface;
@@ -177,7 +171,7 @@ class AppTheme {
       seedColor: p.primary,
       primary: p.primary,
       onPrimary: Colors.white,
-      secondary: p.primaryLime,
+      secondary: p.primaryBright,
       onSecondary: isLight ? Colors.white : p.darkSurface,
       surface: p.surface,
       onSurface: p.textInk,
@@ -208,7 +202,7 @@ class AppTheme {
         titleTextStyle: TextStyle(
           color: p.textInk,
           fontSize: 18,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
         ),
       ),
       cardTheme: CardThemeData(
@@ -232,7 +226,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusLg),
           ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           animationDuration: motionStandard,
         ),
       ),
@@ -317,25 +311,25 @@ class AppTheme {
       textTheme: TextTheme(
         headlineMedium: TextStyle(
           fontSize: 24,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: p.textInk,
           letterSpacing: -0.5,
         ),
         titleLarge: TextStyle(
           fontSize: 18,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
           color: p.textInk,
         ),
         titleMedium: TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
           color: p.textInk,
         ),
         bodyMedium: TextStyle(fontSize: 14, color: p.textInk),
         bodySmall: TextStyle(fontSize: 12, color: p.textMuted),
         labelLarge: TextStyle(
           fontSize: 15,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w600,
           color: p.textInk,
         ),
         labelMedium: TextStyle(

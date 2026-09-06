@@ -12,6 +12,8 @@ use App\Modules\Calculation\Strategies\HigherIsBetterCalculator;
 use App\Modules\Calculation\Strategies\LowerIsBetterCalculator;
 use App\Modules\Calculation\Strategies\RubricCalculator;
 use App\Modules\Calculation\Strategies\ZeroToleranceCalculator;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 
 class KpiCalculationEngine
 {
@@ -21,10 +23,10 @@ class KpiCalculationEngine
     public function __construct()
     {
         $this->strategies = [
-            'higher_is_better' => new HigherIsBetterCalculator(),
-            'lower_is_better' => new LowerIsBetterCalculator(),
-            'zero_tolerance' => new ZeroToleranceCalculator(),
-            'rubric' => new RubricCalculator(),
+            'higher_is_better' => new HigherIsBetterCalculator,
+            'lower_is_better' => new LowerIsBetterCalculator,
+            'zero_tolerance' => new ZeroToleranceCalculator,
+            'rubric' => new RubricCalculator,
         ];
     }
 
@@ -35,7 +37,9 @@ class KpiCalculationEngine
 
     public function calculateItem(EmployeeKpiItem $item, bool $persist = true): CalculationResult
     {
-        $calculator = $this->getCalculator($item->formula_key_snapshot);
+        $calculator = $item->isManualRated()
+            ? $this->strategies['rubric']
+            : $this->getCalculator($item->formula_key_snapshot);
         $result = $calculator
             ? $calculator->calculate($item)
             : CalculationResult::unscorable("Formula KPI '{$item->formula_key_snapshot}' tidak dikenali.");
@@ -55,7 +59,7 @@ class KpiCalculationEngine
     {
         $kpi->loadMissing(['items.assessment', 'templateVersion.ratingScheme.bands']);
 
-        $totalScoreRaw = 0.0;
+        $totalScoreRaw = BigDecimal::zero();
         $allCalculated = true;
         $itemsSnapshot = [];
 
@@ -77,7 +81,7 @@ class KpiCalculationEngine
             ];
 
             if ($result->status === 'calculated' && $result->weightedScore !== null) {
-                $totalScoreRaw += (float) $result->weightedScore;
+                $totalScoreRaw = $totalScoreRaw->plus(BigDecimal::of((string) $result->weightedScore));
             } else {
                 $allCalculated = false;
             }
@@ -85,13 +89,18 @@ class KpiCalculationEngine
 
         // Partial KPI tidak boleh terlihat sebagai skor final.
         $finalScore = $allCalculated
-            ? round($totalScoreRaw, 2, PHP_ROUND_HALF_UP)
+            ? ($totalScoreRaw->isGreaterThan(BigDecimal::of((string) ($kpi->score_cap_snapshot ?? 100)))
+                ? BigDecimal::of((string) ($kpi->score_cap_snapshot ?? 100))
+                : $totalScoreRaw)->toScale(2, RoundingMode::HalfUp)->toFloat()
             : null;
 
-        // Find rating band
-        $ratingScheme = $kpi->templateVersion?->ratingScheme ?? KpiRatingScheme::where('is_default', true)->first();
+        // Snapshot selalu menang; fallback hanya untuk data legacy.
+        $snapshotBand = $finalScore === null ? null : collect($kpi->rating_bands_snapshot ?? [])->first(
+            fn (array $candidate): bool => $finalScore >= (float) $candidate['min_score'] && $finalScore <= (float) $candidate['max_score']
+        );
+        $ratingScheme = $snapshotBand ? null : ($kpi->templateVersion?->ratingScheme ?? KpiRatingScheme::where('is_default', true)->first());
         $band = null;
-        if ($ratingScheme && $finalScore !== null) {
+        if (! $snapshotBand && $ratingScheme && $finalScore !== null) {
             $band = KpiRatingBand::where('rating_scheme_id', $ratingScheme->id)
                 ->where('min_score', '<=', $finalScore)
                 ->where('max_score', '>=', $finalScore)
@@ -99,9 +108,9 @@ class KpiCalculationEngine
         }
 
         $kpi->final_score = $finalScore;
-        $kpi->rating_code = $band?->code ?? ($finalScore >= 95 ? 'STAR' : ($finalScore >= 80 ? 'GOOD' : 'FAIR'));
-        $kpi->rating_label = $band?->label ?? ($finalScore >= 95 ? '⭐ Istimewa' : ($finalScore >= 80 ? 'Baik' : 'Cukup'));
-        if (!$allCalculated) {
+        $kpi->rating_code = $snapshotBand['code'] ?? $band?->code ?? ($finalScore >= 95 ? 'STAR' : ($finalScore >= 80 ? 'GOOD' : 'FAIR'));
+        $kpi->rating_label = $snapshotBand['label'] ?? $band?->label ?? ($finalScore >= 95 ? '⭐ Istimewa' : ($finalScore >= 80 ? 'Baik' : 'Cukup'));
+        if (! $allCalculated) {
             $kpi->rating_code = null;
             $kpi->rating_label = null;
         }
@@ -109,7 +118,7 @@ class KpiCalculationEngine
         $kpi->save();
 
         // Save Calculation Run Log for auditability
-        KpiCalculationRun::create([
+        $run = [
             'employee_kpi_id' => $kpi->id,
             'run_type' => $runType,
             'input_snapshot' => [
@@ -137,7 +146,12 @@ class KpiCalculationEngine
             'rating_code' => $kpi->rating_code,
             'calculated_by' => $userId ?? auth()->id(),
             'calculated_at' => now(),
-        ]);
+        ];
+        $latest = in_array($runType, ['operational_sync', 'daily_aggregation'], true)
+            ? $kpi->calculationRuns()->first() : null;
+        if (! $latest || $latest->input_snapshot != $run['input_snapshot'] || $latest->output_snapshot != $run['output_snapshot']) {
+            KpiCalculationRun::create($run);
+        }
 
         return [
             'total_score' => $finalScore,

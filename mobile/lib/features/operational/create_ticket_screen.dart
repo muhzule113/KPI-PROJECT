@@ -20,7 +20,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   final _passcodeController = TextEditingController();
   final _complaintController = TextEditingController();
   final _conditionController = TextEditingController();
-  final _costController = TextEditingController(text: '0');
+  String _serviceComplexity = 'light';
 
   bool _isSubmitting = false;
 
@@ -34,7 +34,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     _passcodeController.dispose();
     _complaintController.dispose();
     _conditionController.dispose();
-    _costController.dispose();
     super.dispose();
   }
 
@@ -53,9 +52,8 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
         'passcode_or_pattern': _passcodeController.text.trim(),
         'initial_complaint': _complaintController.text.trim(),
         'physical_condition': _conditionController.text.trim(),
-        'estimated_cost': double.tryParse(_costController.text.trim()) ?? 0,
+        'service_complexity': _serviceComplexity,
       });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -82,7 +80,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Buat Tiket Servis Masuk (CS)')),
+      appBar: AppBar(title: const Text('Tiket Servis Baru')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -90,11 +88,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
           children: [
             Text(
               'Informasi Pelanggan',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textInk,
-              ),
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -107,6 +101,33 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
               validator: (v) => v == null || v.trim().isEmpty
                   ? 'Nama pelanggan wajib diisi'
                   : null,
+            ),
+            const SizedBox(height: 12),
+            OpsSelectionField<String>(
+              label: 'Kompleksitas servis',
+              sheetTitle: 'Pilih kompleksitas servis',
+              value: _serviceComplexity,
+              options: const [
+                OpsSelectionOption(
+                  value: 'light',
+                  label: 'Ringan',
+                  supportingText: 'SLA 1 hari kerja',
+                  icon: Icons.speed_rounded,
+                ),
+                OpsSelectionOption(
+                  value: 'medium',
+                  label: 'Sedang',
+                  supportingText: 'SLA 3 hari kerja',
+                  icon: Icons.build_outlined,
+                ),
+                OpsSelectionOption(
+                  value: 'heavy',
+                  label: 'Berat',
+                  supportingText: 'SLA 7 hari kerja',
+                  icon: Icons.precision_manufacturing_outlined,
+                ),
+              ],
+              onChanged: (value) => setState(() => _serviceComplexity = value),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -125,11 +146,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
             Text(
               'Informasi Perangkat HP',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textInk,
-              ),
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
             OpsAdaptiveFieldRow(
@@ -194,15 +211,6 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   ? 'Keluhan kerusakan wajib diisi'
                   : null,
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _costController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Estimasi Biaya Awal (Rp)',
-                prefixText: 'Rp ',
-              ),
-            ),
             const SizedBox(height: 28),
 
             OpsReveal(
@@ -219,7 +227,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Buat Tiket & Teruskan ke Teknisi'),
+                    : const Text('Buat tiket'),
               ),
             ),
             const SizedBox(height: 20),

@@ -4,7 +4,6 @@ namespace Tests\Unit;
 
 use App\Models\EmployeeKpiItem;
 use App\Models\KpiAssessment;
-use App\Modules\Calculation\KpiCalculationEngine;
 use App\Modules\Calculation\Strategies\HigherIsBetterCalculator;
 use App\Modules\Calculation\Strategies\LowerIsBetterCalculator;
 use App\Modules\Calculation\Strategies\RubricCalculator;
@@ -14,17 +13,20 @@ use Tests\TestCase;
 class KpiCalculationEngineTest extends TestCase
 {
     protected HigherIsBetterCalculator $higherCalc;
+
     protected LowerIsBetterCalculator $lowerCalc;
+
     protected ZeroToleranceCalculator $zeroCalc;
+
     protected RubricCalculator $rubricCalc;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->higherCalc = new HigherIsBetterCalculator();
-        $this->lowerCalc = new LowerIsBetterCalculator();
-        $this->zeroCalc = new ZeroToleranceCalculator();
-        $this->rubricCalc = new RubricCalculator();
+        $this->higherCalc = new HigherIsBetterCalculator;
+        $this->lowerCalc = new LowerIsBetterCalculator;
+        $this->zeroCalc = new ZeroToleranceCalculator;
+        $this->rubricCalc = new RubricCalculator;
     }
 
     public function test_higher_is_better_normal_and_capped(): void
@@ -151,5 +153,20 @@ class KpiCalculationEngineTest extends TestCase
         $res = $this->zeroCalc->calculate($item);
         $this->assertFalse($res->isSuccess);
         $this->assertSame('unscorable', $res->status);
+    }
+
+    public function test_lower_formula_rounds_half_up_at_six_decimals(): void
+    {
+        $item = new EmployeeKpiItem([
+            'weight_snapshot' => '15.000000',
+            'target_value_snapshot' => '3.000000',
+            'target_json_snapshot' => ['failure_limit' => '6.000000'],
+            'actual_decimal' => '4.999999',
+        ]);
+
+        $result = $this->lowerCalc->calculate($item);
+
+        $this->assertSame(33.333367, $result->achievementPercentage);
+        $this->assertSame(5.000005, $result->weightedScore);
     }
 }

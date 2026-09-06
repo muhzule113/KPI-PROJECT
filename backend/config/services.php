@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    'clamav' => [
+        'host' => env('CLAMAV_HOST', '127.0.0.1'),
+        'port' => env('CLAMAV_PORT', 3310),
+        'timeout' => env('CLAMAV_TIMEOUT', 5),
+        'fake_result' => env('CLAMAV_FAKE_RESULT'),
+    ],
+
+    'fcm' => [
+        'project_id' => env('FCM_PROJECT_ID'),
+        'bearer_token' => env('FCM_BEARER_TOKEN'),
+        'service_account' => env('FCM_SERVICE_ACCOUNT_PATH'),
+    ],
+
 ];

@@ -68,9 +68,14 @@ class KpiPeriod extends Model
 
     public static function active(): ?self
     {
-        return static::query()
-            ->where('status', 'OPEN')
-            ->orderByDesc('id')
-            ->first();
+        return static::resolveOpen(now());
+    }
+
+    public static function resolveOpen(mixed $date, ?int $branchId = null): ?self
+    {
+        return static::query()->where('status', 'OPEN')
+            ->whereDate('start_date', '<=', $date)->whereDate('end_date', '>=', $date)
+            ->when($branchId, fn ($query, int $id) => $query->whereHas('branches', fn ($branches) => $branches->whereKey($id)))
+            ->orderByDesc('start_date')->first();
     }
 }

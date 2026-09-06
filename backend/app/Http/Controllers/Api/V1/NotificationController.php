@@ -18,17 +18,7 @@ class NotificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $notifications->map(fn($n) => [
-                'id' => $n->id,
-                'title' => $n->title,
-                'body' => $n->body,
-                'type' => $n->type,
-                'entity_type' => $n->entity_type,
-                'entity_id' => $n->entity_id,
-                'action_url' => $n->action_url,
-                'is_read' => (bool) $n->is_read,
-                'created_at' => $n->created_at->toIso8601String(),
-            ]),
+            'data' => $notifications->map(fn ($n) => $n->visiblePayload($request->user()))->filter()->values(),
         ]);
     }
 

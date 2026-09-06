@@ -6,9 +6,23 @@ import 'core/auth/auth_provider.dart';
 import 'core/settings/app_preferences.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
+import 'features/notifications/notification_screen.dart';
+import 'core/notifications/push_notification_service.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationService.instance.initialize();
+  PushNotificationService.instance.onOpen = (data) async {
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => NotificationScreen(
+          initialNotificationId: data['notification_id']?.toString(),
+        ),
+      ),
+    );
+  };
 
   final authProvider = AuthProvider();
   await authProvider.init();
@@ -41,6 +55,7 @@ class KpiMobileApp extends StatelessWidget {
     AppTheme.reduceMotion = preferences.reduceMotion;
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Sistem KPI Toko HP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

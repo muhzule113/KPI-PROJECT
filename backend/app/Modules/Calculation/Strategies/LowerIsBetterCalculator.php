@@ -5,48 +5,49 @@ namespace App\Modules\Calculation\Strategies;
 use App\Models\EmployeeKpiItem;
 use App\Modules\Calculation\CalculationResult;
 use App\Modules\Calculation\Contracts\CalculatorInterface;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 
 class LowerIsBetterCalculator implements CalculatorInterface
 {
     public function calculate(EmployeeKpiItem $item): CalculationResult
     {
-        $weight = (float) $item->weight_snapshot;
-        $target = (float) ($item->target_value_snapshot ?? 0);
-        $actual = $item->actual_decimal !== null ? (float) $item->actual_decimal : null;
-
-        if ($actual === null) {
+        if ($item->actual_decimal === null) {
             return CalculationResult::pending('Nilai aktual belum diisi');
         }
+        $weight = BigDecimal::of((string) $item->weight_snapshot);
+        $target = BigDecimal::of((string) ($item->target_value_snapshot ?? 0));
+        $actual = BigDecimal::of((string) $item->actual_decimal);
 
         $targetData = $item->target_json_snapshot ?? [];
         $formulaParams = $item->formula_params_snapshot ?? [];
-        $failureLimit = isset($targetData['failure_limit']) 
-            ? (float) $targetData['failure_limit'] 
-            : (isset($formulaParams['failure_limit']) ? (float) $formulaParams['failure_limit'] : null);
+        $failureValue = $targetData['failure_limit'] ?? $formulaParams['failure_limit'] ?? null;
+        $failureLimit = $failureValue === null ? null : BigDecimal::of((string) $failureValue);
 
-        if ($failureLimit === null || $failureLimit <= $target) {
+        if ($failureLimit === null || $failureLimit->isLessThanOrEqualTo($target)) {
             return CalculationResult::unscorable('Failure limit belum dikonfigurasi atau tidak lebih besar dari target');
         }
 
-        $cap = isset($formulaParams['cap']) ? (float) $formulaParams['cap'] : 100.0;
+        $cap = BigDecimal::of((string) ($formulaParams['cap'] ?? 100));
 
-        if ($actual <= $target) {
-            $achievement = 100.0;
-        } elseif ($actual >= $failureLimit) {
-            $achievement = 0.0;
+        if ($actual->isLessThanOrEqualTo($target)) {
+            $achievement = BigDecimal::of(100);
+        } elseif ($actual->isGreaterThanOrEqualTo($failureLimit)) {
+            $achievement = BigDecimal::zero();
         } else {
-            $achievement = (($failureLimit - $actual) / ($failureLimit - $target)) * 100.0;
+            $achievement = $failureLimit->minus($actual)->multipliedBy(100)
+                ->dividedBy($failureLimit->minus($target), 6, RoundingMode::HalfUp);
         }
 
-        $achievement = min(max($achievement, 0.0), $cap);
-        $weightedScore = ($achievement * ($weight / 100.0));
+        $achievement = $achievement->isGreaterThan($cap) ? $cap : $achievement;
+        $weightedScore = $achievement->multipliedBy($weight)->dividedBy(100, 6, RoundingMode::HalfUp);
 
-        return CalculationResult::calculated($achievement, $weightedScore, [
-            'target' => $target,
-            'failure_limit' => $failureLimit,
-            'actual' => $actual,
-            'cap' => $cap,
-            'weight' => $weight,
+        return CalculationResult::calculated($achievement->toFloat(), $weightedScore->toFloat(), [
+            'target' => $target->toFloat(),
+            'failure_limit' => $failureLimit->toFloat(),
+            'actual' => $actual->toFloat(),
+            'cap' => $cap->toFloat(),
+            'weight' => $weight->toFloat(),
         ]);
     }
 }

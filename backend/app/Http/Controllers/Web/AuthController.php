@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
+use App\Support\CapabilityMatrix;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,7 +15,7 @@ final class AuthController extends Controller
 {
     public function showLogin(): Response|RedirectResponse
     {
-        if (Auth::check()) {
+        if (Auth::guard('web')->check()) {
             return redirect()->route('app.dashboard');
         }
 
@@ -29,12 +30,21 @@ final class AuthController extends Controller
             'remember' => ['boolean'],
         ]);
 
-        if (!Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']], (bool) ($credentials['remember'] ?? false))) {
+        if (! Auth::guard('web')->attempt(['email' => $credentials['email'], 'password' => $credentials['password']], (bool) ($credentials['remember'] ?? false))) {
             return back()->withErrors(['email' => 'Email atau kata sandi yang Anda masukkan salah.'])->onlyInput('email');
         }
 
+        $user = Auth::guard('web')->user()->loadMissing(['employee.position', 'employee.branch', 'roles']);
+        if ($error = CapabilityMatrix::accessError($user, 'web')) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors(['email' => $error])->onlyInput('email');
+        }
+
         $request->session()->regenerate();
-        AuditEvent::log('web_login', 'User', (string) $request->user()->getKey(), actorId: $request->user()->getKey());
+        AuditEvent::log('web_login', 'User', (string) $user->getKey(), actorId: $user->getKey());
 
         return redirect()->intended(route('app.dashboard'));
     }
@@ -42,7 +52,7 @@ final class AuthController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $userId = $request->user()?->getKey();
-        Auth::logout();
+        Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

@@ -1,10 +1,8 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 import { ArrowLeft, CalendarDays } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 
 const statusLabels = {
     draft: 'Draft',
@@ -15,27 +13,8 @@ const statusLabels = {
 };
 
 export default function DailyKpi({ date, period, kpi, items = [], message }) {
-    const [values, setValues] = useState({});
-
-    useEffect(() => {
-        setValues(Object.fromEntries(items.map((item) => [item.id, item.employee_actual ?? ''])));
-    }, [items]);
-
     const changeDate = (event) => {
         router.get('/app/my-kpi/daily', { date: event.target.value }, { preserveState: false, replace: true });
-    };
-
-    const save = (submit = false) => {
-        router.post('/app/my-kpi/daily', {
-            date,
-            submit,
-            items: items
-                .filter((item) => item.editable)
-                .map((item) => ({
-                    item_id: item.id,
-                    actual_decimal: values[item.id] === '' ? null : values[item.id],
-                })),
-        }, { preserveScroll: true });
     };
 
     return (
@@ -49,7 +28,7 @@ export default function DailyKpi({ date, period, kpi, items = [], message }) {
                                 <ArrowLeft className="size-3.5" />Dashboard
                             </Link>
                             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">KPI Harian Saya</h1>
-                            <p className="mt-1 text-sm text-muted-foreground">Isi indikator milik Anda; indikator operasional lain akan diisi atau divalidasi sumber resminya.</p>
+                            <p className="mt-1 text-sm text-muted-foreground">Pantau fakta harian yang disiapkan sistem dan hasil review Supervisor.</p>
                         </div>
                         <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2">
                             <CalendarDays className="size-4 text-primary" />
@@ -67,13 +46,13 @@ export default function DailyKpi({ date, period, kpi, items = [], message }) {
                             <div className="grid gap-4 sm:grid-cols-3">
                                 <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Periode</p><p className="mt-2 font-semibold">{period?.name ?? '—'}</p></CardContent></Card>
                                 <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Status KPI bulanan</p><p className="mt-2"><Badge variant="outline">{kpi.status}</Badge></p></CardContent></Card>
-                                <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Total sementara bulan ini</p><p className="mt-2 text-2xl font-semibold">{kpi.final_score ?? '—'}</p></CardContent></Card>
+                                <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Skor KPI bulanan</p><p className="mt-2 text-2xl font-semibold">{kpi.final_score ?? 'Menunggu publikasi'}</p></CardContent></Card>
                             </div>
 
                             <Card className="overflow-hidden">
                                 <CardHeader className="border-b border-border/70">
                                     <CardTitle>Indikator untuk {date}</CardTitle>
-                                    <CardDescription>Indikator bertanda input dapat disimpan sebagai draft lalu dikirim untuk review.</CardDescription>
+                                    <CardDescription>Data disiapkan otomatis dan dinilai Supervisor. Halaman ini bersifat baca saja.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="p-0">
                                     <div className="overflow-x-auto">
@@ -97,17 +76,7 @@ export default function DailyKpi({ date, period, kpi, items = [], message }) {
                                                         <tr key={item.id} className="align-top">
                                                             <td className="px-5 py-4"><p className="font-semibold">{item.code}</p><p className="mt-1 max-w-xs text-muted-foreground">{item.name}</p><p className="mt-1 text-xs text-muted-foreground">Bobot {item.weight}%</p></td>
                                                             <td className="px-5 py-4 text-muted-foreground">{item.target ?? '—'} {item.unit}</td>
-                                                            <td className="px-5 py-4 text-muted-foreground">
-                                                                {item.editable ? (
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="any"
-                                                                        value={values[item.id] ?? ''}
-                                                                        onChange={(event) => setValues((current) => ({ ...current, [item.id]: event.target.value }))}
-                                                                        className="w-36"
-                                                                    />
-                                                                ) : hasValue ? String(value) + suffix : 'Menunggu sistem/review'}
-                                                            </td>
+                                                            <td className="px-5 py-4 text-muted-foreground">{hasValue ? String(value) + suffix : 'Menunggu sistem/review'}</td>
                                                             <td className="px-5 py-4 text-muted-foreground">{item.effective_actual ?? item.effective_rubric_score ?? '—'}{hasValue ? suffix : ''}</td>
                                                             <td className="px-5 py-4"><Badge variant={status === 'Perlu revisi' ? 'destructive' : reviewed ? 'default' : 'outline'}>{status}</Badge></td>
                                                         </tr>
@@ -116,12 +85,6 @@ export default function DailyKpi({ date, period, kpi, items = [], message }) {
                                             </tbody>
                                         </table>
                                     </div>
-                                    {items.some((item) => item.editable) && (
-                                        <div className="flex justify-end gap-2 border-t border-border/70 p-4">
-                                            <button type="button" className="rounded-lg border px-4 py-2 text-sm font-medium" onClick={() => save(false)}>Simpan draft</button>
-                                            <button type="button" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" onClick={() => save(true)}>Submit untuk review</button>
-                                        </div>
-                                    )}
                                 </CardContent>
                             </Card>
                         </>

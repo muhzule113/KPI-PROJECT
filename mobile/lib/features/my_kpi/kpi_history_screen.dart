@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/widgets/kpi_ui.dart';
 import '../../core/api/api_service.dart';
+import 'my_kpi_screen.dart';
 
 class KpiHistoryScreen extends StatefulWidget {
   const KpiHistoryScreen({super.key});
@@ -89,6 +90,12 @@ class _KpiHistoryScreenState extends State<KpiHistoryScreen> {
             child: OpsCard(
               padding: EdgeInsets.zero,
               child: ListTile(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: Text(h['period_name'] ?? 'Riwayat KPI')),
+                    body: MyKpiScreen(periodId: h['period_id'] as int?),
+                  ),
+                )),
                 leading: Container(
                   width: 40,
                   height: 40,

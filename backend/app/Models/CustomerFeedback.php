@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerFeedback extends Model
 {
@@ -40,5 +41,10 @@ class CustomerFeedback extends Model
     public function pelayanEmployee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'cs_employee_id');
+    }
+
+    public function followUp(): HasOne
+    {
+        return $this->hasOne(FeedbackFollowUp::class);
     }
 }

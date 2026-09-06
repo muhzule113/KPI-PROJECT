@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\KpiDailyEntry;
 use App\Modules\Assessment\DailyAssessmentService;
+use App\Support\KpiVisibility;
 use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,7 +34,7 @@ final class DailyAssessmentController extends Controller
                 'success' => true,
                 'data' => $this->employeeDayPayload($day),
             ]);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+        } catch (AuthorizationException $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 403);
         } catch (Exception $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
@@ -66,7 +69,7 @@ final class DailyAssessmentController extends Controller
                     : 'Draft KPI harian berhasil disimpan.',
                 'data' => $this->employeeDayPayload($day),
             ]);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+        } catch (AuthorizationException $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 403);
         } catch (Exception $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
@@ -183,6 +186,8 @@ final class DailyAssessmentController extends Controller
 
     private function employeeDayPayload(array $day): array
     {
+        $showScores = KpiVisibility::published($day['period']);
+
         return [
             'date' => $day['date'],
             'period' => [
@@ -194,29 +199,31 @@ final class DailyAssessmentController extends Controller
             'kpi' => [
                 'id' => $day['kpi']->id,
                 'status' => $day['kpi']->status,
-                'final_score' => $day['kpi']->final_score !== null ? (float) $day['kpi']->final_score : null,
+                'scores_published' => $showScores,
+                'final_score' => $showScores && $day['kpi']->final_score !== null ? (float) $day['kpi']->final_score : null,
             ],
             'items' => collect($day['entries'])
-                ->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))
+                ->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry, $showScores))
                 ->values(),
         ];
     }
 
-    private function entryPayload(KpiDailyEntry $entry): array
+    private function entryPayload(KpiDailyEntry $entry, bool $showScores = true): array
     {
         $item = $entry->item;
         $kpi = $item->employeeKpi;
         $employee = $kpi->employee;
 
-        return [
+        $payload = [
             'id' => $entry->id,
+            'row_version' => $entry->row_version,
             'date' => $entry->entry_date?->toDateString(),
             'kpi_id' => $kpi->id,
             'employee' => [
                 'id' => $employee?->id,
                 'name' => $employee?->name,
-                'position' => $employee?->position?->name,
-                'branch' => $employee?->branch?->name,
+                'position' => $kpi->positionSnapshot?->name,
+                'branch' => $kpi->branchSnapshot?->name,
             ],
             'item' => [
                 'id' => $item->id,
@@ -228,16 +235,16 @@ final class DailyAssessmentController extends Controller
                 'formula' => $item->formula_key_snapshot,
                 'source_type' => $item->source_type_snapshot,
                 'rubric' => $item->rubric_snapshot,
+                'input_type' => $item->isAttendanceIndicator() ? 'attendance' : ($item->isManualRated() ? 'rating' : ($item->formula_key_snapshot === 'rubric' ? 'rubric' : 'numeric')),
+                'manual_rating_options' => $item->isManualRated() ? $item->manualRatingOptions() : [],
+                'attendance_options' => $item->isAttendanceIndicator() ? collect(Attendance::STATUSES)->map(fn (string $status): array => [
+                    'value' => $status,
+                    'label' => Attendance::statusLabel($status),
+                ])->values()->all() : [],
                 'system_actual' => $item->systemActualDecimal(),
                 'system_meta' => $entry->system_actual_json ?? ($item->isSystemSourced() ? $item->actual_json : null),
             ],
-            'employee_editable' => strtolower((string) $item->source_type_snapshot) === 'employee'
-                && $item->formula_key_snapshot !== 'rubric'
-                && $entry->supervisor_status !== 'approved'
-                && $entry->manager_status !== 'approved'
-                && ($entry->employee_submitted_at === null
-                    || $entry->supervisor_status === 'revision_required'
-                    || $entry->manager_status === 'revision_required'),
+            'employee_editable' => false,
             'entry_status' => $entry->entry_status,
             'system_actual_decimal' => $entry->system_actual_decimal !== null ? (float) $entry->system_actual_decimal : null,
             'system_actual_json' => $entry->system_actual_json,
@@ -247,16 +254,35 @@ final class DailyAssessmentController extends Controller
             'employee_submitted_at' => $entry->employee_submitted_at?->toIso8601String(),
             'supervisor_actual_decimal' => $entry->supervisor_actual_decimal !== null ? (float) $entry->supervisor_actual_decimal : null,
             'supervisor_score_percentage' => $entry->supervisor_score_percentage !== null ? (float) $entry->supervisor_score_percentage : null,
+            'supervisor_actual_json' => $entry->supervisor_actual_json,
             'supervisor_answers' => $entry->supervisor_answers_json,
             'supervisor_note' => $entry->supervisor_note,
             'supervisor_status' => $entry->supervisor_status,
             'manager_actual_decimal' => $entry->manager_actual_decimal !== null ? (float) $entry->manager_actual_decimal : null,
             'manager_score_percentage' => $entry->manager_score_percentage !== null ? (float) $entry->manager_score_percentage : null,
+            'manager_actual_json' => $entry->manager_actual_json,
             'manager_answers' => $entry->manager_answers_json,
             'manager_note' => $entry->manager_note,
             'manager_status' => $entry->manager_status,
             'effective_actual_decimal' => $entry->effectiveActualDecimal(),
             'effective_rubric_score' => $entry->effectiveRubricScore(),
         ];
+        if (! $showScores) {
+            foreach (['supervisor_score_percentage', 'manager_score_percentage', 'effective_rubric_score', 'supervisor_answers', 'manager_answers'] as $key) {
+                $payload[$key] = null;
+            }
+            if ($item->isManualRated() || $item->formula_key_snapshot === 'rubric'
+                || in_array($item->definition_code_snapshot, ['SUP-01', 'SUP-02'], true)) {
+                foreach (['system_actual_decimal', 'system_actual_json', 'employee_actual_decimal', 'employee_actual_json',
+                    'supervisor_actual_decimal', 'supervisor_actual_json', 'manager_actual_decimal', 'manager_actual_json',
+                    'effective_actual_decimal', 'supervisor_note', 'manager_note'] as $key) {
+                    $payload[$key] = null;
+                }
+                $payload['item']['system_actual'] = null;
+                $payload['item']['system_meta'] = null;
+            }
+        }
+
+        return $payload;
     }
 }

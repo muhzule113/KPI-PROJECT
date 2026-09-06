@@ -9,13 +9,18 @@ import '../../core/realtime/realtime_service.dart';
 import '../approval/manager_approval_screen.dart';
 import '../imports/cashier_upload_screen.dart';
 import '../operational/create_ticket_screen.dart';
+import '../operational/feedback_screen.dart';
+import '../operational/resource_screen.dart';
 import '../operational/sparepart_screen.dart';
+import '../attendance/supervisor_attendance_screen.dart';
+import '../reports/kpi_report_screen.dart';
 import '../../app/widgets/kpi_ui.dart';
 import '../my_kpi/my_kpi_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../operational/tickets_list_screen.dart';
 import '../profile/profile_screen.dart';
 import '../review/supervisor_queue_screen.dart';
+import '../review/daily_assessment_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -90,13 +95,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final auth = context.watch<AuthProvider>();
     final employee = auth.employee;
 
-    // Bottom nav utama — max 5 item (rule bottom-nav-limit).
-    // Item sekunder (Review/Approval/Laporan Kasir) dipindah ke overflow menu di AppBar.
-    final hasOperations = auth.isTeknisi || auth.isCs || auth.isGudang;
+    final hasMyKpi = auth.hasCapability('kpi.self.view');
     final List<Widget> tabs = [
       _buildHomeTab(auth, employee),
-      if (hasOperations) const TicketsListScreen(),
-      const MyKpiScreen(),
+      SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Tugas', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 16),
+          _buildQuickActions(auth),
+        ]),
+      ),
+      if (hasMyKpi) const MyKpiScreen(),
       const ProfileScreen(),
     ];
 
@@ -113,17 +123,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         selectedIcon: Icon(Icons.dashboard_rounded),
         label: 'Beranda',
       ),
-      if (hasOperations)
-        const NavigationDestination(
+      const NavigationDestination(
           icon: Icon(Icons.handyman_outlined),
           selectedIcon: Icon(Icons.handyman_rounded),
-          label: 'Operasional',
+          label: 'Tugas',
         ),
-      const NavigationDestination(
-        icon: Icon(Icons.insights_outlined),
-        selectedIcon: Icon(Icons.insights_rounded),
-        label: 'KPI Saya',
-      ),
+      if (hasMyKpi)
+        const NavigationDestination(
+          icon: Icon(Icons.insights_outlined),
+          selectedIcon: Icon(Icons.insights_rounded),
+          label: 'KPI Saya',
+        ),
       const NavigationDestination(
         icon: Icon(Icons.person_outline_rounded),
         selectedIcon: Icon(Icons.person_rounded),
@@ -185,32 +195,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
-          if (auth.isSupervisor || auth.isManager || auth.isKasir)
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_horiz_rounded),
-              tooltip: 'Menu lainnya',
-              onSelected: _openSecondaryScreen,
-              itemBuilder: (context) => [
-                if (auth.isSupervisor)
-                  PopupMenuItem(
-                    value: 'supervisor',
-                    child: _menuItem(Icons.rate_review_rounded, 'Review Tim'),
-                  ),
-                if (auth.isManager)
-                  PopupMenuItem(
-                    value: 'manager',
-                    child: _menuItem(Icons.verified_user_rounded, 'Approval'),
-                  ),
-                if (auth.isKasir)
-                  PopupMenuItem(
-                    value: 'cashier',
-                    child: _menuItem(
-                      Icons.upload_file_rounded,
-                      'Laporan Kasir',
-                    ),
-                  ),
-              ],
-            ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
             tooltip: 'Notifikasi',
@@ -236,36 +220,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _openSecondaryScreen(String value) {
-    switch (value) {
-      case 'supervisor':
-        _pushScreen(const SupervisorQueueScreen());
-        break;
-      case 'manager':
-        _pushScreen(const ManagerApprovalScreen());
-        break;
-      case 'cashier':
-        _pushScreen(const CashierUploadScreen());
-        break;
-    }
-  }
-
   void _pushScreen(Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
-  Widget _menuItem(IconData icon, String label) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: AppTheme.textInk),
-        const SizedBox(width: 10),
-        Text(label, style: const TextStyle(fontSize: 14)),
-      ],
-    );
-  }
-
   Widget _buildQuickActions(AuthProvider auth) {
     final actions = <Widget>[];
+    final hasMyKpi = auth.hasCapability('kpi.self.view');
 
     if (auth.isCs) {
       actions.add(
@@ -276,12 +237,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       );
     }
-    if (auth.isTeknisi || auth.isCs || auth.isGudang) {
+    if (auth.canViewTickets) {
       actions.add(
         KpiQuickAction(
           icon: Icons.build_circle_rounded,
           label: 'Tiket servis',
-          onTap: () => setState(() => _currentIndex = 1),
+          onTap: () => _pushScreen(const TicketsListScreen()),
         ),
       );
     }
@@ -292,6 +253,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           label: 'Inventory',
           color: AppTheme.statusVerified,
           onTap: () => _pushScreen(const SparepartScreen()),
+        ),
+      );
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.fact_check_rounded,
+          label: 'Stock opname',
+          color: AppTheme.statusSubmitted,
+          onTap: () =>
+              _pushScreen(const ResourceScreen(resource: 'stock-opnames')),
         ),
       );
     }
@@ -309,9 +279,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
       actions.add(
         KpiQuickAction(
           icon: Icons.rate_review_rounded,
-          label: 'Review tim',
+          label: 'Rekap tim',
           color: AppTheme.statusUnderReview,
           onTap: () => _pushScreen(const SupervisorQueueScreen()),
+        ),
+      );
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.today_rounded,
+          label: 'Penilaian harian',
+          color: AppTheme.statusVerified,
+          onTap: () => _pushScreen(const DailyAssessmentScreen(manager: false)),
+        ),
+      );
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.fact_check_rounded,
+          label: 'Absensi tim',
+          color: AppTheme.statusSubmitted,
+          onTap: () => _pushScreen(const SupervisorAttendanceScreen()),
+        ),
+      );
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.school_rounded,
+          label: 'Coaching',
+          color: AppTheme.statusUnderReview,
+          onTap: () =>
+              _pushScreen(const ResourceScreen(resource: 'coaching-logs')),
         ),
       );
     }
@@ -324,6 +319,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => _pushScreen(const ManagerApprovalScreen()),
         ),
       );
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.today_rounded,
+          label: 'Nilai Supervisor',
+          color: AppTheme.statusVerified,
+          onTap: () => _pushScreen(const DailyAssessmentScreen(manager: true)),
+        ),
+      );
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.assessment_rounded,
+          label: 'Laporan KPI',
+          color: AppTheme.statusVerified,
+          onTap: () => _pushScreen(const KpiReportScreen()),
+        ),
+      );
+      if (auth.hasCapability('attendance.manage')) {
+        actions.add(
+          KpiQuickAction(
+            icon: Icons.fact_check_rounded,
+            label: 'Absensi',
+            color: AppTheme.statusSubmitted,
+            onTap: () =>
+                _pushScreen(const ResourceScreen(resource: 'attendances')),
+          ),
+        );
+      }
+    }
+    if (auth.hasCapability('reports.view') && !auth.isManager) {
+      actions.add(KpiQuickAction(
+        icon: Icons.assessment_rounded,
+        label: 'Laporan tim',
+        onTap: () => _pushScreen(const KpiReportScreen()),
+      ));
+    }
+    if (auth.isGudang) {
+      actions.add(KpiQuickAction(
+        icon: Icons.inventory_outlined,
+        label: 'Daftar stok',
+        onTap: () => _pushScreen(const ResourceScreen(resource: 'spareparts')),
+      ));
+    }
+    if (auth.hasCapability('feedback.view')) {
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.forum_rounded,
+          label: 'Feedback',
+          color: AppTheme.statusApproved,
+          onTap: () => _pushScreen(const FeedbackScreen()),
+        ),
+      );
+    }
+    if (auth.hasCapability('complaints.create') ||
+        auth.hasCapability('complaints.validate') ||
+        auth.hasCapability('complaints.manage')) {
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.report_problem_outlined,
+          label: 'Komplain',
+          color: AppTheme.statusDanger,
+          onTap: () =>
+              _pushScreen(const ResourceScreen(resource: 'complaints')),
+        ),
+      );
+    }
+    if (auth.isAdmin) {
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.fact_check_outlined,
+          label: 'Work-log admin',
+          color: AppTheme.statusSubmitted,
+          onTap: () =>
+              _pushScreen(const ResourceScreen(resource: 'admin-work-logs')),
+        ),
+      );
     }
 
     if (actions.isEmpty) {
@@ -331,7 +401,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         KpiQuickAction(
           icon: Icons.assignment_turned_in_rounded,
           label: 'Lihat KPI saya',
-          onTap: () => setState(() => _currentIndex = 2),
+          onTap: () => setState(
+            () => _currentIndex = hasMyKpi ? 2 : 0,
+          ),
         ),
       );
     }
@@ -707,7 +779,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         .map(
                           (metric) => SizedBox(
                             width: width,
-                            child: _metricCard(metric.$1, metric.$2, metric.$3),
+                            child: _metricCard(
+                              metric.$1,
+                              metric.$2,
+                              metric.$3,
+                              expand: false,
+                            ),
                           ),
                         )
                         .toList(),
@@ -721,35 +798,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _metricCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
+  Widget _metricCard(
+    String label,
+    String value,
+    Color color, {
+    bool expand = true,
+  }) {
+    final card = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: color,
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+          ),
+        ],
       ),
     );
+    return expand ? Expanded(child: card) : card;
   }
 
   String _formatStatus(String status) {

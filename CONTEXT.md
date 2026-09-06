@@ -1,55 +1,94 @@
 # Konteks Domain KPI
 
-Konteks ini mendefinisikan kepemilikan nilai KPI dan alur penilaian berjenjang untuk karyawan toko dan servis.
+Konteks ini mendefinisikan istilah yang dipakai dalam alur KPI dan pekerjaan operasional toko serta servis.
 
-## Language
+## Istilah KPI
 
-**KPI periode**:
-Snapshot KPI seorang karyawan untuk satu periode penilaian bulanan.
-_Avoid_: KPI milik karyawan, nilai yang diisi karyawan
+**Periode KPI**:
+Rentang penilaian bulanan yang memiliki konfigurasi, deadline, dan status workflow sendiri.
+_Avoid_: membuka periode sebelum konfigurasi lengkap
+
+**Readiness periode**:
+Kondisi ketika template aktif, target, bobot 100%, sumber, cabang, penilai, dan deadline telah lengkap sehingga periode boleh dibuka.
+
+**KPI karyawan**:
+Snapshot KPI seorang karyawan untuk satu periode, termasuk cabang, jabatan, Supervisor, dan Manager yang berlaku saat KPI dibuat.
+_Avoid_: mengubah histori karena karyawan pindah cabang atau jabatan
+
+**Fakta KPI**:
+Data hasil pekerjaan dari modul operasional, impor, atau catatan penilai yang menjadi input kalkulasi. Fakta berbeda dari skor.
 
 **Entri KPI harian**:
-Catatan satu indikator pada satu tanggal yang disiapkan sistem dan menjadi unit review Supervisor serta Manager.
-_Avoid_: submission karyawan
+Catatan unik satu indikator pada satu tanggal atau cadence yang disiapkan sistem dan dinilai oleh penilai yang ditugaskan.
+_Avoid_: submission KPI oleh karyawan, entri ganda dari sinkronisasi ulang
 
-**Nilai sistem**:
-Nilai yang dihitung dari data operasional terverifikasi, seperti tiket servis, transaksi, absensi, atau stok.
-_Avoid_: input manual karyawan
+**Data belum tersedia**:
+Fakta yang belum diterima dari sumber resminya. Nilainya tetap kosong dan tidak dianggap nol.
 
-**Review Supervisor**:
-Validasi pertama atas seluruh indikator KPI harian anggota tim yang ditugaskan kepada Supervisor.
-_Avoid_: approval parsial
+**UNSCORABLE**:
+Hasil kalkulasi ketika indikator tidak dapat dihitung secara sah, misalnya karena denominator nol atau parameter wajib belum tersedia.
 
-**Penilaian akhir Manager**:
-Validasi atau koreksi terakhir setelah semua indikator pada KPI harian seorang karyawan selesai direview Supervisor.
-_Avoid_: review sebelum Supervisor selesai
+**Penilaian staf**:
+Supervisor memeriksa fakta dan mengisi indikator manual anggota tim per hari/cadence. Manager tidak menilai ulang indikator harian staf.
 
-**Nilai resmi harian**:
-Nilai Manager jika dikoreksi, nilai Supervisor jika tidak dikoreksi Manager, atau nilai sistem untuk indikator yang bersumber dari sistem.
+**Rekap staf**:
+Hasil bulanan yang dibentuk dari fakta dan penilaian Supervisor yang lengkap, kemudian diteruskan kepada Manager yang ditugaskan.
 
-**Agregasi bulanan**:
-Perhitungan nilai periode dari hasil penilaian akhir harian; persentase dan rubrik dirata-ratakan, sedangkan unit hitungan atau uang dijumlahkan.
+**Pengesahan staf**:
+Keputusan Manager untuk menyetujui rekap atau mengembalikan bagian tertentu dengan alasan. Manager tidak mengubah fakta atau nilai harian secara langsung.
+
+**KPI Supervisor**:
+KPI yang dinilai dan difinalisasi langsung oleh Manager yang ditugaskan setelah hasil tim tersedia. Pengecualian ini tidak mengizinkan penilaian atau approval diri sendiri.
+
+**Publikasi**:
+Tindakan Admin KPI untuk membuka skor dan predikat kepada karyawan setelah seluruh KPI periode disahkan.
+
+**Penguncian**:
+Langkah terpisah setelah publikasi yang menutup perubahan periode biasa. Koreksi hasil final tetap melalui permintaan dan persetujuan pihak lain yang diaudit.
+
+**Perubahan sumber**:
+Perubahan fakta sebelum finalisasi yang membatalkan review bagian terdampak dan mewajibkan penilaian ulang sebelum approval.
+
+**Cakupan data**:
+Hak membaca berdasarkan pemilik, snapshot cabang, dan assignment penilai. Admin KPI dan Auditor dapat membaca lintas cabang sesuai tanggung jawabnya; Auditor selalu hanya baca.
+
+## Istilah operasional
+
+**Tiket servis**:
+Catatan penerimaan satu perangkat yang dibuat Pelayan dan menjadi sumber identitas seluruh alur servis.
+
+**Penanggung jawab tiket**:
+Teknisi yang mengambil tiket atau ditugaskan oleh Supervisor/Manager dan menjadi satu-satunya pelaksana diagnosis, progres teknis, serta QC tiket tersebut.
+
+**Permintaan sparepart**:
+Permintaan Teknisi pada tiket yang dipenuhi Gudang sesuai cabang dan kemudian diterima kembali oleh Teknisi.
+
+**QC teknis**:
+Pemeriksaan fungsi oleh Teknisi penanggung jawab sebelum pekerjaan teknis dinyatakan selesai.
+
+**Pembayaran**:
+Pencatatan biaya akhir dan pelunasan oleh Kasir. Pengecualian pembayaran mengikuti persetujuan yang terekam dalam workflow.
+
+**Serah terima**:
+Penyerahan perangkat oleh Pelayan setelah pekerjaan teknis dan syarat pembayaran selesai.
+
+## Platform dan tanggung jawab
+
+- Teknisi, Pelayan, dan Gudang menggunakan mobile.
+- Kasir, Admin Operasional, Supervisor, serta Manager/Owner menggunakan mobile dan web.
+- Admin KPI, Admin Sistem, dan Auditor menggunakan web.
+- Admin KPI mengelola konfigurasi dan publikasi KPI.
+- Admin Sistem mengelola akun, role, organisasi, konfigurasi sistem, serta audit teknis tanpa hak transaksi.
+- Hak administratif tidak memberikan hak operasional atau penilaian.
+- Server memeriksa platform, status akun, profil, capability, kepemilikan, assignment, cabang, dan status data pada setiap request.
+
+## Absensi
 
 **Catatan absensi harian**:
 Satu catatan untuk satu karyawan pada satu tanggal di dalam periode KPI yang berstatus `OPEN`.
-_Avoid_: absensi lintas periode aktif atau dua catatan untuk tanggal yang sama
 
 **Hari kerja absensi**:
-Senin sampai Jumat. Kalender hari libur belum dikelola pada MVP, sehingga hari libur nasional tetap mengikuti aturan hari kerja sampai kalender tersebut tersedia.
-
-**Status absensi**:
-`Hadir` dan `Terlambat` adalah hari kerja yang dihitung sebagai hadir; `Izin` dan `Sakit` adalah ketidakhadiran beralasan yang dikeluarkan dari pembagi; `Alpha` dan hari kerja tanpa catatan masuk pembagi tetapi tidak masuk pembilang.
+Senin sampai Jumat. Kalender hari libur belum dikelola pada MVP.
 
 **Rasio kehadiran**:
-`hari Hadir/Terlambat ÷ (hari kerja - hari Izin/Sakit) × 100`. Jika seluruh hari kerja dikecualikan karena Izin/Sakit, rasio tidak dihitung.
-
-## Tanggung jawab role
-
-**Admin sistem**:
-Mengelola konfigurasi, master data, periode, dan monitoring KPI. Admin sistem tidak melakukan review, penilaian, atau approval KPI karyawan.
-
-**Supervisor**:
-Melakukan review dan penilaian anggota tim yang tercatat sebagai bawahannya pada snapshot KPI.
-
-**Manager**:
-Melakukan penilaian akhir dan approval KPI setelah review Supervisor selesai, hanya untuk KPI yang ditugaskan kepadanya.
+`hari Hadir/Terlambat ÷ (hari kerja - hari Izin/Sakit) × 100`. Jika seluruh hari kerja dikecualikan, rasio tidak dihitung.

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeKpi;
 use App\Modules\Approval\ApprovalService;
+use App\Support\KpiVisibility;
 use App\Support\KpiWorkflow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,11 +23,12 @@ final class KpiCorrectionController extends Controller
                 'id' => (string) $kpi->getKey(),
                 'employee' => $kpi->employee?->name,
                 'period' => $kpi->period?->name,
-                'items' => $kpi->items->map(fn ($item): array => [
+                'items' => $kpi->items->filter(fn ($item): bool => ! $item->isSystemSourced())->map(fn ($item): array => [
                     'id' => (string) $item->getKey(),
                     'code' => $item->definition_code_snapshot,
                     'name' => $item->name_snapshot,
-                    'actual' => $item->actual_decimal,
+                    'actual' => KpiVisibility::scoreVisible($request->user(), $kpi)
+                        || (! $item->isManualRated() && $item->formula_key_snapshot !== 'rubric') ? $item->actual_decimal : null,
                 ])->values()->all(),
             ],
         ]);
@@ -40,10 +42,16 @@ final class KpiCorrectionController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['required', 'string'],
             'items.*.actual' => ['required', 'numeric'],
+            'evidence' => ['required', 'array', 'min:1'],
+            'evidence.*.type' => ['required', 'string', 'max:30'],
+            'evidence.*.reference' => ['required', 'string', 'max:500'],
         ]);
 
         try {
-            app(ApprovalService::class)->requestCorrection($kpi, $data['reason'], ['items' => $data['items']], $request->user()->getKey());
+            app(ApprovalService::class)->requestCorrection($kpi, $data['reason'], [
+                'items' => $data['items'],
+                'evidence' => $data['evidence'],
+            ], $request->user()->getKey());
 
             return redirect('/app/employee-kpis')->with('success', 'Permintaan koreksi KPI berhasil diajukan.');
         } catch (\Throwable $exception) {

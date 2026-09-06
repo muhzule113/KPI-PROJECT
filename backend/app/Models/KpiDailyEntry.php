@@ -9,6 +9,38 @@ class KpiDailyEntry extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $entry): void {
+            if (! $entry->exists || ! $entry->isDirty(['system_actual_decimal', 'system_actual_json'])
+                || ($entry->isDirty('supervisor_assessed_at') && $entry->supervisor_assessed_at !== null)
+                || ($entry->isDirty('manager_assessed_at') && $entry->manager_assessed_at !== null)) {
+                return;
+            }
+            foreach (['supervisor', 'manager'] as $role) {
+                $entry->{$role.'_status'} = 'pending';
+                foreach (['actual_decimal', 'actual_json', 'answers_json', 'score_percentage', 'assessed_by', 'assessed_at'] as $field) {
+                    $entry->{$role.'_'.$field} = null;
+                }
+            }
+            $item = $entry->item;
+            $kpi = $item->employeeKpi;
+            if (in_array($kpi->status, ['approved', 'locked'], true)) {
+                throw new \RuntimeException('Sumber KPI final hanya dapat diubah melalui koreksi teraudit.');
+            }
+            $item->forceFill(['status' => 'revision_required', 'manager_decision' => null, 'manager_decided_at' => null, 'manager_decided_by' => null])->save();
+            if (in_array($kpi->status, ['verified', 'pending_approval'], true)) {
+                $kpi->status = 'under_review';
+            }
+            $kpi->verified_at = null;
+            $kpi->final_score = null;
+            $kpi->rating_code = null;
+            $kpi->rating_label = null;
+            $kpi->row_version += 1;
+            $kpi->save();
+        });
+    }
+
     protected $fillable = [
         'employee_kpi_item_id',
         'entry_date',

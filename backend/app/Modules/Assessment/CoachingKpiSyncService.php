@@ -3,7 +3,6 @@
 namespace App\Modules\Assessment;
 
 use App\Models\CoachingLog;
-use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
@@ -22,9 +21,9 @@ class CoachingKpiSyncService
 
     public function syncPeriodCoachingData(KpiPeriod $period): array
     {
-        $kpis = EmployeeKpi::with(['employee.position', 'items'])
+        $kpis = EmployeeKpi::with(['employee', 'items'])
             ->where('period_id', $period->id)
-            ->whereHas('employee.position', fn($q) => $q->where('code', 'POS-SPV'))
+            ->where('position_code_snapshot', 'POS-SPV')
             ->get();
 
         $updatedItems = 0;
@@ -32,13 +31,17 @@ class CoachingKpiSyncService
 
         foreach ($kpis as $kpi) {
             $spv = $kpi->employee;
-            if (!$spv || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
+            if (! $spv || ! KpiWorkflow::canSystemSyncKpi($kpi)) {
+                continue;
+            }
 
-            $teamSize = Employee::where('supervisor_id', $spv->id)
-                ->where('status', 'active')
+            $teamSize = EmployeeKpi::where('period_id', $period->id)
+                ->where('supervisor_id_snapshot', $spv->id)
                 ->count();
 
-            if ($teamSize === 0) continue;
+            if ($teamSize === 0) {
+                continue;
+            }
 
             $coachedCount = CoachingLog::where('supervisor_id', $spv->id)
                 ->where(fn ($query) => $query->where('period_id', $period->id)->orWhereNull('period_id'))
@@ -49,7 +52,9 @@ class CoachingKpiSyncService
             $coverage = round(($coachedCount / $teamSize) * 100, 2);
 
             $item = $kpi->items->firstWhere('definition_code_snapshot', 'SUP-05');
-            if (!$item || !$item->acceptsSystemCalculatedValue()) continue;
+            if (! $item || ! $item->acceptsSystemCalculatedValue()) {
+                continue;
+            }
 
             $item->actual_decimal = $coverage;
             $item->actual_json = ['_system_calculated' => true, 'source' => 'coaching_log', 'coached_count' => $coachedCount, 'team_size' => $teamSize];

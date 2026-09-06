@@ -9,6 +9,7 @@ server {
     root /var/www/kpi-project/backend/public;
     index index.php;
     client_max_body_size 20M;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -33,6 +34,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name ws.kpi.example.com;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     location /app/ {
         proxy_http_version 1.1;

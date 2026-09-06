@@ -1,11 +1,10 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, ClipboardCheck, RotateCcw, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { useFeedback } from '@/components/feedback/ActionFeedback';
 
 const statusLabels = {
@@ -16,40 +15,26 @@ const statusLabels = {
 
 export default function ManagerAssessment({ kpi }) {
     const { requestAction } = useFeedback();
-    const [values, setValues] = useState(() => Object.fromEntries(
-        kpi.items.filter((item) => item.formula !== 'rubric').map((item) => [item.id, item.actual ?? '']),
+    const [decisions, setDecisions] = useState(() => Object.fromEntries(
+        kpi.items.map((item) => [item.id, item.manager_decision ?? 'valid']),
     ));
-    const [rubricAnswers, setRubricAnswers] = useState(() => Object.fromEntries(
-        kpi.items
-            .filter((item) => item.formula === 'rubric')
-            .map((item) => [item.id, (item.assessment?.answers ?? []).filter((answer) => answer.is_fulfilled).map((answer) => String(answer.criterion_id))]),
+    const [notes, setNotes] = useState(() => Object.fromEntries(
+        kpi.items.map((item) => [item.id, item.manager_note ?? '']),
     ));
+    const actions = kpi.available_actions ?? [];
 
     const assessItem = (item) => {
-        const value = values[item.id];
-        if (value === '' || value === null || value === undefined) return;
-
         router.post(`/app/employee-kpis/${kpi.id}/items/${item.id}/assessment`, {
-            actual_decimal: value,
-        }, { preserveScroll: true });
-    };
-
-    const assessRubric = (item) => {
-        const selected = rubricAnswers[item.id] ?? [];
-        router.post(`/app/employee-kpis/${kpi.id}/items/${item.id}/rubric`, {
-            answers: (item.rubric?.criteria ?? []).map((criterion) => ({
-                criterion_id: criterion.id,
-                is_fulfilled: selected.includes(String(criterion.id)),
-                notes: null,
-            })),
+            decision: decisions[item.id] || 'valid',
+            note: notes[item.id] || null,
         }, { preserveScroll: true });
     };
 
     const approve = async () => {
         const result = await requestAction({
-            title: 'Approve & kunci KPI?',
-            description: 'Pastikan seluruh indikator sudah dinilai. KPI akan menjadi final.',
-            confirmLabel: 'Approve & kunci',
+            title: 'Sahkan rekap KPI?',
+            description: 'Periksa hasil dan bukti. Skor karyawan tersedia setelah publikasi Admin KPI.',
+            confirmLabel: 'Sahkan KPI',
         });
         if (result.confirmed) router.post(`/app/employee-kpis/${kpi.id}/assessment/approve`, { note: result.value });
     };
@@ -77,25 +62,22 @@ export default function ManagerAssessment({ kpi }) {
                             <p className="mt-1 text-sm text-muted-foreground">{kpi.employee.position} · {kpi.employee.branch} · {kpi.period}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" onClick={returnToSupervisor}><RotateCcw />Kembalikan</Button>
-                            <Button type="button" onClick={approve}><CheckCircle2 />Approve & kunci</Button>
+                            {actions.includes('return') && <Button type="button" variant="outline" onClick={returnToSupervisor}><RotateCcw />Kembalikan indikator bermasalah</Button>}
+                            {actions.includes('approve') && <Button type="button" onClick={approve}><CheckCircle2 />Sahkan KPI</Button>}
                         </div>
                     </div>
 
                     <Card>
                         <CardHeader className="border-b border-border/70">
-                            <CardTitle>Nilai seluruh indikator</CardTitle>
-                            <CardDescription>Indikator numerik diisi dengan nilai aktual. Indikator rubric dinilai melalui checklist. Sistem menghitung pencapaian dan skor berbobot.</CardDescription>
+                            <CardTitle>Hasil penilaian dan bukti</CardTitle>
+                            <CardDescription>Rekap berasal dari fakta dan penilaian harian. Tandai indikator yang perlu koreksi beserta alasan, atau sahkan rekap yang sudah lengkap.</CardDescription>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[1050px] text-left text-sm">
-                                    <thead className="border-b border-border/70 bg-muted/35 text-[11px] uppercase tracking-[0.12em] text-muted-foreground"><tr><th className="px-5 py-3">Indikator</th><th className="px-5 py-3">Target</th><th className="px-5 py-3">Nilai saat ini</th><th className="px-5 py-3">Pencapaian</th><th className="px-5 py-3">Skor bobot</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Penilaian Manager</th></tr></thead>
+                                    <thead className="border-b border-border/70 bg-muted/35 text-[11px] uppercase tracking-[0.12em] text-muted-foreground"><tr><th className="px-5 py-3">Indikator</th><th className="px-5 py-3">Target</th><th className="px-5 py-3">Actual sistem</th><th className="px-5 py-3">Pencapaian</th><th className="px-5 py-3">Skor bobot</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Keputusan Manager</th></tr></thead>
                                     <tbody className="divide-y divide-border/70">
                                         {kpi.items.map((item) => {
-                                            const criteria = item.rubric?.criteria ?? [];
-                                            const selected = rubricAnswers[item.id] ?? [];
-
                                             return (
                                                 <tr key={item.id} className="align-top">
                                                     <td className="px-5 py-4"><p className="font-semibold text-foreground">{item.code}</p><p className="mt-1 max-w-xs text-muted-foreground">{item.name}</p><p className="mt-1 text-xs text-muted-foreground">Bobot {item.weight}%</p></td>
@@ -105,17 +87,26 @@ export default function ManagerAssessment({ kpi }) {
                                                     <td className="px-5 py-4 text-muted-foreground">{item.weighted_score ?? '—'}</td>
                                                     <td className="px-5 py-4"><Badge variant="outline">{statusLabels[item.status] ?? item.status}</Badge></td>
                                                     <td className="px-5 py-4">
-                                                        {item.formula === 'rubric' ? (
-                                                            <div className="min-w-72 space-y-2">
-                                                                {criteria.map((criterion) => <label key={criterion.id} className="flex gap-2 text-xs text-foreground"><input type="checkbox" checked={selected.includes(String(criterion.id))} onChange={(event) => setRubricAnswers((current) => { const next = new Set(current[item.id] ?? []); event.target.checked ? next.add(String(criterion.id)) : next.delete(String(criterion.id)); return { ...current, [item.id]: [...next] }; })} className="mt-0.5 size-3.5 accent-primary" />{criterion.criterion_text}</label>)}
-                                                                <Button type="button" size="sm" onClick={() => assessRubric(item)}><ClipboardCheck />Simpan checklist</Button>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex min-w-64 gap-2">
-                                                                <Input type="number" step="any" value={values[item.id] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [item.id]: event.target.value }))} aria-label={`Nilai aktual ${item.code}`} placeholder={`Nilai (${item.unit})`} />
-                                                                <Button type="button" size="icon" title="Simpan penilaian" aria-label={`Simpan penilaian ${item.code}`} onClick={() => assessItem(item)}><Save /></Button>
-                                                            </div>
-                                                        )}
+                                                        {actions.includes('decide') && <div className="min-w-72 space-y-2">
+                                                            <select
+                                                                aria-label={`Keputusan ${item.code}`}
+                                                                value={decisions[item.id] ?? 'valid'}
+                                                                onChange={(event) => setDecisions((current) => ({ ...current, [item.id]: event.target.value }))}
+                                                                className="flex h-9 w-full rounded-lg border border-input bg-background px-2 text-sm text-foreground"
+                                                            >
+                                                                <option value="valid">Valid</option>
+                                                                <option value="needs_correction">Perlu koreksi</option>
+                                                                <option value="data_exception">Data Exception</option>
+                                                            </select>
+                                                            <textarea
+                                                                aria-label={`Catatan ${item.code}`}
+                                                                value={notes[item.id] ?? ''}
+                                                                onChange={(event) => setNotes((current) => ({ ...current, [item.id]: event.target.value }))}
+                                                                className="min-h-16 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs text-foreground"
+                                                                placeholder="Alasan wajib untuk indikator yang perlu koreksi"
+                                                            />
+                                                            <Button type="button" size="sm" onClick={() => assessItem(item)}>Simpan keputusan</Button>
+                                                        </div>}
                                                     </td>
                                                 </tr>
                                             );

@@ -1,0 +1,61 @@
+openapi: 3.1.0
+info:
+  title: KPI Toko & Servis HP API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
+  schemas:
+    Success:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: {}
+paths:
+  /auth/login:
+    post: { summary: Masuk dan buat sesi mobile, responses: { '200': { description: Berhasil } } }
+  /auth/forgot-password:
+    post: { summary: Kirim tautan reset password, responses: { '200': { description: Diproses } } }
+  /auth/reset-password:
+    post: { summary: Reset password single-use, responses: { '200': { description: Berhasil } } }
+  /auth/sessions:
+    get: { summary: Daftar sesi aktif, security: [ { sanctum: [] } ], responses: { '200': { description: Berhasil } } }
+  /auth/sessions/{type}/{id}:
+    delete:
+      summary: Cabut satu sesi
+      security: [ { sanctum: [] } ]
+      parameters:
+        - { name: type, in: path, required: true, schema: { type: string } }
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: Berhasil } }
+  /auth/logout-all:
+    post: { summary: Keluar dari semua perangkat, security: [ { sanctum: [] } ], responses: { '200': { description: Berhasil } } }
+  /devices/push-token:
+    put: { summary: Daftarkan atau perbarui push token, security: [ { sanctum: [] } ], responses: { '200': { description: Berhasil } } }
+    delete: { summary: Cabut push token, security: [ { sanctum: [] } ], responses: { '200': { description: Berhasil } } }
+  /report-submissions:
+    get: { summary: Daftar jadwal laporan, security: [ { sanctum: [] } ], responses: { '200': { description: Berhasil } } }
+  /report-submissions/{id}/submit:
+    post:
+      summary: Submit laporan terjadwal
+      security: [ { sanctum: [] } ]
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses: { '200': { description: Berhasil } }
+  /reports/{type}:
+    get:
+      summary: Ambil salah satu dari sepuluh laporan KPI
+      security: [ { sanctum: [] } ]
+      parameters: [ { name: type, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Berhasil } }
+  /reports/{type}/export/{format}:
+    get:
+      summary: Export laporan KPI
+      security: [ { sanctum: [] } ]
+      parameters:
+        - { name: type, in: path, required: true, schema: { type: string } }
+        - { name: format, in: path, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+      responses: { '200': { description: File laporan } }

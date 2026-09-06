@@ -11,13 +11,32 @@ class StockOpname extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $opname): void {
+            $opname->created_by ??= auth()->id();
+            $opname->branch_id = $opname->creator?->employee?->branch_id;
+            if (! $opname->branch_id || ! $opname->period?->branches()->whereKey($opname->branch_id)->exists()) {
+                throw new \RuntimeException('Cabang pembuat opname harus terdaftar pada periode KPI.');
+            }
+        });
+        static::updating(function (self $opname): void {
+            if ($opname->isDirty(['branch_id', 'period_id', 'created_by'])) {
+                throw new \RuntimeException('Cabang, periode, dan penanggung jawab opname tidak dapat diganti.');
+            }
+        });
+    }
+
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_IN_PROGRESS = 'in_progress';
+
     public const STATUS_COMPLETED = 'completed';
 
     protected $fillable = [
         'code',
         'period_id',
+        'branch_id',
         'status',
         'deadline',
         'completed_at',
@@ -37,6 +56,11 @@ class StockOpname extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function items(): HasMany

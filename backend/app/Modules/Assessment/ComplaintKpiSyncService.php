@@ -3,7 +3,6 @@
 namespace App\Modules\Assessment;
 
 use App\Models\Complaint;
-use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Modules\Calculation\KpiCalculationEngine;
@@ -35,17 +34,29 @@ class ComplaintKpiSyncService
 
         foreach ($kpis as $kpi) {
             $emp = $kpi->employee;
-            if (!$emp || !$emp->position || !KpiWorkflow::canSystemSyncKpi($kpi)) continue;
+            if (! $emp || ! KpiWorkflow::canSystemSyncKpi($kpi)) {
+                continue;
+            }
 
             $changed = false;
 
             // CS-05: jumlah komplain terhadap Pelayan tersebut
-            if ($emp->position->code === 'POS-CS') {
-                $count = $complaints->where('employee_id', $emp->id)->count();
-
+            if ($kpi->position_code_snapshot === 'POS-CS') {
+                $complaintCount = $complaints
+                    ->where('employee_id', $emp->id)
+                    ->filter(fn (Complaint $complaint): bool => (bool) $complaint->description && (bool) $complaint->channel)
+                    ->unique(fn (Complaint $complaint): string => $complaint->service_ticket_id
+                        ? "ticket:{$complaint->service_ticket_id}"
+                        : "complaint:{$complaint->id}")
+                    ->count();
                 $item = $kpi->items->firstWhere('definition_code_snapshot', 'CS-05');
                 if ($item) {
-                    $item->actual_decimal = (float) $count;
+                    $item->actual_decimal = $complaintCount;
+                    $item->actual_json = [
+                        '_system_calculated' => true,
+                        'formula' => 'komplain valid unik / tiket servis eligible Pelayan × 100',
+                        'valid_complaints' => $complaintCount,
+                    ];
                     $item->status = 'draft';
                     $item->save();
                     $this->calculationEngine->calculateItem($item);
@@ -55,30 +66,33 @@ class ComplaintKpiSyncService
             }
 
             // SUP-04: penyelesaian komplain tepat waktu untuk tim supervisor
-            if ($emp->position->code === 'POS-SPV') {
-                $teamIds = Employee::where('supervisor_id', $emp->id)->pluck('id');
+            if ($kpi->position_code_snapshot === 'POS-SPV') {
+                $teamIds = EmployeeKpi::where('period_id', $period->id)
+                    ->where('supervisor_id_snapshot', $emp->id)->pluck('employee_id');
                 $teamComplaints = $complaints->whereIn('employee_id', $teamIds);
                 $total = $teamComplaints->count();
 
-                if ($total > 0) {
-                    $resolvedOntime = $teamComplaints->filter(function ($c) {
-                        return $c->status === Complaint::STATUS_RESOLVED
-                            && $c->resolved_at !== null
-                            && $c->sla_deadline !== null
-                            && $c->resolved_at->lte($c->sla_deadline);
-                    })->count();
+                $resolvedOntime = $teamComplaints->filter(function ($c) {
+                    return $c->status === Complaint::STATUS_RESOLVED
+                        && $c->resolved_at !== null
+                        && $c->sla_deadline !== null
+                        && $c->resolved_at->lte($c->sla_deadline);
+                })->count();
+                $rate = $total > 0 ? round(($resolvedOntime / $total) * 100, 2) : null;
 
-                    $rate = round(($resolvedOntime / $total) * 100, 2);
-
-                    $item = $kpi->items->firstWhere('definition_code_snapshot', 'SUP-04');
-                    if ($item) {
-                        $item->actual_decimal = $rate;
-                        $item->status = 'draft';
-                        $item->save();
-                        $this->calculationEngine->calculateItem($item);
-                        $updatedItems++;
-                        $changed = true;
-                    }
+                $item = $kpi->items->firstWhere('definition_code_snapshot', 'SUP-04');
+                if ($item) {
+                    $item->actual_decimal = $rate;
+                    $item->actual_json = [
+                        '_system_calculated' => true,
+                        'resolved_ontime' => $resolvedOntime,
+                        'total_complaints' => $total,
+                    ];
+                    $item->status = 'draft';
+                    $item->save();
+                    $this->calculationEngine->calculateItem($item);
+                    $updatedItems++;
+                    $changed = true;
                 }
             }
 

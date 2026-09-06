@@ -15,6 +15,7 @@ class KpiRatingBand extends Model
         'label',
         'min_score',
         'max_score',
+        'manual_score',
         'color',
         'badge_icon',
         'sort_order',
@@ -23,6 +24,7 @@ class KpiRatingBand extends Model
     protected $casts = [
         'min_score' => 'decimal:2',
         'max_score' => 'decimal:2',
+        'manual_score' => 'decimal:2',
         'sort_order' => 'integer',
     ];
 

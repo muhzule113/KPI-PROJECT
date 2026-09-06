@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Web;
 
 use App\Exports\KpiSummaryExport;
 use App\Http\Controllers\Controller;
-use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
-use App\Support\MenuAccess;
+use App\Modules\Reporting\KpiReportService;
+use App\Support\CapabilityMatrix;
+use App\Support\SpreadsheetValue;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -17,6 +17,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class KpiReportController extends Controller
 {
+    public function __construct(
+        protected KpiReportService $reportService,
+    ) {}
+
     public function export(Request $request): StreamedResponse
     {
         [$period, $query] = $this->reportData($request);
@@ -47,7 +51,7 @@ final class KpiReportController extends Controller
             ], ';');
 
             foreach ($query->cursor() as $row) {
-                fputcsv($handle, [
+                fputcsv($handle, SpreadsheetValue::row([
                     $period->name,
                     $row->employee_number,
                     $row->employee_name,
@@ -60,7 +64,7 @@ final class KpiReportController extends Controller
                     $row->submitted_at,
                     $row->approved_at,
                     $row->locked_at,
-                ], ';');
+                ]), ';');
             }
 
             fclose($handle);
@@ -99,50 +103,19 @@ final class KpiReportController extends Controller
      */
     private function reportData(Request $request): array
     {
-        abort_unless(MenuAccess::can($request->user(), ['owner_manager', 'super_admin', 'auditor'], []), 403);
+        abort_unless(CapabilityMatrix::has($request->user(), 'reports.export'), 403);
 
         $filters = $request->validate([
             'period_id' => ['nullable', 'integer', 'exists:kpi_periods,id'],
             'position_id' => ['nullable', 'integer', 'exists:positions,id'],
         ]);
 
-        $period = isset($filters['period_id'])
-            ? KpiPeriod::query()->findOrFail($filters['period_id'])
-            : KpiPeriod::query()
-                ->where('status', 'OPEN')
-                ->orderByDesc('id')
-                ->first()
-                ?? KpiPeriod::query()
-                    ->whereNotIn('status', ['DRAFT', 'CANCELLED'])
-                    ->orderByDesc('id')
-                    ->firstOrFail();
+        $result = $this->reportService->reportData(
+            $request->user(),
+            $filters['period_id'] ?? null,
+            $filters['position_id'] ?? null,
+        );
 
-        $query = EmployeeKpi::query()
-            ->join('employees', 'employees.id', '=', 'employee_kpis.employee_id')
-            ->leftJoin('positions', 'positions.id', '=', 'employees.position_id')
-            ->leftJoin('branches', 'branches.id', '=', 'employees.branch_id')
-            ->where('employee_kpis.period_id', $period->getKey())
-            ->when(
-                $filters['position_id'] ?? null,
-                fn (Builder $query, int $positionId) => $query->where('employees.position_id', $positionId),
-            )
-            ->select([
-                'employee_kpis.id as kpi_id',
-                'employee_kpis.status',
-                'employee_kpis.progress_percentage',
-                'employee_kpis.final_score',
-                'employee_kpis.rating_label',
-                'employee_kpis.submitted_at',
-                'employee_kpis.approved_at',
-                'employee_kpis.locked_at',
-                'employees.employee_number',
-                'employees.name as employee_name',
-                'positions.name as position_name',
-                'branches.name as branch_name',
-            ])
-            ->orderBy('employees.name')
-            ->orderBy('employee_kpis.id');
-
-        return [$period, $query];
+        return [$result['period'], $result['query']];
     }
 }

@@ -34,7 +34,7 @@ final class ImportController extends Controller
         $this->authorize($request);
         $data = $request->validate([
             'period_id' => ['required', 'integer', 'exists:kpi_periods,id'],
-            'report_file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
+            'report_file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt,pdf', 'max:10240'],
         ]);
         $activePeriod = KpiPeriod::active();
         abort_unless($activePeriod && (int) $data['period_id'] === (int) $activePeriod->getKey(), 422, 'Import hanya dapat dilakukan pada periode KPI yang sedang OPEN.');

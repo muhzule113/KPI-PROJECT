@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Support\SpreadsheetValue;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -21,7 +22,7 @@ final class KpiSummaryExport implements FromQuery, WithHeadings, WithMapping
 
     public function headings(): array
     {
-        return [
+        return SpreadsheetValue::row([
             'Periode',
             'Nomor Karyawan',
             'Nama Karyawan',
@@ -34,7 +35,7 @@ final class KpiSummaryExport implements FromQuery, WithHeadings, WithMapping
             'Dikirim Pada',
             'Disetujui Pada',
             'Dikunci Pada',
-        ];
+        ]);
     }
 
     public function map($row): array

@@ -2,15 +2,17 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\ParseCashierImport;
+use App\Jobs\ScanQuarantinedFile;
 use App\Models\Employee;
 use App\Models\ImportBatch;
 use App\Models\KpiPeriod;
 use App\Models\ServiceTicket;
 use App\Models\Sparepart;
 use App\Models\SparepartRequest;
-use App\Modules\Import\CashierImportService;
+use App\Models\StockMovement;
 use App\Models\User;
+use App\Modules\Import\CashierImportService;
+use App\Modules\Security\FileScanService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -32,7 +34,7 @@ class ApiOwnershipGateTest extends TestCase
         }
 
         return ServiceTicket::create([
-            'ticket_number' => 'SRV-OWN-' . random_int(1000, 9999),
+            'ticket_number' => 'SRV-OWN-'.random_int(1000, 9999),
             'customer_name' => 'Test Customer',
             'customer_phone' => '08123456789',
             'device_brand' => 'Apple',
@@ -54,7 +56,7 @@ class ApiOwnershipGateTest extends TestCase
         $part = Sparepart::first();
 
         $ticketOther = ServiceTicket::create([
-            'ticket_number' => 'SRV-OWN-OTHER-' . random_int(1000, 9999),
+            'ticket_number' => 'SRV-OWN-OTHER-'.random_int(1000, 9999),
             'customer_name' => 'Customer Lain',
             'customer_phone' => '08987654321',
             'device_brand' => 'Samsung',
@@ -67,31 +69,93 @@ class ApiOwnershipGateTest extends TestCase
 
         $this->actingAs($userTek, 'sanctum')
             ->postJson('/api/v1/operational/spareparts/request', [
+                'row_version' => $ticketOther->row_version,
+                'quantity' => 1,
                 'service_ticket_id' => $ticketOther->id,
                 'sparepart_id' => $part->id,
             ])
             ->assertForbidden();
     }
 
-    public function test_technician_can_request_sparepart_for_own_ticket(): void
+    public function test_technician_cannot_request_sparepart_when_account_is_disabled(): void
     {
         $userTek = User::where('email', 'teknisi@toko.com')->first();
         $empTek = Employee::where('email', 'teknisi@toko.com')->first();
         $part = Sparepart::first();
+        $stockBefore = (int) $part->stock_quantity;
 
         $ticket = $this->makeTicket('teknisi@toko.com');
+        $userTek->update(['is_active' => false]);
 
         $this->actingAs($userTek, 'sanctum')
             ->postJson('/api/v1/operational/spareparts/request', [
+                'row_version' => $ticket->row_version,
                 'service_ticket_id' => $ticket->id,
                 'sparepart_id' => $part->id,
                 'quantity' => 1,
             ])
-            ->assertOk();
+            ->assertForbidden();
 
-        $this->assertDatabaseHas('sparepart_requests', [
+        $this->assertSame($stockBefore, (int) $part->fresh()->stock_quantity);
+        $this->assertDatabaseMissing('sparepart_requests', [
             'service_ticket_id' => $ticket->id,
             'technician_employee_id' => $empTek->id,
+        ]);
+    }
+
+    public function test_pelayan_cannot_request_sparepart_for_assigned_ticket(): void
+    {
+        $userCs = User::where('email', 'cs@toko.com')->first();
+        $empTek = Employee::where('email', 'teknisi@toko.com')->first();
+        $part = Sparepart::first();
+        $stockBefore = (int) $part->stock_quantity;
+        $ticket = $this->makeTicket('teknisi@toko.com');
+
+        $this->actingAs($userCs, 'sanctum')
+            ->postJson('/api/v1/operational/spareparts/request', [
+                'row_version' => $ticket->row_version,
+                'service_ticket_id' => $ticket->id,
+                'sparepart_id' => $part->id,
+                'quantity' => 2,
+                'notes' => 'Diteruskan dari informasi Teknisi.',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame($stockBefore, (int) $part->fresh()->stock_quantity);
+        $this->assertDatabaseMissing('sparepart_requests', [
+            'service_ticket_id' => $ticket->id,
+            'technician_employee_id' => $empTek->id,
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_kasir_cannot_request_sparepart_for_branch_ticket(): void
+    {
+        $userKasir = User::where('email', 'kasir@toko.com')->first();
+        $empTek = Employee::where('email', 'teknisi@toko.com')->first();
+        $part = Sparepart::first();
+        $stockBefore = (int) $part->stock_quantity;
+        $ticket = $this->makeTicket('teknisi@toko.com');
+
+        $this->actingAs($userKasir, 'sanctum')
+            ->getJson('/api/v1/operational/tickets')
+            ->assertOk();
+
+        $this->actingAs($userKasir, 'sanctum')
+            ->postJson('/api/v1/operational/spareparts/request', [
+                'row_version' => $ticket->row_version,
+                'service_ticket_id' => $ticket->id,
+                'sparepart_id' => $part->id,
+                'quantity' => 1,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame($stockBefore, (int) $part->fresh()->stock_quantity);
+        $this->assertDatabaseMissing('sparepart_requests', [
+            'service_ticket_id' => $ticket->id,
+            'technician_employee_id' => $empTek->id,
+            'status' => 'pending',
         ]);
     }
 
@@ -122,6 +186,7 @@ class ApiOwnershipGateTest extends TestCase
         $userTek = User::where('email', 'teknisi@toko.com')->first();
         $empTek = Employee::where('email', 'teknisi@toko.com')->first();
         $part = Sparepart::first();
+        $stockBefore = (int) $part->stock_quantity;
         $ticket = $this->makeTicket('teknisi@toko.com');
 
         $req = SparepartRequest::create([
@@ -134,8 +199,10 @@ class ApiOwnershipGateTest extends TestCase
         ]);
 
         $this->actingAs($userTek, 'sanctum')
-            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}")
+            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}", ['row_version' => $ticket->fresh()->row_version])
             ->assertForbidden();
+
+        $this->assertSame($stockBefore, (int) $part->fresh()->stock_quantity);
     }
 
     public function test_gudang_can_fulfill_sparepart_request(): void
@@ -143,7 +210,106 @@ class ApiOwnershipGateTest extends TestCase
         $userGud = User::where('email', 'gudang@toko.com')->first();
         $empTek = Employee::where('email', 'teknisi@toko.com')->first();
         $part = Sparepart::first();
+        $part->update(['stock_quantity' => 10]);
+        $stockBefore = (int) $part->stock_quantity;
         $ticket = $this->makeTicket('teknisi@toko.com');
+
+        $req = SparepartRequest::create([
+            'service_ticket_id' => $ticket->id,
+            'sparepart_id' => $part->id,
+            'technician_employee_id' => $empTek->id,
+            'quantity' => 2,
+            'status' => 'pending',
+            'requested_at' => now(),
+        ]);
+
+        $this->actingAs($userGud, 'sanctum')
+            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}", ['row_version' => $ticket->fresh()->row_version])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'fulfilled');
+
+        $this->assertEquals('fulfilled', $req->fresh()->status);
+        $this->assertSame(8, (int) $part->fresh()->stock_quantity);
+        $this->assertDatabaseHas('stock_movements', [
+            'sparepart_id' => $part->id,
+            'movement_type' => StockMovement::TYPE_REQUEST_OUT,
+            'quantity' => -2,
+            'stock_before' => $stockBefore,
+            'stock_after' => 8,
+            'reference_type' => 'sparepart_request',
+            'reference_id' => $req->id,
+            'user_id' => $userGud->id,
+        ]);
+    }
+
+    public function test_gudang_cannot_fulfill_when_stock_is_insufficient(): void
+    {
+        $userGud = User::where('email', 'gudang@toko.com')->first();
+        $empTek = Employee::where('email', 'teknisi@toko.com')->first();
+        $part = Sparepart::first();
+        $part->update(['stock_quantity' => 1]);
+        $ticket = $this->makeTicket('teknisi@toko.com');
+
+        $req = SparepartRequest::create([
+            'service_ticket_id' => $ticket->id,
+            'sparepart_id' => $part->id,
+            'technician_employee_id' => $empTek->id,
+            'quantity' => 2,
+            'status' => 'pending',
+            'requested_at' => now(),
+        ]);
+
+        $this->actingAs($userGud, 'sanctum')
+            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}", ['row_version' => $ticket->fresh()->row_version])
+            ->assertStatus(422);
+
+        $this->assertSame(1, (int) $part->fresh()->stock_quantity);
+        $this->assertSame('pending', $req->fresh()->status);
+        $this->assertDatabaseMissing('stock_movements', [
+            'reference_type' => 'sparepart_request',
+            'reference_id' => $req->id,
+        ]);
+    }
+
+    public function test_repeated_fulfillment_does_not_decrement_stock_twice(): void
+    {
+        $userGud = User::where('email', 'gudang@toko.com')->first();
+        $empTek = Employee::where('email', 'teknisi@toko.com')->first();
+        $part = Sparepart::first();
+        $part->update(['stock_quantity' => 10]);
+        $ticket = $this->makeTicket('teknisi@toko.com');
+
+        $req = SparepartRequest::create([
+            'service_ticket_id' => $ticket->id,
+            'sparepart_id' => $part->id,
+            'technician_employee_id' => $empTek->id,
+            'quantity' => 2,
+            'status' => 'pending',
+            'requested_at' => now(),
+        ]);
+
+        $this->actingAs($userGud, 'sanctum')
+            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}", ['row_version' => $ticket->fresh()->row_version])
+            ->assertOk();
+
+        $this->actingAs($userGud, 'sanctum')
+            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}", ['row_version' => $ticket->fresh()->row_version])
+            ->assertStatus(422);
+
+        $this->assertSame(8, (int) $part->fresh()->stock_quantity);
+        $this->assertSame(1, StockMovement::where('reference_type', 'sparepart_request')
+            ->where('reference_id', $req->id)
+            ->count());
+    }
+
+    public function test_gudang_cannot_fulfill_request_from_another_branch(): void
+    {
+        $userGud = User::where('email', 'gudang@toko.com')->first();
+        $empTek = Employee::where('email', 'teknisi@toko.com')->first();
+        $part = Sparepart::first();
+        $stockBefore = (int) $part->stock_quantity;
+        $ticket = $this->makeTicket('teknisi@toko.com');
+        $ticket->update(['branch_id' => 2]);
 
         $req = SparepartRequest::create([
             'service_ticket_id' => $ticket->id,
@@ -155,13 +321,14 @@ class ApiOwnershipGateTest extends TestCase
         ]);
 
         $this->actingAs($userGud, 'sanctum')
-            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}")
-            ->assertOk();
+            ->postJson("/api/v1/operational/spareparts/fulfill/{$req->id}", ['row_version' => $ticket->fresh()->row_version])
+            ->assertForbidden();
 
-        $this->assertEquals('fulfilled', $req->fresh()->status);
+        $this->assertSame($stockBefore, (int) $part->fresh()->stock_quantity);
+        $this->assertSame('pending', $req->fresh()->status);
     }
 
-    // ---- pickupAndFeedback: CS-only gate ----
+    // ---- delivery: CS-only gate ----
 
     public function test_technician_cannot_deliver_and_rate_own_ticket(): void
     {
@@ -178,7 +345,7 @@ class ApiOwnershipGateTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_cs_can_deliver_and_rate_ticket(): void
+    public function test_cs_can_deliver_ticket_without_collecting_feedback(): void
     {
         $userCs = User::where('email', 'cs@toko.com')->first();
         $ticket = $this->makeTicket('teknisi@toko.com');
@@ -188,13 +355,13 @@ class ApiOwnershipGateTest extends TestCase
         ]);
 
         $this->actingAs($userCs, 'sanctum')
-            ->postJson("/api/v1/operational/tickets/{$ticket->id}/feedback", [
-                'rating' => 5,
-                'comments' => 'Pelayanan bagus',
-                'feedback_channel' => 'in_store',
-                'follow_up_ontime' => true,
+            ->postJson("/api/v1/operational/tickets/{$ticket->id}/deliver", [
+                'row_version' => $ticket->row_version,
+                'recipient_type' => 'customer',
+                'recipient_name' => 'Test Customer',
             ])
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('data.status', 'delivered');
     }
 
     // ---- Cashier import: role gate ----
@@ -219,7 +386,7 @@ class ApiOwnershipGateTest extends TestCase
         $file = UploadedFile::fake()->createWithContent(
             'laporan.csv',
             "No Invoice,Tanggal,Nama Kasir,Grand Total,Kas Sistem,Kas Aktual,Durasi (detik),Status\n"
-                . "INV-QUEUE-001,2026-08-10,Rian Pratama,150000,150000,150000,45,SUCCESS\n"
+                ."INV-QUEUE-001,2026-08-10,Rian Pratama,150000,150000,150000,45,SUCCESS\n"
         );
 
         $response = $this->actingAs($cashier, 'sanctum')
@@ -228,17 +395,17 @@ class ApiOwnershipGateTest extends TestCase
                 'period_id' => $period->id,
             ]);
 
-        $response->assertOk()->assertJsonPath('data.status', 'parsing');
+        $response->assertOk()->assertJsonPath('data.status', 'scanning');
         $batchId = $response->json('data.batch_id');
 
-        Queue::assertPushed(ParseCashierImport::class, fn (ParseCashierImport $job): bool => $job->batchId === $batchId);
+        Queue::assertPushed(ScanQuarantinedFile::class, fn (ScanQuarantinedFile $job): bool => $job->type === 'import' && $job->id === $batchId);
 
         $this->actingAs($cashier, 'sanctum')
             ->getJson("/api/v1/cashier/import/{$batchId}")
             ->assertOk()
-            ->assertJsonPath('data.status', 'parsing');
+            ->assertJsonPath('data.status', 'scanning');
 
-        (new ParseCashierImport($batchId))->handle(app(CashierImportService::class));
+        (new ScanQuarantinedFile('import', $batchId))->handle(app(FileScanService::class), app(CashierImportService::class));
 
         $this->assertDatabaseHas('import_batches', [
             'id' => $batchId,

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assessment;
 
+use App\Jobs\ScanQuarantinedFile;
 use App\Models\AuditEvent;
 use App\Models\EmployeeKpi;
 use App\Models\EmployeeKpiItem;
@@ -12,9 +13,9 @@ use App\Models\User;
 use App\Modules\Calculation\KpiCalculationEngine;
 use App\Support\KpiWorkflow;
 use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class AssessmentService
 {
@@ -34,8 +35,8 @@ class AssessmentService
         $actor = $userId !== null
             ? User::with('employee')->find($userId)
             : auth()->user();
-        if (!$actor || !KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
-            throw new \Illuminate\Auth\Access\AuthorizationException('Hanya pemilik KPI yang dapat mengisi nilai aktual.');
+        if (! $actor || ! KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
+            throw new AuthorizationException('Karyawan hanya dapat melihat KPI; fakta dan submit harian dicatat Supervisor.');
         }
         if (strtolower((string) $item->source_type_snapshot) !== 'employee'
             || $item->formula_key_snapshot === 'rubric') {
@@ -44,7 +45,7 @@ class AssessmentService
         KpiWorkflow::assertMutableKpi($kpi);
         KpiWorkflow::assertExpectedVersion($item, $expectedVersion);
 
-        if (!in_array($kpi->status, ['draft', 'revision_required'])) {
+        if (! in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("KPI berstatus '{$kpi->status}' dan tidak dapat diedit.");
         }
 
@@ -53,7 +54,7 @@ class AssessmentService
         }
 
         if ($kpi->status === 'revision_required' && $item->status !== 'revision_required') {
-            throw new Exception("Hanya item yang diminta revisi yang dapat diedit kembali.");
+            throw new Exception('Hanya item yang diminta revisi yang dapat diedit kembali.');
         }
 
         if (is_array($actualJson)) {
@@ -94,13 +95,13 @@ class AssessmentService
         $actor = $userId !== null
             ? User::with('employee')->find($userId)
             : auth()->user();
-        if (!$actor || !KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
-            throw new \Illuminate\Auth\Access\AuthorizationException('Hanya pemilik KPI yang dapat mengunggah evidence.');
+        if (! $actor || ! KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
+            throw new AuthorizationException('Evidence KPI dicatat melalui alur Supervisor atau sumber operasional resmi.');
         }
         if (strtolower((string) $item->source_type_snapshot) !== 'employee') {
             throw new Exception('Evidence hanya dapat ditambahkan pada indikator input karyawan.');
         }
-        if (!in_array($kpi->status, ['draft', 'revision_required'])) {
+        if (! in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("Tidak dapat mengunggah bukti pada status '{$kpi->status}'.");
         }
 
@@ -116,26 +117,29 @@ class AssessmentService
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ];
         $mime = $file->getMimeType() ?? 'application/octet-stream';
-        if (!in_array($mime, $allowedMimes, true) || !$file->isValid()) {
+        if (! in_array($mime, $allowedMimes, true) || ! $file->isValid()) {
             throw new Exception('Format file evidence tidak didukung atau file rusak.');
         }
 
         $hash = hash_file('sha256', $file->getRealPath());
-        $path = $file->store('evidences/' . date('Y/m'), 'local');
+        $path = $file->store('quarantine/evidences/'.date('Y/m'), 'local');
 
-        return KpiEvidence::create([
+        $evidence = KpiEvidence::create([
             'employee_kpi_item_id' => $item->id,
             'file_path' => $path,
             'file_name' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
             'mime_type' => $mime,
             'sha256_hash' => $hash,
-            'scan_status' => 'pending',
+            'scan_status' => 'quarantine',
             'scanned_at' => null,
             'scan_note' => 'Menunggu pemeriksaan keamanan file.',
             'uploaded_by' => $userId ?? auth()->id() ?? $kpi->employee->user_id,
             'description' => $description,
         ]);
+        ScanQuarantinedFile::dispatch('evidence', (string) $evidence->id);
+
+        return $evidence;
     }
 
     public function submitKpi(EmployeeKpi $kpi, ?int $userId = null): array
@@ -143,16 +147,16 @@ class AssessmentService
         $actor = $userId !== null
             ? User::with('employee')->find($userId)
             : auth()->user();
-        if (!$actor || !KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
-            throw new \Illuminate\Auth\Access\AuthorizationException('Hanya pemilik KPI yang dapat melakukan submit.');
+        if (! $actor || ! KpiWorkflow::canEmployeeWriteKpi($actor, $kpi)) {
+            throw new AuthorizationException('Karyawan tidak dapat melakukan submit KPI; sistem meneruskannya otomatis ke Supervisor.');
         }
-        if (!in_array($kpi->status, ['draft', 'revision_required'])) {
+        if (! in_array($kpi->status, ['draft', 'revision_required'])) {
             throw new Exception("KPI berstatus '{$kpi->status}' dan tidak dapat disubmit.");
         }
 
         $period = $kpi->period;
         if ($period->status !== 'OPEN' || $period->submission_deadline->isPast()) {
-            throw new Exception("Batas waktu (deadline) pengisian periode ini telah berakhir.");
+            throw new Exception('Batas waktu (deadline) pengisian periode ini telah berakhir.');
         }
 
         // Validate mandatory items & evidence
@@ -179,13 +183,13 @@ class AssessmentService
             if ($item->evidence_req_snapshot && $usableEvidence->isEmpty()) {
                 $missingItems[] = "Item '{$item->name_snapshot}' mewajibkan evidence berstatus clean.";
             }
-            if ($item->evidences->contains(fn (KpiEvidence $evidence) => !in_array($evidence->scan_status, ['clean', null], true))) {
+            if ($item->evidences->contains(fn (KpiEvidence $evidence) => ! in_array($evidence->scan_status, ['clean', null], true))) {
                 $missingItems[] = "Evidence pada item '{$item->name_snapshot}' masih menunggu pemeriksaan atau ditolak.";
             }
         }
 
-        if (!empty($missingItems)) {
-            throw new Exception("Submisi gagal:\n- " . implode("\n- ", $missingItems));
+        if (! empty($missingItems)) {
+            throw new Exception("Submisi gagal:\n- ".implode("\n- ", $missingItems));
         }
 
         $beforeStatus = $kpi->status;

@@ -857,6 +857,7 @@ class OpsSelectionField<T> extends StatelessWidget {
   final List<OpsSelectionOption<T>> options;
   final ValueChanged<T> onChanged;
   final String? sheetTitle;
+  final String? errorText;
   final bool searchable;
   final bool enabled;
 
@@ -868,6 +869,7 @@ class OpsSelectionField<T> extends StatelessWidget {
     this.value,
     this.hint,
     this.sheetTitle,
+    this.errorText,
     this.searchable = false,
     this.enabled = true,
   });
@@ -902,6 +904,7 @@ class OpsSelectionField<T> extends StatelessWidget {
           child: InputDecorator(
             decoration: InputDecoration(
               labelText: label,
+              errorText: errorText,
               enabled: enabled,
               suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
             ),
@@ -918,11 +921,10 @@ class OpsSelectionField<T> extends StatelessWidget {
                 Expanded(
                   child: Text(
                     selected?.label ?? (hint ?? 'Pilih $label'),
-                    style: TextStyle(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: selected == null
                           ? AppTheme.textMuted
                           : AppTheme.textInk,
-                      fontSize: 14,
                       fontWeight: selected == null
                           ? FontWeight.w400
                           : FontWeight.w600,

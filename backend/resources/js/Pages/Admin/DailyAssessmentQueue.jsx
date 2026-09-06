@@ -16,6 +16,16 @@ const statusLabels = {
 
 const selectedIds = (answers) => (answers ?? []).filter((answer) => answer.is_fulfilled).map((answer) => String(answer.criterion_id));
 
+const selectedRating = (entry, role) => {
+    const actual = role === 'manager' ? entry.manager_actual_json : entry.supervisor_actual_json;
+    return actual?.rating_code ?? '';
+};
+
+const selectedAttendance = (entry, role) => {
+    const actual = role === 'manager' ? entry.manager_actual_json : entry.supervisor_actual_json;
+    return actual?.attendance_status ?? entry.item?.system_meta?.attendance_status ?? '';
+};
+
 const formatValue = (value, unit, formula) => {
     if (value === null || value === undefined || value === '') return 'Belum tersedia';
 
@@ -64,8 +74,10 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
         return map;
     }, new Map()).values());
     const pendingCount = entries.filter((entry) => (role === 'manager' ? entry.manager_status : entry.supervisor_status) !== 'approved').length;
-    const [values, setValues] = useState(() => Object.fromEntries(entries.map((entry) => [entry.id, role === 'manager' ? (entry.manager_actual ?? entry.supervisor_actual ?? '') : (entry.supervisor_actual ?? '')])));
-    const [rubricAnswers, setRubricAnswers] = useState(() => Object.fromEntries(entries.filter((entry) => entry.item.formula === 'rubric').map((entry) => [entry.id, selectedIds(role === 'manager' ? entry.manager_answers : entry.supervisor_answers)])));
+    const [values, setValues] = useState(() => Object.fromEntries(entries.map((entry) => [entry.id, role === 'manager' ? (entry.manager_actual ?? entry.supervisor_actual ?? entry.employee_actual ?? '') : (entry.supervisor_actual ?? '')])));
+    const [ratings, setRatings] = useState(() => Object.fromEntries(entries.filter((entry) => entry.item.input_type === 'rating').map((entry) => [entry.id, selectedRating(entry, role)])));
+    const [attendanceStatuses, setAttendanceStatuses] = useState(() => Object.fromEntries(entries.filter((entry) => entry.item.input_type === 'attendance').map((entry) => [entry.id, selectedAttendance(entry, role)])));
+    const [rubricAnswers, setRubricAnswers] = useState(() => Object.fromEntries(entries.filter((entry) => entry.item.formula === 'rubric').map((entry) => [entry.id, selectedIds(role === 'manager' ? (entry.manager_answers ?? entry.supervisor_answers) : entry.supervisor_answers)])));
 
     const changeDate = (event) => {
         router.get(role === 'manager' ? '/app/manager-daily-assessments' : '/app/supervisor-daily-assessments', { date: event.target.value }, { preserveState: false, replace: true });
@@ -88,15 +100,81 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
         }
 
         const payload = { decision, note };
-        if (entry.item.formula === 'rubric') {
+        if (entry.item.input_type === 'rating') {
+            const ratingCode = ratings[entry.id] ?? '';
+            if (!ratingCode) return;
+            payload.actual_json = { rating_code: ratingCode };
+            if (role === 'manager' && ratingCode !== selectedRating(entry, 'supervisor')) {
+                const result = await requestAction({
+                    title: 'Revisi predikat Manager?',
+                    description: 'Perubahan predikat Manager wajib memiliki alasan.',
+                    confirmLabel: 'Simpan revisi',
+                    prompt: { name: 'reason', label: 'Alasan revisi', required: true, minLength: 3, placeholder: 'Jelaskan dasar perubahan predikat...' },
+                });
+                if (!result.confirmed) return;
+                payload.note = result.value;
+            }
+        } else if (entry.item.input_type === 'attendance') {
+            const attendanceStatus = attendanceStatuses[entry.id] ?? '';
+            if (!attendanceStatus) return;
+            payload.actual_json = { attendance_status: attendanceStatus };
+            const previous = selectedAttendance(entry, 'supervisor');
+            if (['permission', 'sick_leave', 'absent'].includes(attendanceStatus)) {
+                const result = await requestAction({
+                    title: 'Simpan status kehadiran?',
+                    description: 'Status ini membutuhkan catatan agar dapat diaudit.',
+                    confirmLabel: 'Simpan status',
+                    prompt: { name: 'reason', label: 'Catatan kehadiran', required: true, minLength: 3, placeholder: 'Contoh: izin keluarga / surat sakit...' },
+                });
+                if (!result.confirmed) return;
+                payload.note = result.value;
+            } else if (role === 'manager' && attendanceStatus !== previous) {
+                const result = await requestAction({
+                    title: 'Revisi status kehadiran Manager?',
+                    description: 'Perubahan status Manager wajib memiliki alasan.',
+                    confirmLabel: 'Simpan revisi',
+                    prompt: { name: 'reason', label: 'Alasan revisi', required: true, minLength: 3, placeholder: 'Jelaskan dasar perubahan status...' },
+                });
+                if (!result.confirmed) return;
+                payload.note = result.value;
+            }
+        } else if (entry.item.formula === 'rubric') {
             const selected = rubricAnswers[entry.id] ?? [];
             payload.answers = (entry.item.rubric?.criteria ?? []).map((criterion) => ({
                 criterion_id: criterion.id,
                 is_fulfilled: selected.includes(String(criterion.id)),
                 notes: null,
             }));
+            if (role === 'manager') {
+                const previous = selectedIds(entry.supervisor_answers).sort().join(',');
+                const next = [...selected].sort().join(',');
+                if (previous !== next) {
+                    const result = await requestAction({
+                        title: 'Revisi rubrik Manager?',
+                        description: 'Perubahan hasil checklist Manager wajib memiliki alasan.',
+                        confirmLabel: 'Simpan revisi',
+                        prompt: { name: 'reason', label: 'Alasan revisi', required: true, minLength: 3, placeholder: 'Jelaskan dasar perubahan checklist...' },
+                    });
+                    if (!result.confirmed) return;
+                    payload.note = result.value;
+                }
+            }
         } else if (values[entry.id] !== '' && values[entry.id] !== undefined && values[entry.id] !== null) {
             payload.actual_decimal = values[entry.id];
+            if (role === 'manager') {
+                const baseline = Number(entry.supervisor_actual ?? entry.employee_actual ?? entry.system_actual ?? entry.item.system_actual);
+                if (Number.isFinite(baseline) && Math.abs(Number(values[entry.id]) - baseline) > 0.000001) {
+                    const result = await requestAction({
+                        title: 'Koreksi nilai aktual?',
+                        description: 'Koreksi hanya boleh untuk fakta karyawan dan wajib memiliki alasan serta evidence.',
+                        confirmLabel: 'Simpan koreksi',
+                        prompt: { name: 'evidence', label: 'Alasan dan referensi evidence', required: true, minLength: 3, placeholder: 'Contoh: alasan; bukti/nomor dokumen...' },
+                    });
+                    if (!result.confirmed) return;
+                    payload.note = result.value;
+                    payload.actual_json = { evidence: result.value };
+                }
+            }
         }
 
         const base = role === 'manager' ? '/app/manager-daily-assessments' : '/app/supervisor-daily-assessments';
@@ -160,9 +238,10 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
                                             const isSystem = ['system', 'cross_role', 'import'].includes(String(entry.item.source_type).toLowerCase());
                                             const systemMeta = entry.item.system_meta ?? {};
                                             const currentStatus = role === 'manager' ? entry.manager_status : entry.supervisor_status;
+                                            const inputType = entry.item.input_type ?? (entry.item.formula === 'rubric' ? 'rubric' : 'numeric');
                                             const reviewedValue = entry.item.formula === 'rubric'
                                                 ? (role === 'manager' ? (entry.manager_score ?? entry.supervisor_score) : entry.supervisor_score)
-                                                : (role === 'manager' ? (entry.manager_actual ?? entry.supervisor_actual) : entry.supervisor_actual);
+                                                : (role === 'manager' ? (entry.manager_actual ?? entry.supervisor_actual ?? entry.employee_actual) : entry.supervisor_actual);
                                             const systemValue = entry.system_actual ?? entry.item.system_actual;
                                             const displayValue = isSystem ? (systemValue ?? reviewedValue) : reviewedValue;
                                             const hasSystemValue = systemValue !== null && systemValue !== undefined;
@@ -189,22 +268,39 @@ export default function DailyAssessmentQueue({ role, title, description, date, e
                                                     </div>
                                                     <div>
                                                         <div className="mb-2 flex flex-wrap items-center gap-2"><span className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Keputusan</span><Badge variant={currentStatus === 'revision_required' ? 'destructive' : currentStatus === 'approved' ? 'default' : 'outline'}>{statusLabels[currentStatus] ?? currentStatus}</Badge></div>
-                                                        {entry.item.formula === 'rubric' ? (
+                                                        {inputType === 'rating' ? (
+                                                            <div className="space-y-2">
+                                                                <p className="text-xs text-muted-foreground">Pilih predikat. Sistem akan mengonversinya menjadi nilai persen.</p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {(entry.item.manual_rating_options ?? []).map((option) => <Button key={option.code} type="button" size="sm" variant={ratings[entry.id] === option.code ? 'default' : 'outline'} disabled={assessmentDisabled} onClick={() => setRatings((current) => ({ ...current, [entry.id]: option.code }))}>{option.label} ({option.score}%)</Button>)}
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-2 pt-1"><Button type="button" size="sm" disabled={assessmentDisabled || !ratings[entry.id]} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Simpan penilaian'}</Button>{role !== 'manager' && <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>}</div>
+                                                            </div>
+                                                        ) : inputType === 'attendance' ? (
+                                                            <div className="space-y-2">
+                                                                <p className="text-xs text-muted-foreground">Status ini menjadi sumber resmi rekap absensi dan KPI kehadiran.</p>
+                                                                <select value={attendanceStatuses[entry.id] ?? ''} disabled={assessmentDisabled} onChange={(event) => setAttendanceStatuses((current) => ({ ...current, [entry.id]: event.target.value }))} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" aria-label={`Status kehadiran ${group.employee?.name ?? ''}`}>
+                                                                    <option value="">Pilih status kehadiran</option>
+                                                                    {(entry.item.attendance_options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                                                </select>
+                                                                <div className="flex flex-wrap gap-2 pt-1"><Button type="button" size="sm" disabled={assessmentDisabled || !attendanceStatuses[entry.id]} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Simpan status'}</Button>{role !== 'manager' && <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>}</div>
+                                                            </div>
+                                                        ) : inputType === 'rubric' ? (
                                                             <div className="space-y-2">
                                                                 <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><ClipboardCheck className="size-3.5" />Checklist penilaian</p>
                                                                 {criteria.map((criterion) => <label key={criterion.id} className="flex gap-2 text-xs"><input type="checkbox" disabled={assessmentDisabled} checked={selected.includes(String(criterion.id))} onChange={(event) => setRubricAnswers((current) => { const next = new Set(current[entry.id] ?? []); event.target.checked ? next.add(String(criterion.id)) : next.delete(String(criterion.id)); return { ...current, [entry.id]: [...next] }; })} className="mt-0.5 size-3.5 accent-primary" />{criterion.criterion_text}</label>)}
-                                                                <div className="flex flex-wrap gap-2 pt-1"><Button type="button" size="sm" disabled={assessmentDisabled} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Simpan penilaian'}</Button><Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button></div>
+                                                                <div className="flex flex-wrap gap-2 pt-1"><Button type="button" size="sm" disabled={assessmentDisabled} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Simpan penilaian'}</Button>{role !== 'manager' && <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>}</div>
                                                             </div>
                                                         ) : isSystem ? (
                                                             <div className="space-y-2">
                                                                 <p className="text-xs text-muted-foreground">{systemReady ? 'Periksa sumber operasional, lalu konfirmasi angka sistem.' : 'Belum dapat dikonfirmasi karena angka sistem belum tersedia.'}</p>
-                                                                <div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={assessmentDisabled || !systemReady} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan konfirmasi' : 'Konfirmasi sistem'}</Button><Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button></div>
+                                                                <div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={assessmentDisabled || !systemReady} onClick={() => assess(entry, 'approved')}><CheckCircle2 />{currentStatus === 'approved' ? 'Simpan konfirmasi' : 'Konfirmasi sistem'}</Button>{role !== 'manager' && <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>}</div>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-wrap gap-2">
                                                                 <Input type="number" step="any" disabled={assessmentDisabled} value={values[entry.id] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [entry.id]: event.target.value }))} aria-label={`Nilai ${entry.item.code} ${group.employee?.name ?? ''}`} placeholder={`Nilai (${entry.item.unit ?? 'angka'})`} className="max-w-48" />
                                                                 <Button type="button" size="sm" disabled={assessmentDisabled} onClick={() => assess(entry, 'approved')}><Save />{currentStatus === 'approved' ? 'Simpan koreksi' : 'Setujui nilai'}</Button>
-                                                                <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>
+                                                                {role !== 'manager' && <Button type="button" size="sm" variant="outline" disabled={assessmentDisabled} onClick={() => assess(entry, 'revision_required')}><RotateCcw />Revisi</Button>}
                                                             </div>
                                                         )}
                                                     </div>

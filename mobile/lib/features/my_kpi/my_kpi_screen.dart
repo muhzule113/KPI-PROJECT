@@ -7,9 +7,11 @@ import '../../core/api/api_service.dart';
 import '../../core/realtime/realtime_service.dart';
 import 'kpi_item_detail_screen.dart';
 import 'kpi_history_screen.dart';
+import 'daily_kpi_screen.dart';
 
 class MyKpiScreen extends StatefulWidget {
-  const MyKpiScreen({super.key});
+  final int? periodId;
+  const MyKpiScreen({super.key, this.periodId});
 
   @override
   State<MyKpiScreen> createState() => _MyKpiScreenState();
@@ -48,7 +50,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
     }
 
     try {
-      final res = await ApiService.get('/my-kpi/active');
+      final res = await ApiService.get('/my-kpi/active${widget.periodId == null ? '' : '?period_id=${widget.periodId}'}');
       if (mounted) {
         setState(() {
           _kpiData = res['data'];
@@ -179,6 +181,20 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                         ),
                         IconButton(
                           icon: Icon(
+                            Icons.today_rounded,
+                            color: AppTheme.primaryBright,
+                          ),
+                          tooltip: 'KPI harian',
+                          onPressed: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DailyKpiScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(
                             Icons.refresh_rounded,
                             color: AppTheme.primaryBright,
                           ),
@@ -235,9 +251,19 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
                 status == 'pending_approval') ...[
               const SizedBox(height: 12),
               Text(
-                'Nilai yang sudah dikirim sedang diproses dalam alur review dan approval.',
+                'Nilai yang disiapkan otomatis sedang diproses dalam alur review dan approval.',
                 style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
               ),
+            ],
+            if (_kpiData?['score_visible'] == true) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Skor: ${_kpiData?['final_score'] ?? '—'} · ${_kpiData?['rating_label'] ?? 'Belum dapat dihitung'}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              const Text('Skor dan predikat tersedia setelah periode dipublikasikan.'),
             ],
             if (status == 'approved' || status == 'locked') ...[
               const SizedBox(height: 12),
@@ -464,7 +490,7 @@ class _MyKpiScreenState extends State<MyKpiScreen> {
       case 'cross_role':
         return 'Dinilai rekan kerja';
       case 'employee':
-        return 'Belum diisi';
+        return 'Menunggu penilaian Supervisor';
       default:
         return 'Otomatis dari sistem';
     }

@@ -15,7 +15,7 @@ final class KpiWorkflow
     public const FINAL_KPI_STATUSES = ['approved', 'locked'];
 
     private const PERIOD_TRANSITIONS = [
-        'DRAFT' => ['READY', 'OPEN', 'CANCELLED'],
+        'DRAFT' => ['READY', 'CANCELLED'],
         'READY' => ['OPEN', 'CANCELLED'],
         'OPEN' => ['SUBMISSION_CLOSED', 'CANCELLED'],
         'SUBMISSION_CLOSED' => ['IN_REVIEW', 'CANCELLED'],
@@ -28,9 +28,9 @@ final class KpiWorkflow
 
     private const KPI_TRANSITIONS = [
         'draft' => ['submitted', 'revision_required'],
-        'submitted' => ['under_review'],
+        'submitted' => ['under_review', 'pending_approval'],
         'under_review' => ['revision_required', 'verified', 'pending_approval'],
-        'revision_required' => ['submitted'],
+        'revision_required' => ['submitted', 'under_review', 'pending_approval'],
         'verified' => ['pending_approval'],
         'pending_approval' => ['approved', 'under_review'],
         'approved' => ['locked'],
@@ -39,14 +39,14 @@ final class KpiWorkflow
 
     public static function assertPeriodTransition(KpiPeriod $period, string $next): void
     {
-        if (!in_array($next, self::PERIOD_TRANSITIONS[$period->status] ?? [], true)) {
+        if (! in_array($next, self::PERIOD_TRANSITIONS[$period->status] ?? [], true)) {
             throw new RuntimeException("Periode berstatus '{$period->status}' tidak dapat diubah menjadi '{$next}'.");
         }
     }
 
     public static function assertKpiTransition(EmployeeKpi $kpi, string $next): void
     {
-        if (!in_array($next, self::KPI_TRANSITIONS[$kpi->status] ?? [], true)) {
+        if (! in_array($next, self::KPI_TRANSITIONS[$kpi->status] ?? [], true)) {
             throw new RuntimeException("KPI berstatus '{$kpi->status}' tidak dapat diubah menjadi '{$next}'.");
         }
     }
@@ -60,8 +60,8 @@ final class KpiWorkflow
 
     public static function canSystemSyncKpi(EmployeeKpi $kpi): bool
     {
-        // Nilai sistem harus bisa diperbarui setelah karyawan submit, sebelum review dimulai.
-        return in_array($kpi->status, ['draft', 'submitted', 'revision_required'], true);
+        return ! in_array($kpi->status, self::FINAL_KPI_STATUSES, true)
+            && ! in_array($kpi->period?->status, ['PUBLISHED', 'LOCKED', 'CANCELLED'], true);
     }
 
     public static function assertExpectedVersion(Model $model, mixed $expected): void
@@ -74,41 +74,61 @@ final class KpiWorkflow
     public static function canManageKpi(User $user, EmployeeKpi $kpi): bool
     {
         $employee = $user->employee;
-        return !$user->hasRole('super_admin')
-            && $user->hasRole('owner_manager')
+
+        return CapabilityMatrix::has($user, 'kpi.manager.approval')
             && $employee?->status === 'active'
+            && (string) $kpi->employee_id !== (string) $employee->id
             && (string) $kpi->manager_id_snapshot === (string) $employee->id
-            && (string) $kpi->employee?->branch_id === (string) $employee->branch_id;
+            && (string) $kpi->branch_id_snapshot === (string) $employee->branch_id;
+    }
+
+    public static function canApproveKpi(User $user, EmployeeKpi $kpi): bool
+    {
+        return self::canManageKpi($user, $kpi);
+    }
+
+    public static function availableActions(User $user, EmployeeKpi $kpi): array
+    {
+        $actions = [];
+        if (self::canReviewKpi($user, $kpi) && in_array($kpi->status, ['submitted', 'under_review', 'revision_required', 'verified'], true)) {
+            $actions[] = 'review';
+            $actions[] = 'forward';
+        }
+        if (self::canManageKpi($user, $kpi)) {
+            if ($kpi->status === 'pending_approval') {
+                $actions = [...$actions, 'decide', 'return', 'approve'];
+            } elseif ($kpi->isSupervisorKpi() && in_array($kpi->status, ['submitted', 'under_review', 'revision_required', 'verified'], true)) {
+                $actions[] = 'approve';
+            }
+        }
+
+        return $actions;
     }
 
     public static function canReviewKpi(User $user, EmployeeKpi $kpi): bool
     {
         $employee = $user->employee;
-        return !$user->hasRole('super_admin')
-            && $user->hasRole('supervisor')
+
+        return CapabilityMatrix::has($user, 'kpi.supervisor.review')
             && $employee?->status === 'active'
+            && ! $kpi->isSupervisorKpi()
+            && (string) $kpi->employee_id !== (string) $employee->id
             && (string) $kpi->supervisor_id_snapshot === (string) $employee->id
-            && (string) $kpi->employee?->branch_id === (string) $employee->branch_id;
+            && (string) $kpi->branch_id_snapshot === (string) $employee->branch_id;
     }
 
     public static function canEmployeeWriteKpi(User $user, EmployeeKpi $kpi): bool
     {
-        $employee = $user->employee;
-
-        return !$user->hasAnyRole(['super_admin', 'auditor', 'kpi_admin'])
-            && $employee?->status === 'active'
-            && (string) $kpi->employee_id === (string) $employee->id;
+        // Fakta dan submit harian sekarang dimiliki Supervisor; karyawan read-only.
+        return false;
     }
 
-    /**
-     * Nilai KPI dapat ditulis oleh pemilik KPI, reviewer yang ditugaskan, atau
-     * manager yang berwenang. Hak akses tetap dibatasi oleh service per tahap.
-     */
+    /** Nilai KPI hanya ditulis oleh reviewer/sumber resmi; karyawan tetap read-only. */
     public static function canWriteKpi(User $user, EmployeeKpi $kpi): bool
     {
         return self::canEmployeeWriteKpi($user, $kpi)
             || self::canReviewKpi($user, $kpi)
-            || self::canManageKpi($user, $kpi);
+            || ($kpi->isSupervisorKpi() && self::canManageKpi($user, $kpi));
     }
 
     public static function assertCanWriteKpi(?User $user, EmployeeKpi $kpi): void
@@ -128,16 +148,15 @@ final class KpiWorkflow
         }
 
         $employee = $user->employee;
-        if (!$employee || $employee->status !== 'active'
-            || (string) $kpi->employee?->id === (string) $employee->id
-            || (string) $kpi->employee?->branch_id !== (string) $employee->branch_id) {
+        if (! $employee || $employee->status !== 'active' || ! KpiVisibility::canRead($user, $kpi)) {
             return false;
         }
 
-        return ($user->hasRole('owner_manager')
-                && (string) $kpi->manager_id_snapshot === (string) $employee->id)
+        return (string) $kpi->employee_id === (string) $employee->id
             || ($user->hasRole('supervisor')
-                && (string) $kpi->supervisor_id_snapshot === (string) $employee->id);
+                && (string) $kpi->supervisor_id_snapshot === (string) $employee->id)
+            || ($user->hasRole('owner_manager')
+                && (string) $kpi->manager_id_snapshot === (string) $employee->id);
     }
 
     public static function canApproveCorrection(User $user, KpiCorrectionRequest $request): bool
@@ -149,13 +168,10 @@ final class KpiWorkflow
         $employee = $user->employee;
         $kpi = $request->employeeKpi;
 
-        if (!$employee || !$kpi || (string) $kpi->employee?->branch_id !== (string) $employee->branch_id) {
+        if (! $employee || ! $kpi || (string) $request->requested_by === (string) $user->id) {
             return false;
         }
 
-        return ($user->hasRole('owner_manager')
-                && (string) $kpi->manager_id_snapshot === (string) $employee->id)
-            || ($user->hasRole('supervisor')
-                && (string) $kpi->supervisor_id_snapshot === (string) $employee->id);
+        return self::canManageKpi($user, $kpi);
     }
 }

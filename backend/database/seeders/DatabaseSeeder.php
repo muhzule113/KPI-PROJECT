@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Branch;
+use App\Models\CustomerFeedback;
 use App\Models\Employee;
 use App\Models\EmployeePlacement;
 use App\Models\KpiDefinition;
@@ -15,8 +16,12 @@ use App\Models\KpiTemplate;
 use App\Models\KpiTemplateItem;
 use App\Models\KpiTemplateVersion;
 use App\Models\Position;
+use App\Models\ServiceTicket;
+use App\Models\Sparepart;
 use App\Models\User;
+use App\Modules\Assessment\OperationalKpiSyncService;
 use App\Modules\Period\PeriodService;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
@@ -48,9 +53,9 @@ class DatabaseSeeder extends Seeder
 
         $bands = [
             ['code' => 'STAR', 'label' => '⭐ Istimewa', 'min_score' => 95.00, 'max_score' => 100.00, 'color' => '#10B981', 'badge_icon' => 'heroicon-o-sparkles', 'sort_order' => 1],
-            ['code' => 'VERY_GOOD', 'label' => 'Sangat Baik', 'min_score' => 90.00, 'max_score' => 94.99, 'color' => '#3B82F6', 'badge_icon' => 'heroicon-o-check-badge', 'sort_order' => 2],
-            ['code' => 'GOOD', 'label' => 'Baik', 'min_score' => 80.00, 'max_score' => 89.99, 'color' => '#84CC16', 'badge_icon' => 'heroicon-o-hand-thumb-up', 'sort_order' => 3],
-            ['code' => 'FAIR', 'label' => 'Cukup', 'min_score' => 70.00, 'max_score' => 79.99, 'color' => '#F59E0B', 'badge_icon' => 'heroicon-o-exclamation-circle', 'sort_order' => 4],
+            ['code' => 'VERY_GOOD', 'label' => 'Sangat Baik', 'min_score' => 90.00, 'max_score' => 94.99, 'manual_score' => 95.00, 'color' => '#3B82F6', 'badge_icon' => 'heroicon-o-check-badge', 'sort_order' => 2],
+            ['code' => 'GOOD', 'label' => 'Baik', 'min_score' => 80.00, 'max_score' => 89.99, 'manual_score' => 85.00, 'color' => '#84CC16', 'badge_icon' => 'heroicon-o-hand-thumb-up', 'sort_order' => 3],
+            ['code' => 'FAIR', 'label' => 'Cukup', 'min_score' => 70.00, 'max_score' => 79.99, 'manual_score' => 75.00, 'color' => '#F59E0B', 'badge_icon' => 'heroicon-o-exclamation-circle', 'sort_order' => 4],
             ['code' => 'POOR', 'label' => 'Perlu Perbaikan', 'min_score' => 0.00, 'max_score' => 69.99, 'color' => '#EF4444', 'badge_icon' => 'heroicon-o-exclamation-triangle', 'sort_order' => 5],
         ];
 
@@ -77,7 +82,7 @@ class DatabaseSeeder extends Seeder
         $posSpv = Position::firstOrCreate(['code' => 'POS-SPV'], ['name' => 'Supervisor', 'department' => 'Operasional']);
         $posTek = Position::firstOrCreate(['code' => 'POS-TEK'], ['name' => 'Teknisi', 'department' => 'Servis']);
         $posCs = Position::updateOrCreate(['code' => 'POS-CS'], ['name' => 'Pelayan', 'department' => 'Front Office']);
-        $posAdm = Position::firstOrCreate(['code' => 'POS-ADM'], ['name' => 'Admin', 'department' => 'Administrasi']);
+        $posAdm = Position::updateOrCreate(['code' => 'POS-ADM'], ['name' => 'Admin Operasional', 'department' => 'Administrasi']);
         $posKsr = Position::firstOrCreate(['code' => 'POS-KSR'], ['name' => 'Kasir', 'department' => 'Front Office']);
         $posGud = Position::firstOrCreate(['code' => 'POS-GUD'], ['name' => 'Gudang / Sparepart', 'department' => 'Logistik']);
 
@@ -142,10 +147,10 @@ class DatabaseSeeder extends Seeder
         foreach ([
             'TEK-01' => 'employee', 'TEK-02' => 'employee', 'TEK-03' => 'cross_role', 'TEK-04' => 'employee',
             'TEK-05' => 'supervisor', 'TEK-06' => 'supervisor', 'TEK-07' => 'system',
-            'CS-01' => 'employee', 'CS-02' => 'employee', 'CS-03' => 'employee', 'CS-04' => 'employee', 'CS-05' => 'cross_role', 'CS-06' => 'system',
-            'ADM-01' => 'employee', 'ADM-02' => 'system', 'ADM-03' => 'employee', 'ADM-04' => 'employee', 'ADM-05' => 'system', 'ADM-06' => 'supervisor',
-            'KSR-01' => 'import', 'KSR-02' => 'import', 'KSR-03' => 'import', 'KSR-04' => 'import', 'KSR-05' => 'supervisor', 'KSR-06' => 'system',
-            'GUD-01' => 'system', 'GUD-02' => 'system', 'GUD-03' => 'system', 'GUD-04' => 'system', 'GUD-05' => 'system', 'GUD-06' => 'supervisor', 'GUD-07' => 'system',
+            'CS-01' => 'employee', 'CS-02' => 'employee', 'CS-03' => 'employee', 'CS-04' => 'employee', 'CS-05' => 'cross_role', 'CS-06' => 'supervisor',
+            'ADM-01' => 'employee', 'ADM-02' => 'system', 'ADM-03' => 'employee', 'ADM-04' => 'employee', 'ADM-05' => 'supervisor', 'ADM-06' => 'supervisor',
+            'KSR-01' => 'import', 'KSR-02' => 'import', 'KSR-03' => 'import', 'KSR-04' => 'import', 'KSR-05' => 'supervisor', 'KSR-06' => 'supervisor',
+            'GUD-01' => 'system', 'GUD-02' => 'system', 'GUD-03' => 'system', 'GUD-04' => 'system', 'GUD-05' => 'system', 'GUD-06' => 'supervisor', 'GUD-07' => 'supervisor',
             'SUP-01' => 'system', 'SUP-02' => 'system', 'SUP-03' => 'system', 'SUP-04' => 'system', 'SUP-05' => 'employee', 'SUP-06' => 'supervisor', 'SUP-07' => 'system',
         ] as $code => $source) {
             $kpiDefs[$code]?->update(['source_type' => $source]);
@@ -204,8 +209,8 @@ class DatabaseSeeder extends Seeder
             ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
             ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
             ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 8.00], 'evidence' => false, 'source' => 'cross_role'],
-            ['code' => 'CS-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 5.00], 'evidence' => false, 'source' => 'cross_role'],
+            ['code' => 'CS-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
         ];
         $this->attachTemplateItems($verCs, $csItems, $defs);
 
@@ -220,7 +225,7 @@ class DatabaseSeeder extends Seeder
             ['code' => 'ADM-02', 'weight' => 25.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
             ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'ADM-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'ADM-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
             ['code' => 'ADM-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Kelengkapan pengarsipan invoice & surat jalan',
                 'Kerapian dokumen fisik & digital',
@@ -246,7 +251,7 @@ class DatabaseSeeder extends Seeder
                 'Pemberian struk & ucapan terima kasih',
                 'Kerapian area kasir & mesin EDC',
             ]],
-            ['code' => 'KSR-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'KSR-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
         ];
         $this->attachTemplateItems($verKsr, $ksrItems, $defs);
 
@@ -267,7 +272,7 @@ class DatabaseSeeder extends Seeder
                 'Kebersihan lantai & sirkulasi udara gudang',
                 'Keamanan penyimpanan komponen bernilai tinggi',
             ]],
-            ['code' => 'GUD-07', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'GUD-07', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
         ];
         $this->attachTemplateItems($verGud, $gudItems, $defs);
 
@@ -294,7 +299,9 @@ class DatabaseSeeder extends Seeder
         $sort = 1;
         foreach ($items as $itemData) {
             $def = $defs[$itemData['code']] ?? null;
-            if (!$def) continue;
+            if (! $def) {
+                continue;
+            }
 
             $source = $itemData['source'];
             $sortOrder = $sort++;
@@ -317,12 +324,12 @@ class DatabaseSeeder extends Seeder
                 ]
             );
 
-            if (!empty($itemData['rubric_criteria'])) {
+            if (! empty($itemData['rubric_criteria'])) {
                 $rubric = KpiRubric::firstOrCreate(
                     ['template_item_id' => $tplItem->id],
                     [
                         'name' => "Rubrik {$def->name}",
-                        'description' => "Daftar kriteria evaluasi observasi Supervisor",
+                        'description' => 'Daftar kriteria evaluasi observasi Supervisor',
                     ]
                 );
 
@@ -348,7 +355,12 @@ class DatabaseSeeder extends Seeder
             ['email' => 'admin@kpi.com'],
             ['name' => 'System Administrator', 'password' => Hash::make('password')]
         );
-        $userAdmin->assignRole('super_admin', 'kpi_admin');
+        $userAdmin->syncRoles('super_admin');
+
+        foreach (['kpi_admin' => ['kpi_admin@kpi.com', 'Admin KPI'], 'auditor' => ['auditor@kpi.com', 'Auditor']] as $role => [$email, $name]) {
+            $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'password' => Hash::make('password')]);
+            $user->syncRoles($role);
+        }
 
         // 2. Manager / Owner
         $userManager = User::firstOrCreate(
@@ -503,6 +515,19 @@ class DatabaseSeeder extends Seeder
                 'status' => 'active',
             ]
         );
+
+        foreach (Employee::all() as $employee) {
+            EmployeePlacement::firstOrCreate([
+                'employee_id' => $employee->id,
+                'effective_from' => $employee->joined_at->toDateString(),
+            ], [
+                'position_id' => $employee->position_id,
+                'branch_id' => $employee->branch_id,
+                'supervisor_id' => $employee->supervisor_id,
+                'effective_until' => $employee->ended_at?->toDateString(),
+                'notes' => 'Placement awal dari seeder',
+            ]);
+        }
     }
 
     protected function seedActivePeriod($branchPusat, $branchSurabaya): void
@@ -527,7 +552,14 @@ class DatabaseSeeder extends Seeder
 
         // Open period and generate snapshots
         $periodService = app(PeriodService::class);
-        $periodService->openPeriod($period);
+        $clock = Carbon::getTestNow();
+        try {
+            Carbon::setTestNow('2026-08-01 08:00:00');
+            $periodService->markReady($period);
+            $periodService->openPeriod($period->fresh());
+        } finally {
+            Carbon::setTestNow($clock);
+        }
 
         // 9. Seed Operational Service Management Data (Spareparts & Tickets)
         $this->seedOperationalServiceData($period, $branchPusat);
@@ -552,7 +584,7 @@ class DatabaseSeeder extends Seeder
 
         $parts = [];
         foreach ($partsData as $pd) {
-            $parts[$pd['code']] = \App\Models\Sparepart::firstOrCreate(['code' => $pd['code']], $pd);
+            $parts[$pd['code']] = Sparepart::firstOrCreate(['code' => $pd['code']], $pd);
         }
 
         // 1b. Produk non-sparepart (handset, tablet/iPad, aksesoris) — katalog produk toko
@@ -568,7 +600,7 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($productsData as $pd) {
-            \App\Models\Sparepart::firstOrCreate(['code' => $pd['code']], $pd);
+            Sparepart::firstOrCreate(['code' => $pd['code']], $pd);
         }
 
         // 2. Demo Tickets (12 tickets)
@@ -800,7 +832,7 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($ticketsData as $td) {
-            $ticket = \App\Models\ServiceTicket::firstOrCreate(
+            $ticket = ServiceTicket::firstOrCreate(
                 ['ticket_number' => $td['ticket_number']],
                 [
                     'customer_name' => $td['customer_name'],
@@ -829,8 +861,8 @@ class DatabaseSeeder extends Seeder
                 ]
             );
 
-            if (!empty($td['rating'])) {
-                \App\Models\CustomerFeedback::firstOrCreate(
+            if (! empty($td['rating'])) {
+                CustomerFeedback::firstOrCreate(
                     ['service_ticket_id' => $ticket->id],
                     [
                         'cs_employee_id' => $empCs?->id,
@@ -845,7 +877,7 @@ class DatabaseSeeder extends Seeder
         }
 
         // 3. Trigger Automatic Sync to KPI Engine!
-        $syncService = app(\App\Modules\Assessment\OperationalKpiSyncService::class);
+        $syncService = app(OperationalKpiSyncService::class);
         $syncService->syncPeriodOperationalData($period);
     }
 }

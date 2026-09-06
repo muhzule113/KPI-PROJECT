@@ -30,12 +30,18 @@ class SparepartRequest extends Model
         'fulfilled_at',
         'notes',
         'pending_unique_key',
+        'availability_note',
+        'sla_deadline_at',
+        'confirmed_at',
+        'confirmed_by_employee_id',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
         'requested_at' => 'datetime',
         'fulfilled_at' => 'datetime',
+        'sla_deadline_at' => 'datetime',
+        'confirmed_at' => 'datetime',
     ];
 
     public function ticket(): BelongsTo

@@ -17,8 +17,8 @@ class CalculationResult
     {
         return new self(
             isSuccess: true,
-            achievementPercentage: round($achievement, 4),
-            weightedScore: round($weightedScore, 4),
+            achievementPercentage: round($achievement, 6, PHP_ROUND_HALF_UP),
+            weightedScore: round($weightedScore, 6, PHP_ROUND_HALF_UP),
             status: 'calculated',
             meta: $meta
         );

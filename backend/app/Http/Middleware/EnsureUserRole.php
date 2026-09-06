@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\CapabilityMatrix;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,7 +17,7 @@ class EnsureUserRole
     {
         $user = $request->user();
 
-        if ($user && !$user->hasRole('super_admin')) {
+        if ($user && CapabilityMatrix::accessError($user) === null && ! $user->hasAnyRole(CapabilityMatrix::ADMIN_ROLES)) {
             $allowed = array_filter(array_map('trim', explode('|', $roles)));
             $userRoles = $user->roles->pluck('name')->all();
 

@@ -93,6 +93,7 @@ export default function AdminForm({ fields, options, form }) {
                                     <Input
                                         {...commonProps}
                                         type={field.type ?? 'text'}
+                                        step={field.step}
                                         value={value}
                                         placeholder={field.placeholder}
                                         onChange={(event) => form.setData(field.name, event.target.value)}

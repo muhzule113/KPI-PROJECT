@@ -46,7 +46,10 @@ class CorrectionFlowTest extends TestCase
         $req = app(ApprovalService::class)->requestCorrection(
             kpi: $kpi,
             reason: 'Koreksi nilai aktual',
-            afterData: ['items' => [['id' => $item->id, 'actual' => 99]]],
+            afterData: [
+                'items' => [['id' => $item->id, 'actual' => 99]],
+                'evidence' => [['type' => 'document', 'reference' => 'COR-001']],
+            ],
             requesterId: $userMgr->id,
         );
 
@@ -75,12 +78,15 @@ class CorrectionFlowTest extends TestCase
         $req = app(ApprovalService::class)->requestCorrection(
             kpi: $kpi,
             reason: 'Tiket telat tercatat',
-            afterData: ['items' => [['id' => $item->id, 'actual' => $newActual]]],
-            requesterId: $userMgr->id,
+            afterData: [
+                'items' => [['id' => $item->id, 'actual' => $newActual]],
+                'evidence' => [['type' => 'document', 'reference' => 'COR-002']],
+            ],
+            requesterId: $userSpv->id,
         );
 
-        // Disetujui oleh pihak berbeda (supervisor)
-        app(ApprovalService::class)->approveCorrection($req, $userSpv->id);
+        // Disetujui oleh Manager sebagai pihak berbeda.
+        app(ApprovalService::class)->approveCorrection($req, $userMgr->id);
 
         $req->refresh();
         $this->assertEquals('applied', $req->status);
@@ -101,11 +107,14 @@ class CorrectionFlowTest extends TestCase
         $req = app(ApprovalService::class)->requestCorrection(
             kpi: $kpi,
             reason: 'Koreksi nilai aktual',
-            afterData: ['items' => [['id' => $item->id, 'actual' => 50]]],
-            requesterId: $userMgr->id,
+            afterData: [
+                'items' => [['id' => $item->id, 'actual' => 50]],
+                'evidence' => [['type' => 'document', 'reference' => 'COR-003']],
+            ],
+            requesterId: $userSpv->id,
         );
 
-        app(ApprovalService::class)->rejectCorrection($req, $userSpv->id, 'Data sudah benar');
+        app(ApprovalService::class)->rejectCorrection($req, $userMgr->id, 'Data sudah benar');
 
         $this->assertEquals('rejected', $req->fresh()->status);
         // Nilai aktual tidak berubah

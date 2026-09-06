@@ -5,57 +5,56 @@ namespace App\Modules\Calculation\Strategies;
 use App\Models\EmployeeKpiItem;
 use App\Modules\Calculation\CalculationResult;
 use App\Modules\Calculation\Contracts\CalculatorInterface;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 
 class ZeroToleranceCalculator implements CalculatorInterface
 {
     public function calculate(EmployeeKpiItem $item): CalculationResult
     {
-        $weight = (float) $item->weight_snapshot;
-        $actual = $item->actual_decimal !== null ? (float) $item->actual_decimal : null;
-
-        if ($actual === null) {
+        if ($item->actual_decimal === null) {
             return CalculationResult::pending('Nilai aktual selisih kas belum diisi/di-import');
         }
+        $weight = BigDecimal::of((string) $item->weight_snapshot);
+        $actual = BigDecimal::of((string) $item->actual_decimal);
 
         $targetData = $item->target_json_snapshot ?? [];
         $formulaParams = $item->formula_params_snapshot ?? [];
 
-        $fullScoreLimit = array_key_exists('full_score_limit', $targetData)
-            ? (float) $targetData['full_score_limit']
-            : (array_key_exists('full_score_limit', $formulaParams) ? (float) $formulaParams['full_score_limit'] : null);
-
-        $failureLimit = array_key_exists('failure_limit', $targetData)
-            ? (float) $targetData['failure_limit']
-            : (array_key_exists('failure_limit', $formulaParams) ? (float) $formulaParams['failure_limit'] : null);
+        $fullValue = $targetData['full_score_limit'] ?? $formulaParams['full_score_limit'] ?? null;
+        $failureValue = $targetData['failure_limit'] ?? $formulaParams['failure_limit'] ?? null;
+        $fullScoreLimit = $fullValue === null ? null : BigDecimal::of((string) $fullValue);
+        $failureLimit = $failureValue === null ? null : BigDecimal::of((string) $failureValue);
 
         if ($fullScoreLimit === null || $failureLimit === null) {
             return CalculationResult::unscorable('Parameter full score limit dan failure limit wajib dikonfigurasi');
         }
 
-        if ($failureLimit <= $fullScoreLimit) {
+        if ($failureLimit->isLessThanOrEqualTo($fullScoreLimit)) {
             return CalculationResult::unscorable('Failure limit harus lebih besar dari full score limit');
         }
 
-        $cap = isset($formulaParams['cap']) ? (float) $formulaParams['cap'] : 100.0;
-        $absActual = abs($actual);
+        $cap = BigDecimal::of((string) ($formulaParams['cap'] ?? 100));
+        $absActual = $actual->isNegative() ? $actual->negated() : $actual;
 
-        if ($absActual <= $fullScoreLimit) {
-            $achievement = 100.0;
-        } elseif ($absActual >= $failureLimit) {
-            $achievement = 0.0;
+        if ($absActual->isLessThanOrEqualTo($fullScoreLimit)) {
+            $achievement = BigDecimal::of(100);
+        } elseif ($absActual->isGreaterThanOrEqualTo($failureLimit)) {
+            $achievement = BigDecimal::zero();
         } else {
-            $achievement = (($failureLimit - $absActual) / ($failureLimit - $fullScoreLimit)) * 100.0;
+            $achievement = $failureLimit->minus($absActual)->multipliedBy(100)
+                ->dividedBy($failureLimit->minus($fullScoreLimit), 6, RoundingMode::HalfUp);
         }
 
-        $achievement = min(max($achievement, 0.0), $cap);
-        $weightedScore = ($achievement * ($weight / 100.0));
+        $achievement = $achievement->isGreaterThan($cap) ? $cap : $achievement;
+        $weightedScore = $achievement->multipliedBy($weight)->dividedBy(100, 6, RoundingMode::HalfUp);
 
-        return CalculationResult::calculated($achievement, $weightedScore, [
-            'full_score_limit' => $fullScoreLimit,
-            'failure_limit' => $failureLimit,
-            'abs_actual' => $absActual,
-            'cap' => $cap,
-            'weight' => $weight,
+        return CalculationResult::calculated($achievement->toFloat(), $weightedScore->toFloat(), [
+            'full_score_limit' => $fullScoreLimit->toFloat(),
+            'failure_limit' => $failureLimit->toFloat(),
+            'abs_actual' => $absActual->toFloat(),
+            'cap' => $cap->toFloat(),
+            'weight' => $weight->toFloat(),
         ]);
     }
 }

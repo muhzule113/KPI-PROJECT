@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\KpiEvidence;
-use App\Support\KpiWorkflow;
+use App\Support\KpiVisibility;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -14,7 +14,7 @@ class KpiEvidenceController extends Controller
     public function download(Request $request, int $evidenceId): StreamedResponse
     {
         $evidence = KpiEvidence::with('item.employeeKpi.employee')->find($evidenceId);
-        abort_unless($evidence && in_array($evidence->scan_status, ['clean', null], true), 404);
+        abort_unless($evidence && $evidence->scan_status === 'clean', 404);
 
         $kpi = $evidence->item?->employeeKpi;
         abort_unless($kpi, 404);
@@ -27,24 +27,14 @@ class KpiEvidenceController extends Controller
             ['Content-Type' => $evidence->mime_type]
         );
     }
+
     private function canAccess(Request $request, $kpi): bool
     {
         $user = $request->user();
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
-        if ($user->hasRole('super_admin')) {
-            return true;
-        }
-
-        $employee = $user->employee;
-        if (!$employee || (string) $kpi->employee?->branch_id !== (string) $employee->branch_id) {
-            return false;
-        }
-
-        return (string) $kpi->employee_id === (string) $employee->id
-            || KpiWorkflow::canReviewKpi($user, $kpi)
-            || KpiWorkflow::canManageKpi($user, $kpi);
+        return KpiVisibility::canRead($user, $kpi);
     }
 }

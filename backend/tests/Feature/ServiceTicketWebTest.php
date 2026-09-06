@@ -2,12 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Employee;
 use App\Models\Branch;
-use App\Models\KpiPeriod;
 use App\Models\ServiceTicket;
 use App\Models\User;
-use App\Modules\Assessment\OperationalKpiSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,217 +14,71 @@ class ServiceTicketWebTest extends TestCase
 
     protected $seed = true;
 
-    public function test_pelayan_can_open_web_form_and_create_intake_ticket(): void
+    private function ticket(string $status = 'intake'): ServiceTicket
     {
-        $user = User::where('email', 'cs@toko.com')->firstOrFail();
-        $pelayan = Employee::where('email', 'cs@toko.com')->firstOrFail();
-        $technician = Employee::where('email', 'teknisi@toko.com')->firstOrFail();
+        $cs = User::where('email', 'cs@toko.com')->firstOrFail()->employee;
 
-        $this->actingAs($user)
-            ->get('/app/service-tickets/create')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->component('Admin/ResourceForm')
-                ->where('resource.key', 'service-tickets')
-                ->where('resource.can_create', true)
-            );
-
-        $this->actingAs($user)
-            ->post('/app/service-tickets', [
-                'customer_name' => 'Pelanggan Web',
-                'customer_phone' => '081234567890',
-                'intake_by_employee_id' => $pelayan->id,
-                'device_brand' => 'Samsung',
-                'device_model' => 'Galaxy A54',
-                'imei_or_serial' => 'IMEI-WEB-001',
-                'initial_complaint' => 'Baterai cepat habis',
-                'customer_needs' => 'Selesai sebelum akhir pekan.',
-                'physical_condition' => 'Ada lecet ringan di sudut kanan.',
-                'technician_employee_id' => $technician->id,
-                'status' => 'delivered',
-                'result_status' => 'success',
-                'estimated_cost' => 350000,
-                'final_cost' => 350000,
-            ])
-            ->assertRedirect('/app/service-tickets');
-
-        $this->assertDatabaseHas('service_tickets', [
-            'customer_name' => 'Pelanggan Web',
-            'intake_by_employee_id' => $pelayan->id,
-            'technician_employee_id' => $technician->id,
-            'status' => 'intake',
-            'result_status' => 'pending',
-            'final_cost' => 0,
-            'customer_needs' => 'Selesai sebelum akhir pekan.',
+        return ServiceTicket::create([
+            'ticket_number' => 'SRV-WEB-'.str()->uuid(),
+            'customer_name' => 'Pelanggan web', 'customer_phone' => '081234567899',
+            'device_brand' => 'Samsung', 'device_model' => 'A54', 'initial_complaint' => 'Layar pecah',
+            'branch_id' => $cs->branch_id, 'intake_by_employee_id' => $cs->id, 'status' => $status,
         ]);
     }
 
-    public function test_web_ticket_completion_syncs_to_the_technician_kpi(): void
+    public function test_mobile_only_roles_cannot_use_web_ticket_urls(): void
     {
-        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
-        $pelayan = Employee::where('email', 'cs@toko.com')->firstOrFail();
-        $technician = Employee::where('email', 'teknisi@toko.com')->firstOrFail();
-        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
-        $period->update([
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->addDay()->toDateString(),
-        ]);
-
-        $ticket = ServiceTicket::create([
-            'ticket_number' => 'SRV-WEB-SYNC-001',
-            'customer_name' => 'Pelanggan Sinkron Web',
-            'customer_phone' => '081234567891',
-            'device_brand' => 'Apple',
-            'device_model' => 'iPhone 13',
-            'initial_complaint' => 'Baterai cepat habis',
-            'estimated_cost' => 300000,
-            'final_cost' => 300000,
-            'estimated_completion_at' => now()->addHour(),
-            'branch_id' => $technician->branch_id,
-            'period_id' => $period->id,
-            'intake_by_employee_id' => $pelayan->id,
-            'technician_employee_id' => $technician->id,
-            'status' => 'qc_ready',
-            'result_status' => 'pending',
-            'diagnosis_notes' => 'Baterai rusak.',
-            'action_notes' => 'Ganti baterai.',
-            'qc_checklist_json' => [
-                'display' => true,
-                'touch' => true,
-                'camera' => true,
-                'mic' => true,
-                'speaker' => true,
-                'cellular' => true,
-                'charging' => true,
-                'biometric' => true,
-            ],
-            'started_at' => now()->subHour(),
-        ]);
-
-        app(OperationalKpiSyncService::class)->syncPeriodOperationalData($period);
-        $kpi = $technician->kpis()->where('period_id', $period->id)->firstOrFail();
-        $before = (float) $kpi->items()->where('definition_code_snapshot', 'TEK-01')->value('actual_decimal');
-
-        $this->actingAs($manager)
-            ->put("/app/service-tickets/{$ticket->id}", [
-                'ticket_number' => $ticket->ticket_number,
-                'customer_name' => $ticket->customer_name,
-                'customer_phone' => $ticket->customer_phone,
-                'intake_by_employee_id' => $pelayan->id,
-                'device_brand' => $ticket->device_brand,
-                'device_model' => $ticket->device_model,
-                'initial_complaint' => $ticket->initial_complaint,
-                'technician_employee_id' => $technician->id,
-                'status' => 'completed',
-                'result_status' => 'success',
-                'estimated_cost' => 300000,
-                'final_cost' => 300000,
-                'estimated_completion_at' => now()->addHour()->format('Y-m-d\\TH:i'),
-                'diagnosis_notes' => $ticket->diagnosis_notes,
-                'action_notes' => $ticket->action_notes,
-            ])
-            ->assertRedirect('/app/service-tickets');
-
-        $this->assertNotNull($ticket->fresh()->completed_at);
-        $this->assertSame(
-            $before + 1,
-            (float) $kpi->items()->where('definition_code_snapshot', 'TEK-01')->value('actual_decimal')
-        );
-        $this->assertDatabaseHas('audit_events', [
-            'action' => 'web_resource_updated',
-            'subject_type' => 'ServiceTicket',
-            'subject_id' => $ticket->id,
-        ]);
+        $ticket = $this->ticket();
+        foreach (['cs@toko.com', 'teknisi@toko.com', 'gudang@toko.com'] as $email) {
+            $user = User::where('email', $email)->firstOrFail();
+            $this->actingAs($user)->get('/app/service-tickets')->assertRedirect('/login');
+            $this->actingAs($user)->get("/app/service-tickets/{$ticket->id}/workflow")->assertRedirect('/login');
+        }
     }
 
-    public function test_cashier_cannot_delete_service_ticket_from_another_branch(): void
+    public function test_manager_and_system_admin_cannot_create_or_edit_technical_records(): void
     {
-        $cashierUser = User::where('email', 'kasir@toko.com')->firstOrFail();
-        $cashier = Employee::where('email', 'kasir@toko.com')->firstOrFail();
-        $ownBranch = Branch::where('code', 'CAB-01')->firstOrFail();
-        $otherBranch = Branch::where('code', 'CAB-02')->firstOrFail();
-
-        $cashier->update(['branch_id' => $otherBranch->id]);
-
-        $ticket = ServiceTicket::create([
-            'ticket_number' => 'SRV-WEB-IDOR-001',
-            'customer_name' => 'Pelanggan Cabang Lain',
-            'customer_phone' => '081234567892',
-            'device_brand' => 'Xiaomi',
-            'device_model' => 'Redmi Note',
-            'initial_complaint' => 'Layar bermasalah',
-            'branch_id' => $ownBranch->id,
-            'status' => 'intake',
-            'result_status' => 'pending',
-        ]);
-
-        $this->actingAs($cashierUser)
-            ->delete("/app/service-tickets/{$ticket->id}")
-            ->assertNotFound();
-
-        $this->assertDatabaseHas('service_tickets', [
-            'id' => $ticket->id,
-            'branch_id' => $ownBranch->id,
-        ]);
+        $ticket = $this->ticket('qc_ready');
+        foreach (['manager@toko.com', 'admin@kpi.com'] as $email) {
+            $user = User::where('email', $email)->firstOrFail();
+            $this->actingAs($user)->post('/app/service-tickets', [])->assertForbidden();
+            $this->actingAs($user)->put("/app/service-tickets/{$ticket->id}", ['status' => 'completed'])->assertStatus($email === 'manager@toko.com' ? 403 : 404);
+            $this->actingAs($user)->get("/app/service-tickets/{$ticket->id}/complete")->assertForbidden();
+        }
     }
 
-    public function test_technician_cannot_run_global_service_ticket_sync_action(): void
+    public function test_cashier_records_cost_through_shared_domain_and_rejects_stale_form(): void
     {
-        $technician = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $cashier = User::where('email', 'kasir@toko.com')->firstOrFail();
-
-        $this->actingAs($technician)
-            ->post('/app/service-tickets/actions/sync_kpi')
-            ->assertForbidden();
-
-        $this->actingAs($cashier)
-            ->post('/app/service-tickets/actions/sync_kpi')
-            ->assertForbidden();
+        $ticket = $this->ticket();
+        $this->actingAs($cashier)->get("/app/service-tickets/{$ticket->id}/cost")->assertOk();
+        $payload = ['estimated_cost' => 150000, 'note' => 'Harga setelah pemeriksaan', 'row_version' => 1];
+        $this->actingAs($cashier)->post("/app/service-tickets/{$ticket->id}/cost", $payload)->assertRedirect('/app/service-tickets');
+        $this->assertEquals(150000, $ticket->fresh()->estimated_cost);
+        $this->assertSame($cashier->employee->id, $ticket->fresh()->cashier_employee_id);
+        $this->actingAs($cashier)->from("/app/service-tickets/{$ticket->id}/cost")
+            ->post("/app/service-tickets/{$ticket->id}/cost", $payload)->assertSessionHasErrors('cost');
     }
 
-    public function test_service_ticket_lists_only_show_the_active_period(): void
+    public function test_assigned_manager_can_assign_but_cannot_skip_technical_work(): void
     {
         $manager = User::where('email', 'manager@toko.com')->firstOrFail();
-        $oldPeriod = KpiPeriod::where('status', 'OPEN')->firstOrFail();
-        $oldPeriod->update(['status' => 'LOCKED']);
-        $start = $oldPeriod->start_date->copy()->addMonthNoOverflow()->startOfMonth();
-        $currentPeriod = KpiPeriod::create([
-            'name' => 'Periode Berikutnya',
-            'year' => $start->year,
-            'month' => $start->month,
-            'start_date' => $start,
-            'end_date' => $start->copy()->endOfMonth(),
-            'submission_deadline' => $start->copy()->addDays(5),
-            'review_deadline' => $start->copy()->addDays(10),
-            'approval_deadline' => $start->copy()->addDays(15),
-            'status' => 'OPEN',
-            'created_by' => $manager->id,
-        ]);
+        $technician = User::where('email', 'teknisi@toko.com')->firstOrFail()->employee;
+        $ticket = $this->ticket();
+        $this->actingAs($manager)->get("/app/service-tickets/{$ticket->id}/workflow")->assertOk();
+        $this->actingAs($manager)->post("/app/service-tickets/{$ticket->id}/workflow", [
+            'action' => 'assign', 'technician_employee_id' => $technician->id,
+            'assignment_reason' => 'Penugasan antrean cabang', 'row_version' => 1,
+        ])->assertRedirect();
+        $this->assertSame($technician->id, $ticket->fresh()->technician_employee_id);
+        $this->actingAs($manager)->put("/app/service-tickets/{$ticket->id}/status", ['status' => 'qc_ready', 'row_version' => 2])->assertForbidden();
+    }
 
-        $attributes = [
-            'customer_name' => 'Pelanggan Periode',
-            'customer_phone' => '081234567899',
-            'device_brand' => 'Samsung',
-            'device_model' => 'Galaxy A54',
-            'initial_complaint' => 'Layar bermasalah',
-            'branch_id' => $manager->employee->branch_id,
-            'status' => 'intake',
-            'result_status' => 'pending',
-        ];
-        $oldTicket = ServiceTicket::create([...$attributes, 'ticket_number' => 'SRV-OLD-PERIOD', 'period_id' => $oldPeriod->id]);
-        $currentTicket = ServiceTicket::create([...$attributes, 'ticket_number' => 'SRV-CURRENT-PERIOD', 'period_id' => $currentPeriod->id]);
-
-        $webRecords = $this->actingAs($manager)
-            ->get('/app/service-tickets')
-            ->assertOk()
-            ->inertiaProps('records');
-        $this->assertSame(['SRV-CURRENT-PERIOD'], collect($webRecords)->pluck('values.ticket_number.value')->all());
-
-        $apiTickets = $this->actingAs($manager, 'sanctum')
-            ->getJson('/api/v1/operational/tickets')
-            ->assertOk()
-            ->json('data');
-        $this->assertSame([$currentTicket->id], collect($apiTickets)->pluck('id')->all());
-        $this->assertNotContains($oldTicket->id, collect($apiTickets)->pluck('id')->all());
+    public function test_web_workflow_rejects_other_branch_even_for_manager(): void
+    {
+        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
+        $ticket = $this->ticket();
+        $ticket->update(['branch_id' => Branch::where('code', 'CAB-02')->firstOrFail()->id]);
+        $this->actingAs($manager)->get("/app/service-tickets/{$ticket->id}/workflow")->assertForbidden();
     }
 }

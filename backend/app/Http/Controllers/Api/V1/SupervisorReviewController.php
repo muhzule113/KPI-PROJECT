@@ -10,6 +10,7 @@ use App\Support\KpiWorkflow;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 class SupervisorReviewController extends Controller
 {
@@ -23,16 +24,17 @@ class SupervisorReviewController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $queue->map(fn($kpi) => [
+            'data' => $queue->map(fn ($kpi) => [
                 'id' => $kpi->id,
                 'employee' => [
                     'id' => $kpi->employee->id,
                     'name' => $kpi->employee->name,
                     'employee_number' => $kpi->employee->employee_number,
-                    'position' => $kpi->employee->position?->name,
+                    'position' => $kpi->positionSnapshot?->name,
                 ],
                 'period' => $kpi->period->name,
                 'status' => $kpi->status,
+                'available_actions' => KpiWorkflow::availableActions($request->user(), $kpi),
                 'progress_percentage' => (float) $kpi->progress_percentage,
                 'final_score' => $kpi->final_score !== null ? (float) $kpi->final_score : null,
                 'submitted_at' => $kpi->submitted_at?->toIso8601String(),
@@ -53,15 +55,11 @@ class SupervisorReviewController extends Controller
             'items.assessment.answers',
         ])->where('id', $kpiId)->first();
 
-        if ($kpi && !KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
+        if ($kpi && ! KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
-        if ($kpi && $kpi->employee?->branch_id !== $request->user()->employee?->branch_id && !$request->user()->hasRole('super_admin')) {
-            return response()->json(['success' => false, 'message' => 'KPI berada di luar cakupan cabang Anda.'], 403);
-        }
-
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
 
@@ -72,8 +70,8 @@ class SupervisorReviewController extends Controller
                 'employee' => [
                     'id' => $kpi->employee->id,
                     'name' => $kpi->employee->name,
-                    'position' => $kpi->employee->position?->name,
-                    'branch' => $kpi->employee->branch?->name,
+                    'position' => $kpi->positionSnapshot?->name,
+                    'branch' => $kpi->branchSnapshot?->name,
                 ],
                 'period' => [
                     'id' => $kpi->period->id,
@@ -81,11 +79,12 @@ class SupervisorReviewController extends Controller
                     'review_deadline' => $kpi->period->review_deadline->toIso8601String(),
                 ],
                 'status' => $kpi->status,
+                'available_actions' => KpiWorkflow::availableActions($request->user(), $kpi),
                 'progress_percentage' => (float) $kpi->progress_percentage,
                 'final_score' => $kpi->final_score !== null ? (float) $kpi->final_score : null,
                 'rating_label' => $kpi->rating_label,
                 'revision_number' => $kpi->revision_number,
-                'items' => $kpi->items->map(fn($item) => [
+                'items' => $kpi->items->map(fn ($item) => [
                     'id' => $item->id,
                     'code' => $item->definition_code_snapshot,
                     'name' => $item->name_snapshot,
@@ -104,17 +103,17 @@ class SupervisorReviewController extends Controller
                         'score_points' => (float) $item->assessment->score_points,
                         'total_points' => (float) $item->assessment->total_points,
                         'calculated_achievement' => (float) $item->assessment->calculated_achievement,
-                        'answers' => $item->assessment->answers->map(fn($a) => [
+                        'answers' => $item->assessment->answers->map(fn ($a) => [
                             'criterion_id' => $a->criterion_id,
                             'criterion_text' => $a->criterion_text,
                             'is_fulfilled' => $a->is_fulfilled,
                             'points_earned' => (float) $a->points_earned,
                         ]),
                     ] : null,
-                    'evidences' => $item->evidences->map(fn($e) => [
+                    'evidences' => $item->evidences->map(fn ($e) => [
                         'id' => $e->id,
                         'file_name' => $e->file_name,
-                        'file_url' => route('api.v1.kpi.evidence.download', ['evidenceId' => $e->id]),
+                        'file_url' => URL::temporarySignedRoute('api.v1.kpi.evidence.download', now()->addMinutes(5), ['evidenceId' => $e->id]),
                         'file_size' => $e->file_size,
                     ]),
                 ]),
@@ -134,10 +133,10 @@ class SupervisorReviewController extends Controller
             ->where('id', $itemId)
             ->where('employee_kpi_id', $kpiId)
             ->first();
-        if (!$item) {
+        if (! $item) {
             return response()->json(['success' => false, 'message' => 'Item tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canReviewKpi($request->user(), $item->employeeKpi)) {
+        if (! KpiWorkflow::canReviewKpi($request->user(), $item->employeeKpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
@@ -178,10 +177,10 @@ class SupervisorReviewController extends Controller
             ->where('id', $itemId)
             ->where('employee_kpi_id', $kpiId)
             ->first();
-        if (!$item) {
+        if (! $item) {
             return response()->json(['success' => false, 'message' => 'Item tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canReviewKpi($request->user(), $item->employeeKpi)) {
+        if (! KpiWorkflow::canReviewKpi($request->user(), $item->employeeKpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
@@ -215,15 +214,16 @@ class SupervisorReviewController extends Controller
         ]);
 
         $kpi = EmployeeKpi::with('employee')->where('id', $kpiId)->first();
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
+        if (! KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
         try {
             $this->reviewService->requestRevision($kpi, $request->input('reason'), $request->user()->id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Permintaan revisi berhasil dikirimkan ke karyawan.',
@@ -240,15 +240,16 @@ class SupervisorReviewController extends Controller
         ]);
 
         $kpi = EmployeeKpi::with('employee')->where('id', $kpiId)->first();
-        if (!$kpi) {
+        if (! $kpi) {
             return response()->json(['success' => false, 'message' => 'KPI tidak ditemukan.'], 404);
         }
-        if (!KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
+        if (! KpiWorkflow::canReviewKpi($request->user(), $kpi)) {
             return response()->json(['success' => false, 'message' => 'Anda tidak berwenang mereview KPI ini.'], 403);
         }
 
         try {
             $result = $this->reviewService->forwardToManager($kpi, $request->input('notes'), $request->user()->id);
+
             return response()->json([
                 'success' => true,
                 'message' => $result['message'],

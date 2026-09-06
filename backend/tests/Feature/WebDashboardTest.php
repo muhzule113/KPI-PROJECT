@@ -4,10 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Attendance;
 use App\Models\Employee;
-use App\Models\User;
 use App\Models\KpiPeriod;
 use App\Models\Position;
 use App\Models\SystemNotification;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
@@ -68,7 +68,7 @@ class WebDashboardTest extends TestCase
             ->all();
 
         $this->assertContains('/app/employees', $links);
-        $this->assertContains('/app/kpi-periods', $links);
+        $this->assertNotContains('/app/kpi-periods', $links);
     }
 
     public function test_super_admin_can_view_user_accounts_separately_from_employee_profiles(): void
@@ -80,7 +80,7 @@ class WebDashboardTest extends TestCase
         $response->assertOk()->assertInertia(fn ($page) => $page
             ->component('Admin/ResourceIndex')
             ->where('resource.key', 'users')
-            ->where('pagination.total', 8)
+            ->where('pagination.total', User::count())
         );
 
         $emails = collect($response->inertiaProps('records'))
@@ -107,6 +107,7 @@ class WebDashboardTest extends TestCase
             'email' => 'akun.baru@toko.com',
             'password' => 'password-baru',
             'role_ids' => [$employeeRole->id],
+            'is_active' => true,
         ]);
 
         $response->assertRedirect('/app/users');
@@ -119,7 +120,7 @@ class WebDashboardTest extends TestCase
 
     public function test_attendance_form_explains_period_and_status_rules(): void
     {
-        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $admin = User::where('email', 'manager@toko.com')->firstOrFail();
 
         $response = $this->actingAs($admin)->get('/app/attendances/create');
 
@@ -127,13 +128,13 @@ class WebDashboardTest extends TestCase
             ->where('resource.key', 'attendances')
             ->where('resource.can_create', true)
             ->where('form.values.attendance_date', '2026-08-01')
-            ->where('resource.description', fn ($value) => str_contains($value, 'tanpa catatan dihitung Alpha'))
+            ->where('resource.description', fn ($value) => str_contains($value, 'Supervisor mencatat timnya'))
         );
     }
 
     public function test_attendance_requires_check_in_for_worked_status(): void
     {
-        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $admin = User::where('email', 'manager@toko.com')->firstOrFail();
         $employee = Employee::where('email', 'gudang@toko.com')->firstOrFail();
 
         $this->actingAs($admin)
@@ -152,7 +153,7 @@ class WebDashboardTest extends TestCase
 
     public function test_attendance_excludes_excused_status_times_and_rejects_outside_period(): void
     {
-        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $admin = User::where('email', 'manager@toko.com')->firstOrFail();
         $employee = Employee::where('email', 'gudang@toko.com')->firstOrFail();
 
         $this->actingAs($admin)
@@ -225,7 +226,7 @@ class WebDashboardTest extends TestCase
 
     public function test_employee_cannot_download_kpi_csv_report(): void
     {
-        $user = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $user = User::where('email', 'kasir@toko.com')->firstOrFail();
 
         $this->actingAs($user)
             ->get('/app/reports/kpi.csv')
@@ -256,7 +257,7 @@ class WebDashboardTest extends TestCase
 
     public function test_employee_cannot_download_kpi_xlsx_report(): void
     {
-        $user = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $user = User::where('email', 'kasir@toko.com')->firstOrFail();
 
         $this->actingAs($user)
             ->get('/app/reports/kpi.xlsx')
@@ -281,7 +282,7 @@ class WebDashboardTest extends TestCase
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
         $position = Position::where('code', 'POS-TEK')->firstOrFail();
 
-        $response = $this->actingAs($user)->get('/app?' . http_build_query([
+        $response = $this->actingAs($user)->get('/app?'.http_build_query([
             'period_id' => $period->id,
             'position_id' => $position->id,
         ]));

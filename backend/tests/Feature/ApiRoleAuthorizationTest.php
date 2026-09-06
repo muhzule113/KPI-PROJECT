@@ -55,7 +55,7 @@ class ApiRoleAuthorizationTest extends TestCase
         $this->actingAs($manager, 'sanctum')->getJson("/api/v1/manager/daily?date={$date}")->assertOk();
     }
 
-    public function test_employee_can_read_and_write_own_daily_kpi(): void
+    public function test_employee_can_read_but_cannot_write_own_daily_kpi(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $kpi = EmployeeKpi::where('employee_id', $employee->employee->id)
@@ -80,6 +80,12 @@ class ApiRoleAuthorizationTest extends TestCase
                 ]],
                 'submit' => false,
             ])
-            ->assertOk();
+            ->assertForbidden()
+            ->assertJsonPath('success', false);
+
+        $this->actingAs($employee, 'sanctum')
+            ->postJson('/api/v1/my-kpi/submit')
+            ->assertForbidden()
+            ->assertJsonPath('success', false);
     }
 }

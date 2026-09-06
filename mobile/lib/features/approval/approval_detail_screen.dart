@@ -51,10 +51,10 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
       eyebrow: 'Persetujuan KPI',
       title: 'Approve KPI',
       subtitle:
-          'Dengan menyetujui, penilaian KPI akan dikunci dan diterbitkan ke karyawan.',
+          'Sahkan hasil penilaian. Admin KPI menerbitkan skor karyawan setelah seluruh KPI disahkan.',
       label: 'Catatan approval (opsional)',
       hintText: 'Tambahkan catatan jika diperlukan',
-      actionLabel: 'Approve & kunci',
+      actionLabel: 'Sahkan KPI',
       maxLines: 3,
     );
     if (note == null) return;
@@ -121,139 +121,40 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
     }
   }
 
-  Future<void> _assessNumeric(Map<String, dynamic> item) async {
-    final value = await showOpsTextInputSheet(
+  Future<void> _assessNumeric(
+    Map<String, dynamic> item, {
+    bool correction = false,
+  }) async {
+    final note = await showOpsTextInputSheet(
       context: context,
       eyebrow: 'Penilaian Manager',
-      title: 'Nilai aktual ${item['code']}',
+      title: '${correction ? 'Koreksi' : 'Konfirmasi'} ${item['code']}',
       subtitle:
-          'Masukkan nilai aktual indikator sesuai bukti dan hasil review.',
-      label: 'Nilai aktual (${item['target_unit'] ?? '-'})',
-      hintText: 'Contoh: ${item['target_value'] ?? '0'}',
+          'Nilai aktual dihitung dari sumber resmi atau review Supervisor.',
+      label: correction
+          ? 'Alasan koreksi (wajib)'
+          : 'Catatan Manager (opsional)',
+      hintText: 'Tambahkan alasan bila ada masalah pada data.',
       helperText:
-          'Target: ${item['target_value'] ?? '-'} ${item['target_unit'] ?? ''}',
-      actionLabel: 'Simpan nilai',
+          'Aktual: ${item['actual_decimal'] ?? '-'} ${item['target_unit'] ?? ''} · Target: ${item['target_value'] ?? '-'} ${item['target_unit'] ?? ''}',
+      actionLabel: correction ? 'Tandai perlu koreksi' : 'Konfirmasi hasil',
+      maxLines: 3,
     );
-    if (value == null) return;
-
-    final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
-    if (parsed == null || !parsed.isFinite) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Nilai aktual harus berupa angka yang valid.'),
-          backgroundColor: AppTheme.statusDanger,
-        ),
-      );
-      return;
-    }
+    if (note == null) return;
 
     try {
       final res = await ApiService.post(
         '/manager/approval/${widget.kpiId}/items/${item['id']}/assess',
-        {'actual_decimal': parsed},
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            res['message'] ?? 'Penilaian Manager berhasil disimpan.',
-          ),
-          backgroundColor: AppTheme.primary,
-        ),
-      );
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          backgroundColor: AppTheme.statusDanger,
-        ),
-      );
-    }
-  }
-
-  Future<void> _openManagerRubricChecklist(Map<String, dynamic> item) async {
-    final rubric = item['rubric'] as Map<String, dynamic>?;
-    final criteria = (rubric?['criteria'] as List<dynamic>?) ?? [];
-    if (criteria.isEmpty) return;
-
-    final assessment = item['assessment'] as Map<String, dynamic>?;
-    final existingAnswers = (assessment?['answers'] as List<dynamic>?) ?? [];
-    final fulfilledIds = existingAnswers
-        .where((answer) => answer['is_fulfilled'] == true)
-        .map((answer) => answer['criterion_id'].toString())
-        .toSet();
-    final checked = <String, bool>{
-      for (final criterion in criteria)
-        criterion['id'].toString(): fulfilledIds.contains(
-          criterion['id'].toString(),
-        ),
-    };
-
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => OpsFormSheet(
-          eyebrow: 'Penilaian Manager',
-          title: 'Checklist rubrik ${item['code']}',
-          subtitle:
-              'Nilai seluruh kriteria berdasarkan bukti dan hasil review.',
-          footer: ElevatedButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.calculate_rounded),
-            label: const Text('Simpan & hitung skor'),
-          ),
-          child: Column(
-            children: criteria.map((criterion) {
-              final id = criterion['id'].toString();
-              return CheckboxListTile(
-                value: checked[id] ?? false,
-                onChanged: (value) =>
-                    setModalState(() => checked[id] = value ?? false),
-                title: Text(
-                  criterion['criterion_text'] ?? 'Kriteria',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                subtitle: Text(
-                  '${criterion['points'] ?? 0} Poin',
-                  style: TextStyle(fontSize: 12, color: AppTheme.primaryBright),
-                ),
-                activeColor: AppTheme.primary,
-                contentPadding: EdgeInsets.zero,
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final res = await ApiService.post(
-        '/manager/approval/${widget.kpiId}/items/${item['id']}/rubric',
         {
-          'answers': criteria
-              .map(
-                (criterion) => {
-                  'criterion_id': criterion['id'],
-                  'is_fulfilled': checked[criterion['id'].toString()] ?? false,
-                  'notes': null,
-                },
-              )
-              .toList(),
+          'decision': correction ? 'needs_correction' : 'valid',
+          'note': note.trim(),
         },
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            res['message'] ?? 'Checklist Manager berhasil disimpan.',
+            res['message'] ?? 'Penilaian Manager berhasil disimpan.',
           ),
           backgroundColor: AppTheme.primary,
         ),
@@ -396,9 +297,9 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
           const SizedBox(height: 12),
           ...items.map((item) {
             final evidences = (item['evidences'] as List<dynamic>?) ?? [];
-            final isRubric = item['formula'] == 'rubric';
             final canAssess =
                 data['status'] == 'pending_approval' &&
+                (data['can_assess'] != false) &&
                 item['status'] != 'locked';
             return OpsCard(
               padding: EdgeInsets.zero,
@@ -507,23 +408,15 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          icon: Icon(
-                            isRubric
-                                ? Icons.checklist_rounded
-                                : Icons.edit_note_rounded,
-                            size: 18,
-                          ),
-                          label: Text(
-                            isRubric
-                                ? 'Isi Checklist Manager'
-                                : item['actual_decimal'] != null
-                                ? 'Ubah Nilai Manager'
-                                : 'Isi Nilai Manager',
-                          ),
-                          onPressed: () => isRubric
-                              ? _openManagerRubricChecklist(item)
-                              : _assessNumeric(item),
+                          icon: const Icon(Icons.edit_note_rounded, size: 18),
+                          label: const Text('Konfirmasi hasil'),
+                          onPressed: () => _assessNumeric(item),
                         ),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.undo_rounded),
+                        label: const Text('Tandai indikator perlu koreksi'),
+                        onPressed: () => _assessNumeric(item, correction: true),
                       ),
                     ],
                   ],
@@ -538,11 +431,11 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.check_circle_rounded, size: 18),
-                  label: const Text('Approve & Lock'),
+                  label: const Text('Sahkan KPI'),
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(0, 44),
                   ),
-                  onPressed: _approve,
+                  onPressed: data['can_approve'] == true ? _approve : null,
                 ),
               ),
               const SizedBox(width: 8),
@@ -553,7 +446,12 @@ class _ApprovalDetailScreenState extends State<ApprovalDetailScreen> {
                   foregroundColor: AppTheme.statusDanger,
                   minimumSize: const Size(80, 44),
                 ),
-                onPressed: _returnToSpv,
+                onPressed:
+                    (data['available_actions'] as List? ?? const []).contains(
+                      'return',
+                    )
+                    ? _returnToSpv
+                    : null,
               ),
             ],
           ),

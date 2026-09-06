@@ -25,24 +25,23 @@ class InventoryKpiSyncService
     {
         $kpis = EmployeeKpi::with(['employee.position', 'items'])
             ->where('period_id', $period->id)
-            ->whereHas('employee.position', fn($q) => $q->where('code', 'POS-GUD'))
+            ->whereHas('employee.position', fn ($q) => $q->where('code', 'POS-GUD'))
             ->get();
-
-        $opnames = StockOpname::with('items')
-            ->where('period_id', $period->id)
-            ->get();
-
-        $completedOpnames = $opnames->where('status', StockOpname::STATUS_COMPLETED);
-        $latestOpname = $completedOpnames->sortByDesc('completed_at')->first();
-        $totalOpnames = $opnames->count();
 
         $updatedItems = 0;
         $updatedEmployees = 0;
 
         foreach ($kpis as $kpi) {
-            if (!KpiWorkflow::canSystemSyncKpi($kpi)) {
+            if (! KpiWorkflow::canSystemSyncKpi($kpi)) {
                 continue;
             }
+
+            $opnames = StockOpname::with(['items' => fn ($query) => $query->whereHas('sparepart',
+                fn ($parts) => $parts->where('branch_id', $kpi->branch_id_snapshot))])
+                ->where('period_id', $period->id)->where('branch_id', $kpi->branch_id_snapshot)->get();
+            $completedOpnames = $opnames->where('status', StockOpname::STATUS_COMPLETED);
+            $latestOpname = $completedOpnames->sortByDesc('completed_at')->first();
+            $totalOpnames = $opnames->count();
 
             $changed = false;
 
@@ -55,7 +54,7 @@ class InventoryKpiSyncService
                     $accuracy = round(($accurate / $counted->count()) * 100, 2);
 
                     $totalSystem = $counted->sum('system_stock');
-                    $totalDifference = $counted->sum(fn($i) => abs($i->difference));
+                    $totalDifference = $counted->sum(fn ($i) => abs($i->difference));
                     $selisih = $totalSystem > 0 ? round(($totalDifference / $totalSystem) * 100, 2) : null;
 
                     $gud01 = $kpi->items->firstWhere('definition_code_snapshot', 'GUD-01');
@@ -106,8 +105,6 @@ class InventoryKpiSyncService
             'message' => "Inventory disinkronkan: {$updatedItems} indikator gudang pada {$updatedEmployees} karyawan.",
             'updated_items' => $updatedItems,
             'updated_employees' => $updatedEmployees,
-            'opname_total' => $totalOpnames,
-            'opname_completed' => $completedOpnames->count(),
         ];
     }
 }

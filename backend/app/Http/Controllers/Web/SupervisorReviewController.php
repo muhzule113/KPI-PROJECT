@@ -24,11 +24,12 @@ final class SupervisorReviewController extends Controller
                 'id' => (string) $kpi->getKey(),
                 'employee' => [
                     'name' => $kpi->employee?->name,
-                    'position' => $kpi->employee?->position?->name,
-                    'branch' => $kpi->employee?->branch?->name,
+                    'position' => $kpi->positionSnapshot?->name,
+                    'branch' => $kpi->branchSnapshot?->name,
                 ],
                 'period' => $kpi->period?->name,
                 'status' => $kpi->status,
+                'available_actions' => KpiWorkflow::availableActions($request->user(), $kpi),
                 'progress' => (float) $kpi->progress_percentage,
                 'final_score' => $kpi->final_score !== null ? (float) $kpi->final_score : null,
                 'rating_label' => $kpi->rating_label,
@@ -123,7 +124,7 @@ final class SupervisorReviewController extends Controller
 
         abort_unless(MenuAccess::can($request->user(), ['supervisor', 'super_admin'], []), 403);
         abort_unless(KpiWorkflow::canReviewKpi($request->user(), $kpi), 403);
-        abort_unless(in_array($kpi->status, ['submitted', 'under_review', 'revision_required'], true), 409);
+        abort_unless(in_array($kpi->status, ['submitted', 'under_review', 'revision_required', 'verified', 'pending_approval', 'approved', 'locked'], true), 409);
 
         return $kpi;
     }

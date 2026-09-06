@@ -24,11 +24,13 @@ final class ManagerApprovalController extends Controller
                 'id' => (string) $kpi->getKey(),
                 'employee' => [
                     'name' => $kpi->employee?->name,
-                    'position' => $kpi->employee?->position?->name,
-                    'branch' => $kpi->employee?->branch?->name,
+                    'position' => $kpi->positionSnapshot?->name,
+                    'branch' => $kpi->branchSnapshot?->name,
                 ],
                 'period' => $kpi->period?->name,
                 'status' => $kpi->status,
+                'available_actions' => KpiWorkflow::availableActions($request->user(), $kpi),
+                'is_supervisor_kpi' => $kpi->isSupervisorKpi(),
                 'final_score' => $kpi->final_score !== null ? (float) $kpi->final_score : null,
                 'rating_label' => $kpi->rating_label,
                 'items' => $kpi->items->map(fn (EmployeeKpiItem $item): array => [
@@ -43,6 +45,8 @@ final class ManagerApprovalController extends Controller
                     'achievement' => $item->achievement_percentage !== null ? (float) $item->achievement_percentage : null,
                     'weighted_score' => $item->weighted_score !== null ? (float) $item->weighted_score : null,
                     'status' => $item->status,
+                    'manager_decision' => $item->manager_decision,
+                    'manager_note' => $item->manager_note,
                     'rubric' => $item->rubric_snapshot,
                     'assessment' => $item->assessment ? [
                         'answers' => $item->assessment->answers->map(fn ($answer): array => [
@@ -58,8 +62,11 @@ final class ManagerApprovalController extends Controller
     public function assessItem(Request $request, string $record, string $item): RedirectResponse
     {
         $data = $request->validate([
-            'actual_decimal' => ['required', 'numeric'],
+            'decision' => ['required', 'in:valid,needs_correction,data_exception'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'evidence' => ['nullable', 'array'],
+            'evidence.*.type' => ['required_with:evidence', 'string', 'max:30'],
+            'evidence.*.reference' => ['required_with:evidence', 'string', 'max:500'],
         ]);
 
         try {
@@ -67,10 +74,11 @@ final class ManagerApprovalController extends Controller
             $kpiItem = EmployeeKpiItem::query()
                 ->where('employee_kpi_id', $kpi->getKey())
                 ->findOrFail($item);
-            app(ApprovalService::class)->assessItem(
+            app(ApprovalService::class)->decideItem(
                 item: $kpiItem,
-                actualDecimal: (float) $data['actual_decimal'],
+                decision: $data['decision'],
                 note: $data['note'] ?? null,
+                evidence: $data['evidence'] ?? [],
                 assessorId: $request->user()->getKey()
             );
 
@@ -87,6 +95,8 @@ final class ManagerApprovalController extends Controller
             'answers.*.criterion_id' => ['required', 'integer'],
             'answers.*.is_fulfilled' => ['required', 'boolean'],
             'answers.*.notes' => ['nullable', 'string'],
+            'decision' => ['required', 'in:valid,needs_correction,data_exception'],
+            'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         try {
@@ -97,7 +107,9 @@ final class ManagerApprovalController extends Controller
             app(ReviewService::class)->submitRubricAssessment(
                 item: $kpiItem,
                 answers: $data['answers'],
-                reviewerId: $request->user()->getKey()
+                reviewerId: $request->user()->getKey(),
+                managerDecision: $data['decision'],
+                managerNote: $data['note'] ?? null,
             );
 
             return back()->with('success', "{$kpiItem->definition_code_snapshot} berhasil dinilai Manager.");
@@ -113,7 +125,7 @@ final class ManagerApprovalController extends Controller
         ]);
 
         try {
-            $kpi = $this->record($request, $record);
+            $kpi = $this->approvalRecord($request, $record);
             $result = app(ApprovalService::class)->approve(
                 $kpi,
                 $data['note'] ?? null,
@@ -135,7 +147,7 @@ final class ManagerApprovalController extends Controller
         ]);
 
         try {
-            $kpi = $this->record($request, $record);
+            $kpi = $this->approvalRecord($request, $record);
             $result = app(ApprovalService::class)->return(
                 $kpi,
                 $data['reason'],
@@ -157,7 +169,20 @@ final class ManagerApprovalController extends Controller
             ->findOrFail($record);
 
         abort_unless(KpiWorkflow::canManageKpi($request->user(), $kpi), 403);
-        abort_unless($kpi->status === 'pending_approval', 409);
+        abort_unless(KpiWorkflow::availableActions($request->user(), $kpi) !== []
+            || in_array($kpi->status, ['approved', 'locked'], true), 409);
+
+        return $kpi;
+    }
+
+    private function approvalRecord(Request $request, string $record): EmployeeKpi
+    {
+        $kpi = EmployeeKpi::query()
+            ->with(['employee.position', 'employee.branch', 'period', 'items.assessment.answers'])
+            ->findOrFail($record);
+
+        abort_unless(KpiWorkflow::canApproveKpi($request->user(), $kpi), 403);
+        abort_unless(in_array('approve', KpiWorkflow::availableActions($request->user(), $kpi), true), 409);
 
         return $kpi;
     }

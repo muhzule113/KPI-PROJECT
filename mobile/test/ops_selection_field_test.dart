@@ -1,9 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kpi_mobile/app/theme/app_theme.dart';
 import 'package:kpi_mobile/app/widgets/kpi_ui.dart';
 
 void main() {
+  test('form fitur memakai sheet pilihan, bukan dropdown inline', () {
+    final offenders = Directory('lib/features')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'))
+        .where((file) => file.readAsStringSync().contains('DropdownButton'))
+        .map((file) => file.path)
+        .toList();
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'Gunakan OpsSelectionField agar pilihan tampil sebagai bottom sheet.',
+    );
+  });
+
   testWidgets(
     'OpsSelectionField membuka bottom sheet dan mengembalikan pilihan',
     (tester) async {

@@ -10,6 +10,52 @@ class EmployeeKpiItem extends Model
 {
     use HasFactory, HasUlids;
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $item): void {
+            if (! $item->exists || (! $item->isSystemSourced() && ! $item->isAttendanceIndicator())) {
+                return;
+            }
+            $sourceChanged = $item->isDirty(['actual_decimal', 'actual_json']);
+            if (! $sourceChanged) {
+                if ($item->status === 'draft' && in_array($item->getOriginal('status'), ['verified', 'assessed'], true)) {
+                    $item->status = $item->getOriginal('status');
+                }
+
+                return;
+            }
+            $kpi = $item->employeeKpi()->first();
+            if (! $kpi || in_array($kpi->status, ['approved', 'locked'], true)) {
+                return;
+            }
+            $item->manager_decision = null;
+            $item->manager_decided_at = null;
+            $item->manager_decided_by = null;
+            $item->status = 'draft';
+            $item->row_version += 1;
+            $item->dailyEntries()->where('system_actual_json->cadence', 'period')->update([
+                'system_actual_decimal' => $item->actual_decimal,
+                'supervisor_status' => 'pending',
+                'manager_status' => 'pending',
+                'supervisor_assessed_at' => null,
+                'manager_assessed_at' => null,
+                'supervisor_assessed_by' => null,
+                'manager_assessed_by' => null,
+                'supervisor_actual_decimal' => null,
+                'manager_actual_decimal' => null,
+            ]);
+            if (in_array($kpi->status, ['verified', 'pending_approval'], true)) {
+                $kpi->status = 'under_review';
+                $kpi->verified_at = null;
+            }
+            $kpi->final_score = null;
+            $kpi->rating_code = null;
+            $kpi->rating_label = null;
+            $kpi->row_version += 1;
+            $kpi->save();
+        });
+    }
+
     protected $fillable = [
         'employee_kpi_id',
         'kpi_definition_id',
@@ -31,6 +77,11 @@ class EmployeeKpiItem extends Model
         'weighted_score',
         'calculation_status',
         'calculation_note',
+        'manager_decision',
+        'manager_note',
+        'manager_evidence_json',
+        'manager_decided_by',
+        'manager_decided_at',
         'row_version',
     ];
 
@@ -41,10 +92,12 @@ class EmployeeKpiItem extends Model
         'formula_params_snapshot' => 'array',
         'evidence_req_snapshot' => 'boolean',
         'rubric_snapshot' => 'array',
-        'actual_decimal' => 'decimal:2',
+        'actual_decimal' => 'decimal:6',
         'actual_json' => 'array',
-        'achievement_percentage' => 'decimal:2',
-        'weighted_score' => 'decimal:2',
+        'achievement_percentage' => 'decimal:6',
+        'weighted_score' => 'decimal:6',
+        'manager_evidence_json' => 'array',
+        'manager_decided_at' => 'datetime',
         'row_version' => 'integer',
     ];
 
@@ -86,6 +139,37 @@ class EmployeeKpiItem extends Model
     public function isSystemSourced(): bool
     {
         return in_array(strtolower((string) $this->source_type_snapshot), ['system', 'cross_role', 'import'], true);
+    }
+
+    public function cadence(): string
+    {
+        return $this->formula_params_snapshot['cadence'] ?? ($this->isSystemSourced() ? 'period' : 'daily');
+    }
+
+    public function isAttendanceIndicator(): bool
+    {
+        return in_array($this->definition_code_snapshot, ['ADM-05', 'KSR-06', 'GUD-07', 'CS-06'], true);
+    }
+
+    public function isManualRated(): bool
+    {
+        return strtolower((string) $this->source_type_snapshot) === 'supervisor'
+            && ! $this->isAttendanceIndicator();
+    }
+
+    public function manualRatingOptions(): array
+    {
+        return $this->rubric_snapshot['manual_rating_options'] ?? [
+            ['code' => 'FAIR', 'label' => 'Cukup', 'score' => 75.00],
+            ['code' => 'GOOD', 'label' => 'Baik', 'score' => 85.00],
+            ['code' => 'VERY_GOOD', 'label' => 'Sangat Baik', 'score' => 95.00],
+        ];
+    }
+
+    public function manualRating(string $code): ?array
+    {
+        return collect($this->manualRatingOptions())
+            ->first(fn (array $option): bool => (string) ($option['code'] ?? '') === $code);
     }
 
     /**

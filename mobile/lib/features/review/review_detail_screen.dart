@@ -298,7 +298,11 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
           ...items.map((item) {
             final isRubric = item['formula'] == 'rubric';
-            final isVerified = item['status'] == 'verified';
+            final isVerified =
+                ['verified', 'assessed'].contains(item['status']) ||
+                !(detail['available_actions'] as List? ?? const []).contains(
+                  'review',
+                );
             final evidences = (item['evidences'] as List<dynamic>?) ?? [];
 
             return OpsReveal(
@@ -482,8 +486,13 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: _forwardToManager,
-            child: const Text('Forward KPI ke Manager untuk Approval'),
+            onPressed:
+                (detail['available_actions'] as List? ?? const []).contains(
+                  'forward',
+                )
+                ? _forwardToManager
+                : null,
+            child: const Text('Kirim rekap ke Manager'),
           ),
           const SizedBox(height: 30),
         ],

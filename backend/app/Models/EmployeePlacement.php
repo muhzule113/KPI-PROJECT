@@ -43,4 +43,10 @@ class EmployeePlacement extends Model
     {
         return $this->belongsTo(Employee::class, 'supervisor_id');
     }
+
+    public function scopeEffectiveOn($query, mixed $date)
+    {
+        return $query->whereDate('effective_from', '<=', $date)
+            ->where(fn ($scope) => $scope->whereNull('effective_until')->orWhereDate('effective_until', '>=', $date));
+    }
 }
