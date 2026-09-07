@@ -67,6 +67,9 @@ for (const account of accounts) {
         if (!message.includes('hanya dapat masuk melalui aplikasi mobile')) {
             failures.push(`Pesan penolakan platform tidak tampil — ${message.replace(/\s+/g, ' ').trim()}`);
         }
+        if (consoleErrors.some((error) => /Content Security Policy|WebSocket connection/i.test(error))) {
+            failures.push('Koneksi realtime gagal');
+        }
         results.push({
             account: account.email,
             expected: 'mobile-only',
@@ -130,6 +133,9 @@ for (const account of accounts) {
 
     if (serverErrors.length) failures.push(...serverErrors.map((error) => `Server error: ${error}`));
     if (pageErrors.length) failures.push(...pageErrors.map((error) => `Page error: ${error}`));
+    if (consoleErrors.some((error) => /Content Security Policy|WebSocket connection/i.test(error))) {
+        failures.push('Koneksi realtime gagal');
+    }
 
     if (account.denied) {
         const deniedResponse = await page.goto(`${baseURL}${account.denied}`, { waitUntil: 'domcontentloaded' });
