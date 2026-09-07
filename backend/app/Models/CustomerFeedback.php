@@ -16,8 +16,10 @@ class CustomerFeedback extends Model
     protected $fillable = [
         'service_ticket_id',
         'cs_employee_id',
+        'technician_employee_id',
         'customer_name',
         'rating',
+        'technician_rating',
         'comments',
         'follow_up_ontime',
         'feedback_channel',
@@ -25,6 +27,7 @@ class CustomerFeedback extends Model
 
     protected $casts = [
         'rating' => 'integer',
+        'technician_rating' => 'integer',
         'follow_up_ontime' => 'boolean',
     ];
 
@@ -41,6 +44,11 @@ class CustomerFeedback extends Model
     public function pelayanEmployee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'cs_employee_id');
+    }
+
+    public function technicianEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'technician_employee_id');
     }
 
     public function followUp(): HasOne

@@ -13,6 +13,7 @@ import {
     MessageCircleWarning,
     Package,
     ScrollText,
+    Settings2,
     ShieldCheck,
     Store,
     Target,
@@ -45,6 +46,7 @@ const iconMap = {
     template: Database,
     approval: ShieldCheck,
     audit: ScrollText,
+    settings: Settings2,
 };
 
 function isActivePath(href, currentPath) {

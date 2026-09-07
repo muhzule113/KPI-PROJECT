@@ -41,7 +41,7 @@ class CorrectionFlowTest extends TestCase
     {
         $userMgr = User::where('email', 'manager@toko.com')->first();
         $kpi = $this->lockedKpi();
-        $item = $kpi->items->first();
+        $item = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-05');
 
         $req = app(ApprovalService::class)->requestCorrection(
             kpi: $kpi,
@@ -71,7 +71,7 @@ class CorrectionFlowTest extends TestCase
         $userMgr = User::where('email', 'manager@toko.com')->first();
         $userSpv = User::where('email', 'supervisor@toko.com')->first();
         $kpi = $this->lockedKpi();
-        $item = $kpi->items->first();
+        $item = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-05');
         $oldActual = $item->actual_decimal;
         $newActual = (float) $oldActual + 7;
 
@@ -102,7 +102,7 @@ class CorrectionFlowTest extends TestCase
         $userMgr = User::where('email', 'manager@toko.com')->first();
         $userSpv = User::where('email', 'supervisor@toko.com')->first();
         $kpi = $this->lockedKpi();
-        $item = $kpi->items->first();
+        $item = $kpi->items->firstWhere('definition_code_snapshot', 'TEK-05');
 
         $req = app(ApprovalService::class)->requestCorrection(
             kpi: $kpi,

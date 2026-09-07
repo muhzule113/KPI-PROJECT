@@ -169,19 +169,16 @@ class ApprovalService
             $approver = User::with('employee')->find($approverUser);
             $approverEmployee = $approver?->employee;
 
-            if (! $approver || ! $approverEmployee) {
+            if (! $approver || (! $approverEmployee && ! $approver->hasRole('super_admin'))) {
                 throw new Exception('Akun approver tidak memiliki profil karyawan yang valid.');
             }
-            if ($approverEmployee->id === $kpi->employee_id) {
+            if ($approverEmployee && $approverEmployee->id === $kpi->employee_id) {
                 throw new Exception('Pemisahan tugas (No Self-Approval): Anda tidak dapat menyetujui penilaian KPI Anda sendiri.');
             }
             $reviewedByApprover = KpiDailyEntry::whereHas(
                 'item',
                 fn ($query) => $query->where('employee_kpi_id', $kpi->id)
-            )->where(function ($query) use ($approverUser): void {
-                $query->where('supervisor_assessed_by', $approverUser)
-                    ->orWhere('manager_assessed_by', $approverUser);
-            })->exists();
+            )->where('supervisor_assessed_by', $approverUser)->exists();
             if (! $kpi->isSupervisorKpi() && ($reviewedByApprover || $kpi->reviews()->where('reviewer_id', $approverUser)->exists())) {
                 throw new Exception('Pemisahan tugas (SoD): approver tidak boleh menjadi reviewer KPI yang sama.');
             }
@@ -301,10 +298,10 @@ class ApprovalService
                 ->firstOrFail();
             $approver = User::with('employee')->find($approverUser);
 
-            if (! $approver || ! $approver->employee) {
+            if (! $approver || (! $approver->employee && ! $approver->hasRole('super_admin'))) {
                 throw new Exception('Akun approver tidak memiliki profil karyawan yang valid.');
             }
-            if ($approver->employee->id === $kpi->employee_id) {
+            if ($approver->employee && $approver->employee->id === $kpi->employee_id) {
                 throw new Exception('Pemisahan tugas: Anda tidak dapat mengembalikan penilaian KPI Anda sendiri.');
             }
             if (! KpiWorkflow::canApproveKpi($approver, $kpi)) {

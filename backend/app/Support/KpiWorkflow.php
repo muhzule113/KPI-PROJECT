@@ -73,6 +73,10 @@ final class KpiWorkflow
 
     public static function canManageKpi(User $user, EmployeeKpi $kpi): bool
     {
+        if ($user->hasRole('super_admin')) {
+            return true;
+        }
+
         $employee = $user->employee;
 
         return CapabilityMatrix::has($user, 'kpi.manager.approval')
@@ -107,6 +111,10 @@ final class KpiWorkflow
 
     public static function canReviewKpi(User $user, EmployeeKpi $kpi): bool
     {
+        if ($user->hasRole('super_admin')) {
+            return ! $kpi->isSupervisorKpi();
+        }
+
         $employee = $user->employee;
 
         return CapabilityMatrix::has($user, 'kpi.supervisor.review')
@@ -144,7 +152,7 @@ final class KpiWorkflow
     public static function canRequestCorrection(User $user, EmployeeKpi $kpi): bool
     {
         if ($user->hasRole('super_admin')) {
-            return false;
+            return true;
         }
 
         $employee = $user->employee;
@@ -162,7 +170,7 @@ final class KpiWorkflow
     public static function canApproveCorrection(User $user, KpiCorrectionRequest $request): bool
     {
         if ($user->hasRole('super_admin')) {
-            return false;
+            return (string) $request->requested_by !== (string) $user->id;
         }
 
         $employee = $user->employee;

@@ -1,16 +1,16 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, CalendarDays } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { DatePicker, formatDateValue } from '@/components/ui/date-picker';
 
 export default function SupervisorAttendance({ date, period, rows = [], statusOptions = [], message }) {
     const recordedCount = useMemo(() => rows.filter((row) => row.status).length, [rows]);
 
-    const changeDate = (event) => {
-        router.get('/app/supervisor-attendance', { date: event.target.value }, { preserveState: false, replace: true });
+    const changeDate = (value) => {
+        router.get('/app/supervisor-attendance', { date: value }, { preserveState: false, replace: true });
     };
 
     return (
@@ -24,10 +24,9 @@ export default function SupervisorAttendance({ date, period, rows = [], statusOp
                             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Absensi Tim</h1>
                             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Hasil absensi berasal dari Review KPI Harian. Halaman ini hanya menampilkan rekap tim.</p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2">
-                            <CalendarDays className="size-4 text-primary" />
+                        <div>
                             <label htmlFor="attendance-date" className="sr-only">Tanggal absensi</label>
-                            <Input id="attendance-date" type="date" value={date} max={new Date().toISOString().slice(0, 10)} onChange={changeDate} className="w-auto" />
+                            <DatePicker id="attendance-date" value={date} max={formatDateValue()} onChange={changeDate} aria-label="Tanggal absensi" />
                         </div>
                     </div>
 

@@ -62,8 +62,12 @@ final class AdminResourceRegistry
                 && (in_array($record->status, ['pending_approval', 'verified'], true) || ($record->position_code_snapshot === 'POS-SPV' && in_array($record->status, ['submitted', 'under_review', 'revision_required'], true)));
         }
         if ($key === 'supervisor-reviews' && $config) {
-            $config['scope'] = static fn ($query, User $user) => KpiVisibility::applyScope($query, $user)
-                ->where('supervisor_id_snapshot', $user->employee?->id)->whereIn('status', ['submitted', 'under_review']);
+            $config['scope'] = static function ($query, User $user): void {
+                KpiVisibility::applyScope($query, $user)->whereIn('status', ['submitted', 'under_review']);
+                if (! $user->hasRole('super_admin')) {
+                    $query->where('supervisor_id_snapshot', $user->employee?->id);
+                }
+            };
         }
         if ($key === 'kpi-correction-requests' && $config) {
             $config['scope'] = static fn ($query, User $user) => $query->whereHas('employeeKpi', fn ($kpis) => KpiVisibility::applyScope($kpis, $user));
@@ -107,9 +111,7 @@ final class AdminResourceRegistry
             $config['columns'][] = ['key' => 'after_json.error', 'label' => 'Kegagalan Sinkronisasi'];
             $config['columns'][] = ['key' => 'after_json.through_date', 'label' => 'Fakta Sampai Tanggal'];
             $config['scope'] = static function ($query, User $user): void {
-                if ($user->hasRole('super_admin')) {
-                    $query->whereIn('subject_type', ['User', 'Employee', 'Branch', 'Position', 'Role', 'SystemConfiguration']);
-                } elseif ($user->hasRole('kpi_admin')) {
+                if ($user->hasRole('kpi_admin')) {
                     $query->whereIn('action', ['daily_kpi_sync_completed', 'daily_kpi_sync_failed', 'template_activated', 'template_copied']);
                 }
             };
@@ -129,7 +131,7 @@ final class AdminResourceRegistry
                 'model' => User::class,
                 'label' => 'Pengguna',
                 'plural_label' => 'Pengguna Sistem',
-                'description' => 'Hubungkan akun dengan karyawan. Teknisi, Pelayan, dan Gudang memakai mobile; Kasir, Admin Operasional, Supervisor, serta Manager memakai mobile dan web; Admin KPI, Admin Sistem, dan Auditor memakai web.',
+                'description' => 'Hubungkan akun dengan karyawan. Teknisi, Pelayan, dan Gudang memakai mobile; Kasir, Admin Operasional, Supervisor, serta Manager memakai mobile dan web; Admin KPI, Super Admin, dan Auditor memakai web.',
                 'permission' => ['roles' => ['super_admin'], 'positions' => []],
                 'search' => ['name', 'email'],
                 'with' => ['roles', 'employee.position', 'employee.branch'],
@@ -160,7 +162,7 @@ final class AdminResourceRegistry
                     'employee_id' => ['nullable', 'string', Rule::exists('employees', 'id')->where(fn ($query) => $query->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', $record?->id)))],
                     'role_ids' => ['required', 'array', 'min:1', static function (string $attribute, mixed $value, \Closure $fail): void {
                         if (CapabilityMatrix::roleConflict(Role::whereIn('id', $value)->pluck('name')->all())) {
-                            $fail('Admin Sistem, Admin KPI, dan Auditor harus memakai akun terpisah dari peran operasional. Supervisor dan Manager juga harus dipisahkan.');
+                            $fail('Super Admin, Admin KPI, dan Auditor harus memakai akun terpisah dari peran operasional. Supervisor dan Manager juga harus dipisahkan.');
                         }
                     }],
                     'role_ids.*' => ['integer', Rule::exists('roles', 'id')->where(fn ($query) => $query->where('guard_name', 'web'))],
@@ -535,15 +537,18 @@ final class AdminResourceRegistry
                 ],
                 'fields' => [
                     ['name' => 'code', 'label' => 'Kode Opname', 'type' => 'text', 'placeholder' => 'Otomatis jika dikosongkan'],
+                    ['name' => 'branch_id', 'label' => 'Cabang', 'type' => 'select', 'required' => true],
                     ['name' => 'period_id', 'label' => 'Periode KPI', 'type' => 'select', 'required' => true],
                     ['name' => 'deadline', 'label' => 'Deadline Penyelesaian', 'type' => 'date', 'default' => now()->addDays(3)->toDateString()],
                 ],
                 'rules' => static fn (?StockOpname $record): array => [
                     'code' => ['nullable', 'string', 'max:50', Rule::unique('stock_opnames', 'code')->ignore($record?->getKey())],
+                    'branch_id' => ['required', 'integer', 'exists:branches,id'],
                     'period_id' => ['required', 'integer', 'exists:kpi_periods,id'],
                     'deadline' => ['nullable', 'date'],
                 ],
                 'options' => [
+                    'branch_id' => static fn (?Model $record = null): array => self::branchOptions(),
                     'period_id' => static fn (?Model $record = null): array => self::periodOptions(),
                 ],
                 'prepare' => static function (array $data, Request $request, ?Model $record): array {
@@ -1037,7 +1042,7 @@ final class AdminResourceRegistry
                 'model' => KpiRatingBand::class,
                 'label' => 'Skala Predikat',
                 'plural_label' => 'Konversi Predikat KPI',
-                'description' => 'Atur nilai persen yang dipakai saat Supervisor atau Manager memilih predikat penilaian.',
+                'description' => 'Edit label, nilai, rentang, warna, dan urutan lima predikat pada skema draft. Salin versi aktif terlebih dahulu, validasi, lalu aktifkan.',
                 'permission' => ['roles' => ['super_admin'], 'positions' => []],
                 'search' => ['code', 'label', 'scheme.name'],
                 'with' => ['scheme'],
@@ -1051,9 +1056,9 @@ final class AdminResourceRegistry
                 ],
                 'fields' => [
                     ['name' => 'rating_scheme_id', 'label' => 'Skema Rating', 'type' => 'select', 'required' => true],
-                    ['name' => 'code', 'label' => 'Kode', 'type' => 'text', 'required' => true],
+                    ['name' => 'code', 'label' => 'Kode', 'type' => 'text', 'required' => true, 'readOnly' => static fn (?Model $record): bool => $record !== null],
                     ['name' => 'label', 'label' => 'Label Predikat', 'type' => 'text', 'required' => true],
-                    ['name' => 'manual_score', 'label' => 'Nilai Saat Dipilih (%)', 'type' => 'number', 'help' => 'Kosongkan jika predikat tidak dipakai pada review manual.'],
+                    ['name' => 'manual_score', 'label' => 'Nilai Saat Dipilih (%)', 'type' => 'number', 'required' => true, 'help' => 'Nilai 0-100 yang dipakai untuk penilaian subjektif harian.'],
                     ['name' => 'min_score', 'label' => 'Nilai Minimum Rating (%)', 'type' => 'number', 'required' => true],
                     ['name' => 'max_score', 'label' => 'Nilai Maksimum Rating (%)', 'type' => 'number', 'required' => true],
                     ['name' => 'color', 'label' => 'Warna Badge', 'type' => 'text', 'required' => true, 'default' => '#10B981'],
@@ -1062,9 +1067,9 @@ final class AdminResourceRegistry
                 ],
                 'rules' => static fn (?KpiRatingBand $record): array => [
                     'rating_scheme_id' => ['required', 'integer', Rule::exists('kpi_rating_schemes', 'id')->where('is_active', false)],
-                    'code' => ['required', 'string', 'max:50'],
+                    'code' => ['required', 'string', Rule::in(['POOR', 'FAIR', 'GOOD', 'VERY_GOOD', 'STAR']), Rule::unique('kpi_rating_bands', 'code')->where('rating_scheme_id', request('rating_scheme_id'))->ignore($record?->id)],
                     'label' => ['required', 'string', 'max:100'],
-                    'manual_score' => ['nullable', 'numeric', 'between:0,100'],
+                    'manual_score' => ['required', 'numeric', 'between:0,100'],
                     'min_score' => ['required', 'numeric', 'between:0,100'],
                     'max_score' => ['required', 'numeric', 'between:0,100', 'gte:min_score'],
                     'color' => ['required', 'string', 'max:30'],
@@ -1391,14 +1396,16 @@ final class AdminResourceRegistry
                 'search' => ['employee.name', 'period.name', 'status'],
                 'with' => ['employee.position', 'period'],
                 'scope' => static function ($query, $user): void {
-                    if (! $user || $user->hasRole('super_admin') || ! $user->hasRole('supervisor')) {
+                    if (! $user || (! $user->hasRole('super_admin') && ! $user->hasRole('supervisor'))) {
                         $query->whereIn('id', []);
 
                         return;
                     }
 
-                    $query->whereIn('status', ['submitted', 'under_review'])
-                        ->where('supervisor_id_snapshot', $user?->employee?->id);
+                    $query->whereIn('status', ['submitted', 'under_review']);
+                    if (! $user->hasRole('super_admin')) {
+                        $query->where('supervisor_id_snapshot', $user?->employee?->id);
+                    }
                 },
                 'columns' => [
                     ['key' => 'employee.name', 'label' => 'Karyawan', 'emphasis' => true],
@@ -1449,7 +1456,16 @@ final class AdminResourceRegistry
 
     private static function operationalAccess(string $key, array $config): array
     {
-        $config['scope'] = static function ($query, User $user) use ($key): void {
+        $baseScope = $config['scope'] ?? null;
+        $config['scope'] = static function ($query, User $user) use ($key, $baseScope): void {
+            if ($user->hasRole('super_admin')) {
+                if ($baseScope) {
+                    $baseScope($query, $user);
+                }
+
+                return;
+            }
+
             $employee = $user->employee;
             match ($key) {
                 'admin-work-logs' => $query->where('employee_id', $employee?->id),
@@ -1480,6 +1496,19 @@ final class AdminResourceRegistry
             $employee = $user->employee;
             $period = KpiPeriod::active();
             abort_unless($period, 422, 'Tidak ada periode KPI yang sedang OPEN.');
+            if ($user->hasRole('super_admin')) {
+                $data['recorded_by'] = $record?->recorded_by ?? $user->id;
+                if (in_array($key, ['admin-work-logs', 'coaching-logs', 'stock-opnames'], true)) {
+                    $data['period_id'] = $record?->period_id ?? $period->id;
+                }
+                if ($key === 'stock-opnames') {
+                    $data['created_by'] = $record?->created_by ?? $user->id;
+                    $data['status'] = $record?->status ?? StockOpname::STATUS_DRAFT;
+                }
+
+                return $prepare ? $prepare($data, $request, $record) : $data;
+            }
+
             if ($record?->period_id) {
                 abort_unless((int) $record->period_id === (int) $period->id, 409, 'Data periode yang sudah ditutup hanya dapat dibaca.');
             }
@@ -1538,10 +1567,13 @@ final class AdminResourceRegistry
                 continue;
             }
             $config['options'][$field] = static function (?Model $record, User $user) use ($key, $field): array {
-                $employees = Employee::where('branch_id', $user->employee?->branch_id)->where('status', 'active');
-                if ($key === 'admin-work-logs' || ($key === 'coaching-logs' && $field === 'supervisor_id')) {
+                $employees = Employee::where('status', 'active');
+                if (! $user->hasRole('super_admin')) {
+                    $employees->where('branch_id', $user->employee?->branch_id);
+                }
+                if (! $user->hasRole('super_admin') && ($key === 'admin-work-logs' || ($key === 'coaching-logs' && $field === 'supervisor_id'))) {
                     $employees->whereKey($user->employee?->id);
-                } elseif (in_array($key, ['coaching-logs', 'attendances'], true)) {
+                } elseif (! $user->hasRole('super_admin') && in_array($key, ['coaching-logs', 'attendances'], true)) {
                     $employees->whereIn('id', KpiVisibility::applyScope(EmployeeKpi::query(), $user)->where('period_id', KpiPeriod::active()?->id)->select('employee_id'));
                 }
 

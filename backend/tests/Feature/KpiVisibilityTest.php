@@ -107,7 +107,7 @@ class KpiVisibilityTest extends TestCase
         $manager = User::where('email', 'manager@toko.com')->firstOrFail();
         $url = URL::temporarySignedRoute('app.kpi.evidence.download', now()->addMinutes(5), ['evidenceId' => $evidence->id]);
         $this->actingAs($manager)->get($url)->assertOk();
-        $this->actingAs(User::where('email', 'admin@kpi.com')->firstOrFail())->get($url)->assertForbidden();
+        $this->actingAs(User::where('email', 'admin@kpi.com')->firstOrFail())->get($url)->assertOk();
         $kpi->update(['manager_id_snapshot' => null]);
         $this->actingAs($manager)->get($url)->assertForbidden();
         $this->travel(6)->minutes();

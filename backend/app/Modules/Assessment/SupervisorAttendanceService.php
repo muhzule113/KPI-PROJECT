@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiPeriod;
 use App\Models\User;
+use App\Support\CapabilityMatrix;
 use Exception;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -134,7 +135,7 @@ final class SupervisorAttendanceService
         return EmployeeKpi::query()
             ->with(['employee.position'])
             ->where('period_id', $period->id)
-            ->where('supervisor_id_snapshot', $supervisor->employee?->id)
+            ->when(! $supervisor->hasRole('super_admin'), fn ($query) => $query->where('supervisor_id_snapshot', $supervisor->employee?->id))
             ->whereHas('employee', fn ($query) => $query->where('status', 'active'))
             ->get()
             ->map(fn (EmployeeKpi $kpi): ?Employee => $kpi->employee)
@@ -170,7 +171,7 @@ final class SupervisorAttendanceService
 
     private function assertSupervisor(User $user): void
     {
-        if ($user->hasRole('super_admin') || ! $user->hasRole('supervisor') || ! $user->employee?->id) {
+        if (! CapabilityMatrix::has($user, 'attendance.team.manage') || (! $user->hasRole('super_admin') && ! $user->employee?->id)) {
             throw new AuthorizationException('Hanya Supervisor aktif yang dapat mencatat absensi tim.');
         }
     }

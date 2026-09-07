@@ -32,7 +32,7 @@ class PlanChangesTest extends TestCase
         $this->assertContains('tickets.claim', $response->json('data.capabilities'));
     }
 
-    public function test_manager_cannot_change_staff_manual_predicate(): void
+    public function test_manager_can_change_staff_manual_predicate_with_reason(): void
     {
         [, $date] = $this->openPeriodForToday();
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
@@ -51,17 +51,29 @@ class PlanChangesTest extends TestCase
             $entry->id,
             'approved',
             actualJson: ['rating_code' => 'GOOD'],
+            note: 'Perlu peningkatan konsistensi SOP.',
         );
         try {
             $service->assessManager($manager, $entry->id, 'approved', actualJson: ['rating_code' => 'VERY_GOOD']);
-            $this->fail('Manager tidak boleh mengganti penilaian harian staf.');
+            $this->fail('Perubahan Manager tanpa alasan harus ditolak.');
         } catch (\Exception $exception) {
-            $this->assertStringContainsString('tidak berwenang', $exception->getMessage());
+            $this->assertSame('Perubahan penilaian Manager wajib menyertakan alasan.', $exception->getMessage());
         }
         $this->assertSame(85.0, (float) $entry->fresh()->supervisor_score_percentage);
         $this->assertNull($entry->fresh()->manager_score_percentage);
         $this->assertSame('pending', $entry->fresh()->manager_status);
-        $this->assertSame(85.0, (float) $item->fresh()->actual_decimal);
+
+        $service->assessManager(
+            $manager,
+            $entry->id,
+            'approved',
+            actualJson: ['rating_code' => 'VERY_GOOD'],
+            note: 'Observasi Manager menunjukkan hasil lebih konsisten.',
+        );
+
+        $this->assertSame(95.0, (float) $entry->fresh()->effectiveRubricScore());
+        $this->assertSame('approved', $entry->fresh()->manager_status);
+        $this->assertSame(95.0, (float) $item->fresh()->actual_decimal);
     }
 
     public function test_attendance_is_recorded_from_daily_review(): void
@@ -91,6 +103,24 @@ class PlanChangesTest extends TestCase
             'recorded_by' => $supervisor->id,
         ]);
         $this->assertSame(100.0, (float) $reviewed->supervisor_actual_decimal);
+
+        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
+        $managerReview = $service->assessManager(
+            $manager,
+            $entry->id,
+            'approved',
+            actualJson: ['attendance_status' => Attendance::STATUS_ABSENT],
+            note: 'Manager menemukan ketidaksesuaian pada hasil penilaian.',
+        );
+
+        $this->assertSame(0.0, (float) $managerReview->effectiveActualDecimal());
+        $this->assertSame(0.0, (float) $item->fresh()->actual_decimal);
+        $this->assertDatabaseHas('attendances', [
+            'employee_id' => $employee->employee->id,
+            'attendance_date' => $date,
+            'status' => Attendance::STATUS_PRESENT,
+            'recorded_by' => $supervisor->id,
+        ]);
     }
 
     public function test_pelayan_cannot_update_unassigned_ticket_progress(): void

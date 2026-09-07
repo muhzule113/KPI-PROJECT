@@ -195,10 +195,11 @@ final class DailyAssessmentService
         return $this->employeeDay($user, $date);
     }
 
-    public function supervisorQueue(User $user, string $date): Collection
+    public function supervisorQueue(User $user, string $date, ?string $kpiId = null): Collection
     {
         $period = $this->periodForDate($date);
         $this->assertRole($user, 'supervisor');
+        $this->assertFocusedKpi($user, $period, $kpiId, 'supervisor');
         $this->operationalSync->syncPeriodOperationalData($period);
         $this->ensureAssignedEntries($user, $period, $date, 'supervisor');
 
@@ -210,18 +211,22 @@ final class DailyAssessmentService
             ->whereDate('entry_date', $date)
             ->whereIn('entry_status', ['submitted', 'revision_required'])
             ->whereIn('supervisor_status', ['pending', 'revision_required'])
+            ->when($kpiId, fn ($query, string $id) => $query->whereHas('item', fn ($item) => $item->where('employee_kpi_id', $id)))
             ->whereHas('item.employeeKpi', function ($query) use ($user, $period): void {
                 $query->where('period_id', $period->id);
-                $query->where('supervisor_id_snapshot', $user->employee?->id);
+                if (! $user->hasRole('super_admin')) {
+                    $query->where('supervisor_id_snapshot', $user->employee?->id);
+                }
             })
             ->orderBy('id')
             ->get()->filter(fn (KpiDailyEntry $entry): bool => KpiWorkflow::canReviewKpi($user, $entry->item->employeeKpi))->values();
     }
 
-    public function managerQueue(User $user, string $date): Collection
+    public function managerQueue(User $user, string $date, ?string $kpiId = null): Collection
     {
         $period = $this->periodForDate($date);
         $this->assertRole($user, 'manager');
+        $this->assertFocusedKpi($user, $period, $kpiId, 'manager');
         $this->operationalSync->syncPeriodOperationalData($period);
         $this->ensureAssignedEntries($user, $period, $date, 'manager');
 
@@ -232,16 +237,40 @@ final class DailyAssessmentService
         ])
             ->whereDate('entry_date', $date)
             ->whereIn('entry_status', ['submitted', 'revision_required'])
-            ->whereHas('item.employeeKpi', fn ($query) => $query->where('position_code_snapshot', 'POS-SPV')
-                ->orWhere(fn ($legacy) => $legacy->whereNull('position_code_snapshot')
-                    ->whereHas('employee.position', fn ($position) => $position->where('code', 'POS-SPV'))))
+            ->where(function ($query): void {
+                $query->where('supervisor_status', 'approved')
+                    ->orWhereHas('item.employeeKpi', fn ($kpi) => $kpi->where('position_code_snapshot', 'POS-SPV')
+                        ->orWhere(fn ($legacy) => $legacy->whereNull('position_code_snapshot')
+                            ->whereHas('employee.position', fn ($position) => $position->where('code', 'POS-SPV'))));
+            })
             ->whereIn('manager_status', ['pending', 'revision_required', 'approved'])
+            ->when($kpiId, fn ($query, string $id) => $query
+                ->whereIn('manager_status', ['pending', 'revision_required'])
+                ->whereHas('item', fn ($item) => $item->where('employee_kpi_id', $id)))
             ->whereHas('item.employeeKpi', function ($query) use ($user, $period): void {
                 $query->where('period_id', $period->id);
-                $query->where('manager_id_snapshot', $user->employee?->id);
+                if (! $user->hasRole('super_admin')) {
+                    $query->where('manager_id_snapshot', $user->employee?->id);
+                }
             })
+            ->orderByRaw("CASE WHEN manager_status = 'approved' THEN 1 ELSE 0 END")
             ->orderBy('id')
             ->get()->filter(fn (KpiDailyEntry $entry): bool => KpiWorkflow::canManageKpi($user, $entry->item->employeeKpi))->values();
+    }
+
+    private function assertFocusedKpi(User $user, KpiPeriod $period, ?string $kpiId, string $role): void
+    {
+        if ($kpiId === null) {
+            return;
+        }
+
+        $kpi = EmployeeKpi::with(['employee.position', 'period'])->whereKey($kpiId)->first();
+        $allowed = $kpi && (string) $kpi->period_id === (string) $period->id
+            && ($role === 'manager' ? KpiWorkflow::canManageKpi($user, $kpi) : KpiWorkflow::canReviewKpi($user, $kpi));
+
+        if (! $allowed) {
+            throw new AuthorizationException('KPI tidak tersedia dalam penugasan, cabang, atau peran Anda.');
+        }
     }
 
     public function assessmentDeadline(string $date, string $role): ?Carbon
@@ -279,7 +308,178 @@ final class DailyAssessmentService
         return $this->assess($user, $entryId, 'manager', $decision, $actualDecimal, $actualJson, $answers, $note);
     }
 
-    public function aggregateKpi(EmployeeKpi $kpi, ?int $userId = null): ?array
+    public function approveAllSupervisor(User $user, string $kpiId, string $date): array
+    {
+        $period = $this->periodForDate($date);
+        $this->assertRole($user, 'supervisor');
+
+        return DB::transaction(function () use ($user, $kpiId, $date, $period): array {
+            $kpi = EmployeeKpi::with(['employee.user', 'employee.position', 'period'])
+                ->whereKey($kpiId)->lockForUpdate()->first();
+            if (! $kpi || (string) $kpi->period_id !== (string) $period->id
+                || $kpi->isSupervisorKpi() || ! KpiWorkflow::canReviewKpi($user, $kpi)) {
+                throw new Exception('Anda tidak berwenang mengonfirmasi KPI harian staf ini.');
+            }
+            KpiWorkflow::assertMutableKpi($kpi);
+            $this->assertDailyWindow($period, 'supervisor');
+
+            $entries = KpiDailyEntry::with('item')
+                ->whereHas('item', fn ($query) => $query->where('employee_kpi_id', $kpi->id))
+                ->whereDate('entry_date', $date)
+                ->whereIn('entry_status', ['submitted', 'revision_required'])
+                ->whereIn('supervisor_status', ['pending', 'revision_required'])
+                ->lockForUpdate()->get()
+                ->filter(fn (KpiDailyEntry $entry): bool => $entry->item->isSystemSourced()
+                    && ! $entry->item->isAttendanceIndicator()
+                    && $entry->item->formula_key_snapshot !== 'rubric')
+                ->values();
+            if ($entries->isEmpty()) {
+                throw new Exception('Tidak ada indikator otomatis yang menunggu konfirmasi pada tanggal ini.');
+            }
+
+            foreach ($entries as $entry) {
+                $value = data_get($entry->system_actual_json, 'cadence') === 'period'
+                    ? $entry->item->systemActualDecimal()
+                    : ($entry->system_actual_decimal !== null ? (float) $entry->system_actual_decimal : null);
+                if ($value === null) {
+                    throw new Exception("Data otomatis {$entry->item->definition_code_snapshot} belum lengkap. Tidak ada indikator yang diubah.");
+                }
+            }
+
+            $before = $entries->mapWithKeys(fn (KpiDailyEntry $entry): array => [
+                (string) $entry->id => $this->entryAuditPayload($entry),
+            ])->all();
+            foreach ($entries as $entry) {
+                $entry->entry_status = 'submitted';
+                $entry->supervisor_actual_decimal = null;
+                $entry->supervisor_actual_json = null;
+                $entry->supervisor_answers_json = null;
+                $entry->supervisor_score_percentage = null;
+                $entry->supervisor_note = null;
+                $entry->supervisor_assessed_by = $user->id;
+                $entry->supervisor_status = 'approved';
+                $entry->supervisor_assessed_at = now();
+                $entry->manager_status = 'pending';
+                $entry->manager_actual_decimal = null;
+                $entry->manager_actual_json = null;
+                $entry->manager_answers_json = null;
+                $entry->manager_score_percentage = null;
+                $entry->manager_note = null;
+                $entry->manager_assessed_by = null;
+                $entry->manager_assessed_at = null;
+                $entry->row_version += 1;
+                $entry->save();
+            }
+
+            $calculation = $this->aggregateKpi($kpi, $user->id, 'daily_automatic_confirmation');
+            if ($calculation === null) {
+                $this->calculationEngine->calculateKpi($kpi, 'daily_automatic_confirmation', $user->id);
+            }
+            if (in_array($kpi->status, ['verified', 'pending_approval'], true)) {
+                $kpi->status = 'under_review';
+                $kpi->verified_at = null;
+                $kpi->row_version += 1;
+                $kpi->save();
+            }
+            AuditEvent::log(
+                action: 'approve_all_automatic_daily_kpi_supervisor',
+                subjectType: 'EmployeeKpi',
+                subjectId: (string) $kpi->id,
+                before: $before,
+                after: ['date' => $date, 'approved_count' => $entries->count()],
+                actorId: $user->id,
+            );
+            if ($kpi->employee?->user_id) {
+                SystemNotification::send(
+                    userId: $kpi->employee->user_id,
+                    title: 'Data Otomatis KPI Dikonfirmasi',
+                    body: "Supervisor mengonfirmasi {$entries->count()} indikator otomatis untuk {$date}.",
+                    type: 'daily_kpi_automatic_approved',
+                    entityType: 'EmployeeKpi',
+                    entityId: (string) $kpi->id,
+                    actionUrl: "/app/my-kpi/daily?date={$date}",
+                );
+            }
+
+            return ['kpi_id' => $kpi->id, 'date' => $date, 'approved_count' => $entries->count()];
+        });
+    }
+
+    public function approveAllManager(User $user, string $kpiId, string $date): array
+    {
+        $period = $this->periodForDate($date);
+        $this->assertRole($user, 'manager');
+
+        return DB::transaction(function () use ($user, $kpiId, $date, $period): array {
+            $kpi = EmployeeKpi::with(['employee.user', 'employee.position', 'period'])
+                ->whereKey($kpiId)->lockForUpdate()->first();
+            if (! $kpi || (string) $kpi->period_id !== (string) $period->id
+                || $kpi->isSupervisorKpi() || ! KpiWorkflow::canManageKpi($user, $kpi)) {
+                throw new Exception('Anda tidak berwenang menyetujui KPI harian staf ini.');
+            }
+            KpiWorkflow::assertMutableKpi($kpi);
+            $this->assertDailyWindow($period, 'manager');
+
+            $entries = KpiDailyEntry::with('item')
+                ->whereHas('item', fn ($query) => $query->where('employee_kpi_id', $kpi->id))
+                ->whereDate('entry_date', $date)
+                ->where('supervisor_status', 'approved')
+                ->lockForUpdate()
+                ->get();
+            if ($entries->isEmpty()) {
+                throw new Exception('Tidak ada penilaian Supervisor untuk disetujui pada tanggal ini.');
+            }
+            if ($entries->contains(fn (KpiDailyEntry $entry): bool => ! in_array($entry->entry_status, ['submitted', 'revision_required'], true))) {
+                throw new Exception('Semua indikator yang dinilai Supervisor harus siap direview sebelum disetujui sekaligus.');
+            }
+
+            $before = $entries->mapWithKeys(fn (KpiDailyEntry $entry): array => [(string) $entry->id => $this->entryAuditPayload($entry)])->all();
+            foreach ($entries as $entry) {
+                $entry->entry_status = 'submitted';
+                $entry->manager_actual_decimal = $entry->supervisor_actual_decimal;
+                $entry->manager_actual_json = $entry->supervisor_actual_json;
+                $entry->manager_answers_json = $entry->supervisor_answers_json;
+                $entry->manager_score_percentage = $entry->supervisor_score_percentage;
+                $entry->manager_note = null;
+                $entry->manager_assessed_by = $user->id;
+                $entry->manager_status = 'approved';
+                $entry->manager_assessed_at = now();
+                $entry->row_version += 1;
+                $entry->save();
+            }
+
+            $this->aggregateKpi($kpi, $user->id);
+            if (in_array($kpi->status, ['verified', 'pending_approval'], true)) {
+                $kpi->status = 'under_review';
+                $kpi->verified_at = null;
+                $kpi->row_version += 1;
+                $kpi->save();
+            }
+            AuditEvent::log(
+                action: 'approve_all_daily_kpi_manager',
+                subjectType: 'EmployeeKpi',
+                subjectId: (string) $kpi->id,
+                before: $before,
+                after: ['date' => $date, 'approved_count' => $entries->count()],
+                actorId: $user->id
+            );
+            if ($kpi->employee?->user_id) {
+                SystemNotification::send(
+                    userId: $kpi->employee->user_id,
+                    title: 'Penilaian KPI Harian Disetujui Manager',
+                    body: "Manager menyetujui {$entries->count()} indikator KPI harian {$date}.",
+                    type: 'daily_kpi_manager_approved_all',
+                    entityType: 'KpiDailyEntry',
+                    entityId: (string) $entries->first()->id,
+                    actionUrl: "/app/my-kpi/daily?date={$date}"
+                );
+            }
+
+            return ['kpi_id' => $kpi->id, 'date' => $date, 'approved_count' => $entries->count()];
+        });
+    }
+
+    public function aggregateKpi(EmployeeKpi $kpi, ?int $userId = null, string $runType = 'daily_aggregation'): ?array
     {
         $kpi->load(['items.dailyEntries', 'employee.position']);
         KpiWorkflow::assertMutableKpi($kpi);
@@ -377,7 +577,7 @@ final class DailyAssessmentService
             return null;
         }
 
-        return $this->calculationEngine->calculateKpi($kpi, 'daily_aggregation', $userId);
+        return $this->calculationEngine->calculateKpi($kpi, $runType, $userId);
     }
 
     private function assess(
@@ -412,7 +612,7 @@ final class DailyAssessmentService
             $canAssess = $role === 'manager'
                 ? KpiWorkflow::canManageKpi($user, $kpi)
                 : KpiWorkflow::canReviewKpi($user, $kpi);
-            if (! $canAssess || ($role === 'manager' && ! $kpi->isSupervisorKpi())) {
+            if (! $canAssess) {
                 throw new Exception('Anda tidak berwenang menilai KPI harian ini.');
             }
             KpiWorkflow::assertMutableKpi($kpi);
@@ -452,6 +652,12 @@ final class DailyAssessmentService
                     } else {
                         throw new Exception('Pilih predikat penilaian sebelum menyimpan review.');
                     }
+                    if ($role === 'supervisor'
+                        && $entry->item->target_value_snapshot !== null
+                        && $score < (float) $entry->item->target_value_snapshot
+                        && trim((string) $note) === '') {
+                        throw new Exception('Catatan wajib diisi jika predikat berada di bawah target indikator.');
+                    }
                 } elseif ($entry->item->isAttendanceIndicator()) {
                     if ($attendanceStatus !== null && ! in_array($attendanceStatus, Attendance::STATUSES, true)) {
                         throw new Exception('Status kehadiran tidak valid.');
@@ -460,14 +666,17 @@ final class DailyAssessmentService
                         throw new Exception('Status kehadiran wajib dipilih.');
                     }
                     if ($attendanceStatus !== null) {
-                        if (in_array($attendanceStatus, [...Attendance::EXCUSED_STATUSES, Attendance::STATUS_ABSENT], true)
+                        if ($role === 'supervisor'
+                            && in_array($attendanceStatus, [...Attendance::EXCUSED_STATUSES, Attendance::STATUS_ABSENT], true)
                             && trim((string) $note) === '') {
                             throw new Exception('Catatan wajib diisi untuk status kehadiran ini.');
                         }
                         $actualDecimal = in_array($attendanceStatus, Attendance::WORKED_STATUSES, true)
                             ? 100.0
                             : ($attendanceStatus === Attendance::STATUS_ABSENT ? 0.0 : null);
-                        $this->recordAttendance($entry, $attendanceStatus, $note, $user->id);
+                        if ($role === 'supervisor') {
+                            $this->recordAttendance($entry, $attendanceStatus, $note, $user->id);
+                        }
                     }
                 } elseif ($entry->item->formula_key_snapshot === 'rubric') {
                     [$normalizedAnswers, $score] = $this->normalizeRubricAnswers($entry->item, $answers ?? []);
@@ -768,7 +977,9 @@ final class DailyAssessmentService
         ])->where('period_id', $period->id);
 
         $assignmentColumn = $role === 'manager' ? 'manager_id_snapshot' : 'supervisor_id_snapshot';
-        $query->where($assignmentColumn, $user->employee?->id);
+        if (! $user->hasRole('super_admin')) {
+            $query->where($assignmentColumn, $user->employee?->id);
+        }
 
         $query->get()->filter(fn (EmployeeKpi $kpi): bool => $role === 'manager'
             ? ($kpi->isSupervisorKpi() && KpiWorkflow::canManageKpi($user, $kpi))

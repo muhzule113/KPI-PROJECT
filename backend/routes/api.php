@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\ReportSubmissionController;
 use App\Http\Controllers\Api\V1\ServiceTicketApiController;
 use App\Http\Controllers\Api\V1\SupervisorAttendanceApiController;
 use App\Http\Controllers\Api\V1\SupervisorReviewController;
+use App\Http\Controllers\Api\V1\TeamTaskController;
 use App\Http\Controllers\ServiceTicketEvidenceController;
 use Illuminate\Support\Facades\Route;
 
@@ -46,6 +47,7 @@ Route::prefix('v1')->group(function () {
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index']);
+        Route::get('/team/tasks', TeamTaskController::class);
         Route::get('/reports/kpi', [KpiReportApiController::class, 'index']);
         Route::get('/reports/kpi/export/{format}', [KpiReportApiController::class, 'export'])->middleware('throttle:export')
             ->whereIn('format', ['csv', 'xlsx', 'pdf']);
@@ -117,6 +119,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/supervisor/daily', [DailyAssessmentController::class, 'supervisorQueue']);
             Route::post('/supervisor/daily/{entryId}/assess', [DailyAssessmentController::class, 'assessSupervisor'])
                 ->whereNumber('entryId');
+            Route::post('/supervisor/daily/{kpiId}/approve-all', [DailyAssessmentController::class, 'approveAllSupervisor']);
             Route::get('/supervisor/queue', [SupervisorReviewController::class, 'queue']);
             Route::get('/supervisor/review/{kpiId}', [SupervisorReviewController::class, 'detail']);
             Route::post('/supervisor/review/{kpiId}/items/{itemId}/verify', [SupervisorReviewController::class, 'verifyItem']);
@@ -130,6 +133,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/manager/daily', [DailyAssessmentController::class, 'managerQueue']);
             Route::post('/manager/daily/{entryId}/assess', [DailyAssessmentController::class, 'assessManager'])
                 ->whereNumber('entryId');
+            Route::post('/manager/daily/{kpiId}/approve-all', [DailyAssessmentController::class, 'approveAllManager']);
             Route::get('/manager/queue', [ManagerApprovalController::class, 'queue']);
             Route::get('/manager/approval/{kpiId}', [ManagerApprovalController::class, 'detail']);
             Route::post('/manager/approval/{kpiId}/items/{itemId}/assess', [ManagerApprovalController::class, 'assessItem']);

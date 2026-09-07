@@ -15,7 +15,9 @@ class StockOpname extends Model
     {
         static::creating(function (self $opname): void {
             $opname->created_by ??= auth()->id();
-            $opname->branch_id = $opname->creator?->employee?->branch_id;
+            if (! $opname->creator?->hasRole('super_admin')) {
+                $opname->branch_id = $opname->creator?->employee?->branch_id;
+            }
             if (! $opname->branch_id || ! $opname->period?->branches()->whereKey($opname->branch_id)->exists()) {
                 throw new \RuntimeException('Cabang pembuat opname harus terdaftar pada periode KPI.');
             }

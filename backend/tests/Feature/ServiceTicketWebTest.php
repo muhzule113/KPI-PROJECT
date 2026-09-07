@@ -36,15 +36,33 @@ class ServiceTicketWebTest extends TestCase
         }
     }
 
-    public function test_manager_and_system_admin_cannot_create_or_edit_technical_records(): void
+    public function test_manager_cannot_create_or_edit_technical_records(): void
     {
         $ticket = $this->ticket('qc_ready');
-        foreach (['manager@toko.com', 'admin@kpi.com'] as $email) {
-            $user = User::where('email', $email)->firstOrFail();
-            $this->actingAs($user)->post('/app/service-tickets', [])->assertForbidden();
-            $this->actingAs($user)->put("/app/service-tickets/{$ticket->id}", ['status' => 'completed'])->assertStatus($email === 'manager@toko.com' ? 403 : 404);
-            $this->actingAs($user)->get("/app/service-tickets/{$ticket->id}/complete")->assertForbidden();
-        }
+        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
+
+        $this->actingAs($manager)->post('/app/service-tickets', [])->assertForbidden();
+        $this->actingAs($manager)->put("/app/service-tickets/{$ticket->id}", ['status' => 'completed'])->assertForbidden();
+        $this->actingAs($manager)->get("/app/service-tickets/{$ticket->id}/complete")->assertForbidden();
+    }
+
+    public function test_super_admin_can_manage_technical_records_across_branches(): void
+    {
+        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $technician = User::where('email', 'teknisi@toko.com')->firstOrFail()->employee;
+        $ticket = $this->ticket('in_progress');
+        $ticket->update([
+            'technician_employee_id' => $technician->id,
+            'customer_consent_status' => 'approved',
+        ]);
+
+        $this->actingAs($admin)->put("/app/service-tickets/{$ticket->id}/status", [
+            'status' => 'qc_ready',
+            'row_version' => $ticket->row_version,
+        ])->assertRedirect('/app/service-tickets');
+
+        $this->assertSame('qc_ready', $ticket->fresh()->status);
+        $this->actingAs($admin)->get("/app/service-tickets/{$ticket->id}/complete")->assertOk();
     }
 
     public function test_cashier_records_cost_through_shared_domain_and_rejects_stale_form(): void

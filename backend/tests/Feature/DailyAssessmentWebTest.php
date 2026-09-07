@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Employee;
 use App\Models\EmployeeKpi;
 use App\Models\KpiDailyEntry;
+use App\Models\KpiPeriod;
 use App\Models\ServiceTicket;
 use App\Models\User;
 use App\Modules\Assessment\DailyAssessmentService;
@@ -34,7 +35,7 @@ class DailyAssessmentWebTest extends TestCase
             ->assertRedirect('/app/my-kpi/daily');
     }
 
-    public function test_supervisor_and_manager_receive_daily_navigation_and_pages(): void
+    public function test_supervisor_and_manager_receive_unified_navigation_while_legacy_pages_remain_available(): void
     {
         $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
         $manager = User::where('email', 'manager@toko.com')->firstOrFail();
@@ -44,13 +45,15 @@ class DailyAssessmentWebTest extends TestCase
         $supervisorLinks = collect($supervisorPage->inertiaProps('navigation'))
             ->flatMap(fn (array $group) => $group['items'] ?? [])
             ->pluck('href')->all();
-        $this->assertContains('/app/supervisor-daily-assessments', $supervisorLinks);
+        $this->assertContains('/app/team-tasks', $supervisorLinks);
+        $this->assertNotContains('/app/supervisor-daily-assessments', $supervisorLinks);
 
         $managerPage = $this->actingAs($manager)->get('/app/manager-daily-assessments');
         $managerPage->assertOk()->assertInertia(fn ($page) => $page->component('Admin/DailyAssessmentQueue')->where('role', 'manager'));
         $managerLinks = collect($managerPage->inertiaProps('navigation'))
             ->flatMap(fn (array $group) => $group['items'] ?? [])
             ->pluck('href')->all();
+        $this->assertContains('/app/team-tasks', $managerLinks);
         $this->assertContains('/app/manager-daily-assessments', $managerLinks);
     }
 
@@ -102,7 +105,7 @@ class DailyAssessmentWebTest extends TestCase
         $this->assertNotNull($entry);
         $this->assertSame((string) $employee->id, (string) data_get($entry, 'employee.id'));
         $this->assertSame((string) $kpi->id, (string) data_get($entry, 'kpi_id'));
-        $this->assertNull(data_get($entry, 'item.system_actual'));
+        $this->assertSame($expectedCompleted, (int) data_get($entry, 'item.system_actual'));
         $expectedDailyCompleted = ServiceTicket::where('technician_employee_id', $employee->id)
             ->whereDate('completed_at', $date)
             ->count();
@@ -143,5 +146,40 @@ class DailyAssessmentWebTest extends TestCase
             ->assertRedirect("/app/supervisor-daily-assessments?date={$date}");
 
         $this->assertSame('approved', KpiDailyEntry::findOrFail($entry['id'])->supervisor_status);
+    }
+
+    public function test_manager_page_shows_staff_first_and_approves_all_staff_entries(): void
+    {
+        $employeeUser = User::where('email', 'teknisi@toko.com')->firstOrFail();
+        $manager = User::where('email', 'manager@toko.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $period->update([
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'review_deadline' => now()->addDays(2),
+            'approval_deadline' => now()->addDays(3),
+        ]);
+        $date = now()->toDateString();
+        $day = app(DailyAssessmentService::class)->employeeDay($employeeUser, $date);
+        $entry = $day['entries']->first(fn (KpiDailyEntry $candidate): bool => $candidate->item->isManualRated());
+        $entry->update([
+            'supervisor_actual_json' => ['rating_code' => 'VERY_GOOD'],
+            'supervisor_score_percentage' => 95,
+            'supervisor_status' => 'approved',
+            'supervisor_assessed_at' => now(),
+        ]);
+
+        $this->actingAs($manager)->get("/app/manager-daily-assessments?date={$date}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/DailyAssessmentQueue')
+                ->where('title', 'Tinjauan Opsional')
+                ->where('entries.0.review_mode', 'staff_confirmation'));
+
+        $this->actingAs($manager)
+            ->post("/app/manager-daily-assessments/{$day['kpi']->id}/approve-all", ['date' => $date])
+            ->assertRedirect("/app/manager-daily-assessments?date={$date}");
+
+        $this->assertSame('approved', $entry->fresh()->manager_status);
     }
 }

@@ -29,13 +29,13 @@ Fakta yang belum diterima dari sumber resminya. Nilainya tetap kosong dan tidak 
 Hasil kalkulasi ketika indikator tidak dapat dihitung secara sah, misalnya karena denominator nol atau parameter wajib belum tersedia.
 
 **Penilaian staf**:
-Supervisor memeriksa fakta dan mengisi indikator manual anggota tim per hari/cadence. Manager tidak menilai ulang indikator harian staf.
+Supervisor memeriksa fakta dan mengisi indikator manual anggota tim per hari/cadence. Setelah itu Manager dapat mengonfirmasi atau mengubah hasil harian secara opsional; perubahan wajib memiliki alasan dan menjadi nilai efektif.
 
 **Rekap staf**:
 Hasil bulanan yang dibentuk dari fakta dan penilaian Supervisor yang lengkap, kemudian diteruskan kepada Manager yang ditugaskan.
 
 **Pengesahan staf**:
-Keputusan Manager untuk menyetujui rekap atau mengembalikan bagian tertentu dengan alasan. Manager tidak mengubah fakta atau nilai harian secara langsung.
+Keputusan Manager untuk menyetujui rekap atau mengembalikan bagian tertentu dengan alasan. Tinjauan harian Manager tidak mengubah fakta sumber dan tidak menghambat rekap bila dilewati.
 
 **KPI Supervisor**:
 KPI yang dinilai dan difinalisasi langsung oleh Manager yang ditugaskan setelah hasil tim tersedia. Pengecualian ini tidak mengizinkan penilaian atau approval diri sendiri.
@@ -76,10 +76,10 @@ Penyerahan perangkat oleh Pelayan setelah pekerjaan teknis dan syarat pembayaran
 
 - Teknisi, Pelayan, dan Gudang menggunakan mobile.
 - Kasir, Admin Operasional, Supervisor, serta Manager/Owner menggunakan mobile dan web.
-- Admin KPI, Admin Sistem, dan Auditor menggunakan web.
-- Admin KPI mengelola konfigurasi dan publikasi KPI.
-- Admin Sistem mengelola akun, role, organisasi, konfigurasi sistem, serta audit teknis tanpa hak transaksi.
-- Hak administratif tidak memberikan hak operasional atau penilaian.
+- Admin KPI, Super Admin, dan Auditor menggunakan web.
+- Super Admin mengelola skala, indikator, template, dan rubrik; Admin KPI mengelola periode, assignment penilai, konfigurasi import, monitoring, dan publikasi.
+- Super Admin memiliki seluruh akses web lintas role dan cabang, tetapi tidak dapat masuk melalui mobile.
+- Admin KPI dan Auditor tidak memperoleh hak operasional atau penilaian.
 - Server memeriksa platform, status akun, profil, capability, kepemilikan, assignment, cabang, dan status data pada setiap request.
 
 ## Absensi

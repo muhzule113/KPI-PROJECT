@@ -55,9 +55,21 @@ class KpiRatingScheme extends Model
     {
         $bands = $this->bands()->reorder('min_score')->get();
         $issues = [];
+        $expectedCodes = ['FAIR', 'GOOD', 'POOR', 'STAR', 'VERY_GOOD'];
+        $codes = $bands->pluck('code')->sort()->values()->all();
+        if ($codes !== $expectedCodes) {
+            $issues[] = 'Skema penilaian Supervisor harus memakai lima kode predikat internal yang unik.';
+        }
+        if ($bands->whereNotNull('manual_score')->count() !== 5) {
+            $issues[] = 'Skema penilaian Supervisor harus mempunyai tepat lima pilihan manual.';
+        }
         $expected = 0.0;
         foreach ($bands as $band) {
             $minimum = (float) $band->min_score;
+            if ($minimum < 0 || (float) $band->max_score > 100
+                || ($band->manual_score !== null && ((float) $band->manual_score < 0 || (float) $band->manual_score > 100))) {
+                $issues[] = 'Nilai dan rentang predikat harus berada pada 0 sampai 100.';
+            }
             if (abs($minimum - $expected) > 0.000001) {
                 $issues[] = $minimum < $expected ? 'Band rating saling tumpang tindih.' : 'Band rating memiliki gap.';
             }

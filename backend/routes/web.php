@@ -10,6 +10,7 @@ use App\Http\Controllers\Web\CustomerFeedbackController;
 use App\Http\Controllers\Web\DailyAssessmentController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\ImportController;
+use App\Http\Controllers\Web\KpiAdministrationController;
 use App\Http\Controllers\Web\KpiCorrectionController;
 use App\Http\Controllers\Web\KpiReportController;
 use App\Http\Controllers\Web\ManagerApprovalController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Web\ServiceTicketWorkflowController;
 use App\Http\Controllers\Web\StockOpnameController;
 use App\Http\Controllers\Web\SupervisorAttendanceController;
 use App\Http\Controllers\Web\SupervisorReviewController;
+use App\Http\Controllers\Web\TeamTaskController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -34,7 +36,7 @@ Route::middleware('guest:web')->group(function () {
 
 Route::get('/customer-feedback/{ticket}', [CustomerFeedbackController::class, 'show'])
     ->whereNumber('ticket')
-    ->middleware('signed')
+    ->middleware(['signed', 'throttle:60,1'])
     ->name('customer-feedback.show');
 Route::post('/customer-feedback/{ticket}', [CustomerFeedbackController::class, 'store'])
     ->whereNumber('ticket')
@@ -50,6 +52,7 @@ Route::middleware(['auth:web', 'platform:web'])->group(function () {
         return response()->json(['token' => $request->session()->token()]);
     })->name('csrf-token');
     Route::get('/app', [DashboardController::class, 'index'])->name('app.dashboard');
+    Route::get('/app/team-tasks', TeamTaskController::class)->name('app.team-tasks');
     Route::get('/app/reports/kpi.csv', [KpiReportController::class, 'export'])->name('app.reports.kpi.export');
     Route::get('/app/reports/kpi.xlsx', [KpiReportController::class, 'exportXlsx'])->name('app.reports.kpi.xlsx');
     Route::get('/app/reports/kpi.pdf', [KpiReportController::class, 'exportPdf'])->name('app.reports.kpi.pdf');
@@ -64,10 +67,14 @@ Route::middleware(['auth:web', 'platform:web'])->group(function () {
     Route::post('/app/supervisor-daily-assessments/{entry}/assess', [DailyAssessmentController::class, 'assessSupervisor'])
         ->whereNumber('entry')
         ->name('app.supervisor-daily.assess');
+    Route::post('/app/supervisor-daily-assessments/{kpi}/approve-all', [DailyAssessmentController::class, 'approveAllSupervisor'])
+        ->name('app.supervisor-daily.approve-all');
     Route::get('/app/manager-daily-assessments', [DailyAssessmentController::class, 'managerQueue'])->name('app.manager-daily.index');
     Route::post('/app/manager-daily-assessments/{entry}/assess', [DailyAssessmentController::class, 'assessManager'])
         ->whereNumber('entry')
         ->name('app.manager-daily.assess');
+    Route::post('/app/manager-daily-assessments/{kpi}/approve-all', [DailyAssessmentController::class, 'approveAllManager'])
+        ->name('app.manager-daily.approve-all');
     Route::get('/app/supervisor-reviews/{record}/review', [SupervisorReviewController::class, 'show'])->name('app.supervisor-review.show');
     Route::post('/app/supervisor-reviews/{record}/items/{item}/decision', [SupervisorReviewController::class, 'verifyItem'])->name('app.supervisor-review.decision');
     Route::post('/app/supervisor-reviews/{record}/items/{item}/rubric', [SupervisorReviewController::class, 'submitRubric'])->name('app.supervisor-review.rubric');
@@ -86,6 +93,17 @@ Route::middleware(['auth:web', 'platform:web'])->group(function () {
     Route::post('/app/employee-kpis/{record}/assessment/approve', [ManagerApprovalController::class, 'approve'])->name('app.manager-assessment.approve');
     Route::post('/app/employee-kpis/{record}/assessment/return', [ManagerApprovalController::class, 'returnToSupervisor'])->name('app.manager-assessment.return');
     Route::get('/app/customer-feedback', [CustomerFeedbackController::class, 'index'])->name('app.customer-feedback.index');
+    Route::get('/app/kpi-administration', [KpiAdministrationController::class, 'index'])->name('app.kpi-administration.index');
+    Route::post('/app/kpi-administration/predicates/start', [KpiAdministrationController::class, 'startPredicates'])->middleware('capability:kpi.catalog.configure');
+    Route::put('/app/kpi-administration/predicates/{scheme}', [KpiAdministrationController::class, 'updatePredicates'])->middleware('capability:kpi.catalog.configure');
+    Route::post('/app/kpi-administration/predicates/{scheme}/activate', [KpiAdministrationController::class, 'activatePredicates'])->middleware('capability:kpi.catalog.configure');
+    Route::post('/app/kpi-administration/templates/{version}/start', [KpiAdministrationController::class, 'startTemplate'])->middleware('capability:kpi.catalog.configure');
+    Route::put('/app/kpi-administration/templates/{draft}', [KpiAdministrationController::class, 'updateTemplate'])->middleware('capability:kpi.catalog.configure');
+    Route::post('/app/kpi-administration/templates/{draft}/activate', [KpiAdministrationController::class, 'activateTemplate'])->middleware('capability:kpi.catalog.configure');
+    Route::put('/app/kpi-administration/assignments', [KpiAdministrationController::class, 'updateAssignments'])->middleware('capability:kpi.assignments.manage');
+    Route::post('/app/kpi-administration/imports/{template}/start', [KpiAdministrationController::class, 'startImport'])->middleware('capability:imports.configure');
+    Route::put('/app/kpi-administration/imports/{version}', [KpiAdministrationController::class, 'updateImport'])->middleware('capability:imports.configure');
+    Route::post('/app/kpi-administration/imports/{version}/activate', [KpiAdministrationController::class, 'activateImport'])->middleware('capability:imports.configure');
     Route::get('/app/service-tickets/{id}/evidence/{index}', [ServiceTicketEvidenceController::class, 'download'])->whereNumber('index');
     Route::get('/app/service-tickets/{record}/workflow', [ServiceTicketWorkflowController::class, 'show']);
     Route::post('/app/service-tickets/{record}/workflow', [ServiceTicketWorkflowController::class, 'update']);

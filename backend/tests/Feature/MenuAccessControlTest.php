@@ -13,16 +13,16 @@ class MenuAccessControlTest extends TestCase
 
     protected $seed = true;
 
-    public function test_system_admin_access_does_not_bypass_operational_roles(): void
+    public function test_super_admin_bypasses_web_role_and_position_checks(): void
     {
         $user = User::where('email', 'admin@kpi.com')->first();
         $this->assertNotNull($user);
         $this->assertTrue($user->hasRole('super_admin'));
 
         $this->assertTrue(MenuAccess::can($user, ['super_admin'], []));
-        $this->assertFalse(MenuAccess::can($user, [], []));
-        $this->assertFalse(MenuAccess::can($user, ['owner_manager'], []));
-        $this->assertFalse(MenuAccess::can($user, [], ['POS-GUD']));
+        $this->assertTrue(MenuAccess::can($user, [], []));
+        $this->assertTrue(MenuAccess::can($user, ['owner_manager'], []));
+        $this->assertTrue(MenuAccess::can($user, [], ['POS-GUD']));
     }
 
     public function test_gudang_only_sees_inventory_and_service_tickets(): void

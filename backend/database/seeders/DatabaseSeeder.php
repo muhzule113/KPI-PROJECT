@@ -56,7 +56,7 @@ class DatabaseSeeder extends Seeder
             ['code' => 'VERY_GOOD', 'label' => 'Sangat Baik', 'min_score' => 90.00, 'max_score' => 94.99, 'manual_score' => 95.00, 'color' => '#3B82F6', 'badge_icon' => 'heroicon-o-check-badge', 'sort_order' => 2],
             ['code' => 'GOOD', 'label' => 'Baik', 'min_score' => 80.00, 'max_score' => 89.99, 'manual_score' => 85.00, 'color' => '#84CC16', 'badge_icon' => 'heroicon-o-hand-thumb-up', 'sort_order' => 3],
             ['code' => 'FAIR', 'label' => 'Cukup', 'min_score' => 70.00, 'max_score' => 79.99, 'manual_score' => 75.00, 'color' => '#F59E0B', 'badge_icon' => 'heroicon-o-exclamation-circle', 'sort_order' => 4],
-            ['code' => 'POOR', 'label' => 'Perlu Perbaikan', 'min_score' => 0.00, 'max_score' => 69.99, 'color' => '#EF4444', 'badge_icon' => 'heroicon-o-exclamation-triangle', 'sort_order' => 5],
+            ['code' => 'POOR', 'label' => 'Perlu Perbaikan', 'min_score' => 0.00, 'max_score' => 69.99, 'manual_score' => 60.00, 'color' => '#EF4444', 'badge_icon' => 'heroicon-o-exclamation-triangle', 'sort_order' => 5],
         ];
 
         foreach ($bands as $band) {
@@ -65,6 +65,7 @@ class DatabaseSeeder extends Seeder
                 $band
             );
         }
+        $scheme->bands()->where('code', 'STAR')->update(['manual_score' => 100.00]);
 
         // 3. Branches
         $branchPusat = Branch::firstOrCreate(
@@ -99,7 +100,7 @@ class DatabaseSeeder extends Seeder
 
             // Pelayan (kode indikator tetap CS-* untuk kompatibilitas)
             ['code' => 'CS-01', 'name' => 'Kepuasan Pelanggan (CSAT)', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
-            ['code' => 'CS-02', 'name' => 'Kecepatan Melayani Pelanggan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
+            ['code' => 'CS-02', 'name' => 'Kecepatan Melayani Pelanggan', 'metric_type' => 'rubric', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'rubric', 'source_type' => 'supervisor'],
             ['code' => 'CS-03', 'name' => 'Akurasi Input Order / Tiket', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'CS-04', 'name' => 'Follow-up Status Pelanggan', 'metric_type' => 'percentage', 'unit' => '%', 'direction' => 'higher', 'default_formula' => 'higher_is_better', 'source_type' => 'system'],
             ['code' => 'CS-05', 'name' => 'Jumlah Komplain Pelanggan', 'metric_type' => 'count', 'unit' => 'komplain', 'direction' => 'lower', 'default_formula' => 'lower_is_better', 'source_type' => 'system'],
@@ -145,10 +146,10 @@ class DatabaseSeeder extends Seeder
             $kpiDefs[$d['code']] = KpiDefinition::firstOrCreate(['code' => $d['code']], $d);
         }
         foreach ([
-            'TEK-01' => 'employee', 'TEK-02' => 'employee', 'TEK-03' => 'cross_role', 'TEK-04' => 'employee',
+            'TEK-01' => 'system', 'TEK-02' => 'system', 'TEK-03' => 'cross_role', 'TEK-04' => 'system',
             'TEK-05' => 'supervisor', 'TEK-06' => 'supervisor', 'TEK-07' => 'system',
-            'CS-01' => 'employee', 'CS-02' => 'employee', 'CS-03' => 'employee', 'CS-04' => 'employee', 'CS-05' => 'cross_role', 'CS-06' => 'supervisor',
-            'ADM-01' => 'employee', 'ADM-02' => 'system', 'ADM-03' => 'employee', 'ADM-04' => 'employee', 'ADM-05' => 'supervisor', 'ADM-06' => 'supervisor',
+            'CS-01' => 'system', 'CS-02' => 'supervisor', 'CS-03' => 'system', 'CS-04' => 'system', 'CS-05' => 'cross_role', 'CS-06' => 'supervisor',
+            'ADM-01' => 'system', 'ADM-02' => 'system', 'ADM-03' => 'system', 'ADM-04' => 'system', 'ADM-05' => 'supervisor', 'ADM-06' => 'supervisor',
             'KSR-01' => 'import', 'KSR-02' => 'import', 'KSR-03' => 'import', 'KSR-04' => 'import', 'KSR-05' => 'supervisor', 'KSR-06' => 'supervisor',
             'GUD-01' => 'system', 'GUD-02' => 'system', 'GUD-03' => 'system', 'GUD-04' => 'system', 'GUD-05' => 'system', 'GUD-06' => 'supervisor', 'GUD-07' => 'supervisor',
             'SUP-01' => 'system', 'SUP-02' => 'system', 'SUP-03' => 'system', 'SUP-04' => 'system', 'SUP-05' => 'employee', 'SUP-06' => 'supervisor', 'SUP-07' => 'system',
@@ -176,10 +177,10 @@ class DatabaseSeeder extends Seeder
         );
 
         $tekItems = [
-            ['code' => 'TEK-01', 'weight' => 25.00, 'target' => 80.00, 'unit' => 'unit', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'TEK-02', 'weight' => 25.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'TEK-01', 'weight' => 25.00, 'target' => 80.00, 'unit' => 'unit', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'TEK-02', 'weight' => 25.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'TEK-03', 'weight' => 15.00, 'target' => 3.00, 'unit' => '%', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 6.00], 'evidence' => false, 'source' => 'cross_role'],
-            ['code' => 'TEK-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'TEK-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'TEK-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Diagnosis kerusakan sesuai prosedur standar',
                 'Penggunaan alat servis & ESD protection sesuai SOP',
@@ -205,10 +206,14 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $csItems = [
-            ['code' => 'CS-01', 'weight' => 25.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
-            ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'CS-01', 'weight' => 25.00, 'target' => 90.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'CS-02', 'weight' => 20.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
+                'Kebutuhan pelanggan dikenali tanpa penundaan yang tidak perlu',
+                'Proses dan perkiraan waktu layanan dijelaskan dengan jelas',
+                'Pelayanan diselesaikan sesuai antrean dan standar toko',
+            ]],
+            ['code' => 'CS-03', 'weight' => 20.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
+            ['code' => 'CS-04', 'weight' => 15.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'CS-05', 'weight' => 10.00, 'target' => 3.00, 'unit' => 'komplain', 'formula' => 'lower_is_better', 'target_json' => ['failure_limit' => 5.00], 'evidence' => false, 'source' => 'cross_role'],
             ['code' => 'CS-06', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
         ];
@@ -221,10 +226,10 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'total_weight' => 100.00, 'rating_scheme_id' => $scheme->id, 'effective_from' => '2026-01-01', 'activated_at' => now()]
         );
         $admItems = [
-            ['code' => 'ADM-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'employee'],
+            ['code' => 'ADM-01', 'weight' => 30.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
             ['code' => 'ADM-02', 'weight' => 25.00, 'target' => 100.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'system'],
-            ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
-            ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'employee'],
+            ['code' => 'ADM-03', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
+            ['code' => 'ADM-04', 'weight' => 15.00, 'target' => 98.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => true, 'source' => 'system'],
             ['code' => 'ADM-05', 'weight' => 10.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'higher_is_better', 'evidence' => false, 'source' => 'supervisor'],
             ['code' => 'ADM-06', 'weight' => 5.00, 'target' => 95.00, 'unit' => '%', 'formula' => 'rubric', 'evidence' => false, 'source' => 'supervisor', 'rubric_criteria' => [
                 'Kelengkapan pengarsipan invoice & surat jalan',
@@ -350,10 +355,10 @@ class DatabaseSeeder extends Seeder
 
     protected function seedUsersAndEmployees($posOwner, $posSpv, $posTek, $posCs, $posAdm, $posKsr, $posGud, $branchPusat, $branchSurabaya): void
     {
-        // 1. Admin System
+        // 1. Super Admin
         $userAdmin = User::firstOrCreate(
             ['email' => 'admin@kpi.com'],
-            ['name' => 'System Administrator', 'password' => Hash::make('password')]
+            ['name' => 'Super Admin', 'password' => Hash::make('password')]
         );
         $userAdmin->syncRoles('super_admin');
 

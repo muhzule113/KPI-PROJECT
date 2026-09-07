@@ -56,11 +56,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       if (url == null) {
         throw const ApiException(
           statusCode: 422,
-          message: 'Link feedback tidak tersedia.',
+          message: 'Link progres servis tidak tersedia.',
         );
       }
       await Clipboard.setData(ClipboardData(text: url));
-      if (mounted) _messageSnack('Link feedback berhasil disalin.');
+      if (mounted) _messageSnack('Link progres servis berhasil disalin.');
     } catch (exception) {
       if (mounted) _errorSnack(_message(exception));
     }
@@ -229,28 +229,30 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             Row(
               children: [
                 _stat(
-                  'Menunggu',
-                  '${stats['pending'] ?? 0}',
+                  'Rerata Pelayan',
+                  '${stats['average'] ?? 0}',
+                  AppTheme.statusApproved,
+                ),
+                const SizedBox(width: 10),
+                _stat(
+                  'Rerata Teknisi',
+                  stats['technician_average'] == null
+                      ? '—'
+                      : '${stats['technician_average']}',
                   AppTheme.statusRevision,
                 ),
                 const SizedBox(width: 10),
                 _stat('Total', '${stats['total'] ?? 0}', AppTheme.primary),
-                const SizedBox(width: 10),
-                _stat(
-                  'Rata-rata',
-                  '${stats['average'] ?? 0}',
-                  AppTheme.statusApproved,
-                ),
               ],
             ),
             const SizedBox(height: 22),
-            KpiSectionHeader(title: 'Kirim link feedback'),
+            KpiSectionHeader(title: 'Bagikan progres servis'),
             const SizedBox(height: 8),
             if (pending.isEmpty)
               const KpiEmptyState(
                 icon: Icons.check_circle_outline,
-                title: 'Semua tiket sudah ditindaklanjuti',
-                message: 'Tidak ada tiket delivered yang menunggu feedback.',
+                title: 'Tidak ada tiket tersedia',
+                message: 'Tidak ada link progres servis yang dapat dibagikan.',
               ),
             ...pending.map((raw) {
               final ticket = Map<String, dynamic>.from(raw as Map);
@@ -271,7 +273,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     OutlinedButton.icon(
                       onPressed: () => _copyLink(ticket['id'].toString()),
                       icon: const Icon(Icons.link_rounded),
-                      label: const Text('Salin link feedback'),
+                      label: const Text('Salin link progres'),
                     ),
                   ],
                 ),
@@ -292,6 +294,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   ? Map<String, dynamic>.from(feedback['follow_up'] as Map)
                   : null;
               final rating = (feedback['rating'] as num?)?.toInt() ?? 0;
+              final technicianRating = (feedback['technician_rating'] as num?)
+                  ?.toInt();
+              final technician = feedback['technician_employee']?.toString();
               return OpsCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,15 +310,25 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
-                        Text(
-                          '★ $rating/5',
-                          style: const TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
                       ],
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pelayan: ${feedback['employee'] ?? '-'} · ★ $rating/5',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (technicianRating != null ||
+                        technician?.trim().isNotEmpty == true)
+                      Text(
+                        'Teknisi: ${technician ?? '-'} · ★ ${technicianRating ?? '-'}/5',
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Text(
                       feedback['comments']?.toString().isNotEmpty == true

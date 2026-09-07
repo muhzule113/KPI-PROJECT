@@ -52,7 +52,7 @@ class WebDashboardTest extends TestCase
             ->assertOk();
     }
 
-    public function test_authenticated_user_receives_navigation_on_non_dashboard_pages(): void
+    public function test_super_admin_receives_all_web_navigation_on_non_dashboard_pages(): void
     {
         $user = User::where('email', 'admin@kpi.com')->firstOrFail();
 
@@ -68,7 +68,13 @@ class WebDashboardTest extends TestCase
             ->all();
 
         $this->assertContains('/app/employees', $links);
-        $this->assertNotContains('/app/kpi-periods', $links);
+        $this->assertContains('/app/service-tickets', $links);
+        $this->assertContains('/app/team-tasks', $links);
+        $this->assertNotContains('/app/supervisor-daily-assessments', $links);
+        $this->assertContains('/app/manager-daily-assessments', $links);
+        $this->assertContains('/app/kpi-periods', $links);
+        $this->assertContains('/app/kpi-administration', $links);
+        $this->assertNotContains('/app/kpi-definitions', $links);
     }
 
     public function test_super_admin_can_view_user_accounts_separately_from_employee_profiles(): void
@@ -88,6 +94,42 @@ class WebDashboardTest extends TestCase
             ->all();
 
         $this->assertContains('manager@toko.com', $emails);
+    }
+
+    public function test_super_admin_can_open_role_specific_web_pages(): void
+    {
+        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $date = KpiPeriod::where('status', 'OPEN')->firstOrFail()->start_date->toDateString();
+
+        foreach ([
+            '/app/service-tickets',
+            '/app/kpi-template-items',
+            "/app/supervisor-attendance?date={$date}",
+            "/app/supervisor-daily-assessments?date={$date}",
+            "/app/manager-daily-assessments?date={$date}",
+            "/app/my-kpi/daily?date={$date}",
+        ] as $url) {
+            $this->actingAs($admin)->get($url)->assertOk();
+        }
+    }
+
+    public function test_super_admin_can_choose_a_branch_when_creating_stock_opname(): void
+    {
+        $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
+        $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
+        $branch = $period->branches()->firstOrFail();
+
+        $form = $this->actingAs($admin)->get('/app/stock-opnames/create')->assertOk();
+        $this->assertContains('branch_id', array_column($form->inertiaProps('resource.fields'), 'name'));
+
+        $this->post('/app/stock-opnames', [
+            'code' => 'OPN-SUPER-001',
+            'period_id' => $period->id,
+            'branch_id' => $branch->id,
+            'deadline' => $period->end_date->toDateString(),
+        ])->assertRedirect('/app/stock-opnames');
+
+        $this->assertDatabaseHas('stock_opnames', ['code' => 'OPN-SUPER-001', 'branch_id' => $branch->id]);
     }
 
     public function test_manager_cannot_manage_user_accounts(): void

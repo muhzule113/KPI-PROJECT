@@ -8,12 +8,14 @@ class DailyAssessmentScreen extends StatefulWidget {
   final bool manager;
   final DateTime? initialDate;
   final String? entryId;
+  final String? kpiId;
 
   const DailyAssessmentScreen({
     super.key,
     required this.manager,
     this.initialDate,
     this.entryId,
+    this.kpiId,
   });
 
   @override
@@ -30,6 +32,9 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
   final Map<String, String> _ratings = {};
   final Map<String, String> _attendance = {};
   final Map<String, Set<String>> _rubric = {};
+  final Set<String> _editing = {};
+  String? _approvingKpi;
+  String _managerSection = 'staff_confirmation';
 
   String get _dateValue => _date.toIso8601String().substring(0, 10);
   String get _endpoint =>
@@ -62,7 +67,12 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
       });
     }
     try {
-      final response = await ApiService.get('$_endpoint?date=$_dateValue');
+      final focus = widget.kpiId == null
+          ? ''
+          : '&kpi_id=${Uri.encodeQueryComponent(widget.kpiId!)}';
+      final response = await ApiService.get(
+        '$_endpoint?date=$_dateValue$focus',
+      );
       if (!mounted) return;
       for (final raw in List<dynamic>.from(
         response['data'] as List? ?? const [],
@@ -118,6 +128,12 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
                   entry['id'].toString() == widget.entryId,
             )
             .toList();
+        if (widget.manager &&
+            (widget.entryId != null || widget.kpiId != null) &&
+            _entries.isNotEmpty) {
+          _managerSection =
+              _entries.first['review_mode']?.toString() ?? _managerSection;
+        }
         _loading = false;
       });
     } catch (exception) {
@@ -165,6 +181,25 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
         _errorSnack('Pilih predikat penilaian terlebih dahulu.');
         return;
       }
+      final options = List<dynamic>.from(
+        item['manual_rating_options'] as List? ?? const [],
+      );
+      final selected = options.cast<Map>().firstWhere(
+        (option) => option['code']?.toString() == rating,
+        orElse: () => const {},
+      );
+      final score = num.tryParse(selected['score']?.toString() ?? '');
+      final target = num.tryParse(item['target_value']?.toString() ?? '');
+      if (!widget.manager &&
+          score != null &&
+          target != null &&
+          score < target &&
+          note.isEmpty) {
+        _errorSnack(
+          'Catatan wajib diisi jika predikat berada di bawah target indikator.',
+        );
+        return;
+      }
       body['actual_json'] = {'rating_code': rating};
       if (widget.manager && decision == 'approved') {
         final previous = _ratingCode(entry['supervisor_actual_json']);
@@ -183,7 +218,8 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
         _errorSnack('Pilih status kehadiran terlebih dahulu.');
         return;
       }
-      if (['permission', 'sick_leave', 'absent'].contains(status) &&
+      if (!widget.manager &&
+          ['permission', 'sick_leave', 'absent'].contains(status) &&
           note.isEmpty) {
         _errorSnack('Catatan wajib diisi untuk status kehadiran ini.');
         return;
@@ -224,7 +260,7 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
         if (reason == null) return;
         body['note'] = reason;
       }
-    } else if (decision == 'approved') {
+    } else if (decision == 'approved' && !_isOfficialSource(item)) {
       final value = double.tryParse(_values[id]?.text.trim() ?? '');
       if (value == null && entry['item']?['system_actual'] == null) {
         _errorSnack('Nilai aktual wajib diisi.');
@@ -268,6 +304,50 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
     }
   }
 
+  Future<void> _approveAll(List<Map<String, dynamic>> entries) async {
+    if (entries.isEmpty || _approvingKpi != null) return;
+    final kpiId = entries.first['kpi_id'].toString();
+    setState(() => _approvingKpi = kpiId);
+    try {
+      final response = await ApiService.post(
+        '/manager/daily/$kpiId/approve-all',
+        {'date': _dateValue},
+      );
+      if (!mounted) return;
+      _showMessage(
+        response['message']?.toString() ??
+            'Seluruh indikator staf berhasil disetujui.',
+      );
+      await _load();
+    } catch (exception) {
+      if (mounted) _errorSnack(_exceptionMessage(exception));
+    } finally {
+      if (mounted) setState(() => _approvingKpi = null);
+    }
+  }
+
+  Future<void> _approveAutomatic(List<Map<String, dynamic>> entries) async {
+    if (entries.isEmpty || _approvingKpi != null) return;
+    final kpiId = entries.first['kpi_id'].toString();
+    setState(() => _approvingKpi = kpiId);
+    try {
+      final response = await ApiService.post(
+        '/supervisor/daily/$kpiId/approve-all',
+        {'date': _dateValue},
+      );
+      if (!mounted) return;
+      _showMessage(
+        response['message']?.toString() ??
+            'Indikator otomatis berhasil dikonfirmasi.',
+      );
+      await _load();
+    } catch (exception) {
+      if (mounted) _errorSnack(_exceptionMessage(exception));
+    } finally {
+      if (mounted) setState(() => _approvingKpi = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: OpsScreenLoading(rows: 5));
@@ -293,12 +373,17 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text('Penilaian Harian $_roleLabel'),
+        title: Text(
+          widget.kpiId == null
+              ? 'Penilaian Harian $_roleLabel'
+              : 'Penilaian Tim',
+        ),
         actions: [
-          IconButton(
-            onPressed: _pickDate,
-            icon: const Icon(Icons.calendar_month_rounded),
-          ),
+          if (widget.kpiId == null)
+            IconButton(
+              onPressed: _pickDate,
+              icon: const Icon(Icons.calendar_month_rounded),
+            ),
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
         ],
       ),
@@ -307,38 +392,361 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 40),
           children: [
-            OpsCard(
-              child: Row(
+            if (widget.kpiId == null)
+              OpsCard(
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_rounded,
+                      color: AppTheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _dateValue,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    TextButton(onPressed: _pickDate, child: const Text('Ubah')),
+                  ],
+                ),
+              ),
+            if (widget.manager && widget.kpiId == null) ...[
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  const Icon(
-                    Icons.calendar_today_rounded,
-                    color: AppTheme.primary,
-                  ),
-                  const SizedBox(width: 10),
+                  Expanded(child: _sectionButton('Staf', 'staff_confirmation')),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      _dateValue,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    child: _sectionButton(
+                      'Supervisor',
+                      'supervisor_assessment',
                     ),
                   ),
-                  TextButton(onPressed: _pickDate, child: const Text('Ubah')),
                 ],
               ),
-            ),
-            if (_entries.isEmpty)
-              const KpiEmptyState(
+            ],
+            if (_visibleEntries.isEmpty)
+              KpiEmptyState(
                 icon: Icons.check_circle_outline,
-                title: 'Tidak ada antrean',
-                message:
-                    'Belum ada fakta KPI yang siap diproses untuk tanggal ini.',
+                title: widget.kpiId == null
+                    ? 'Belum ada data'
+                    : 'Penilaian karyawan ini selesai',
+                message: widget.kpiId != null
+                    ? 'Tidak ada lagi tindakan wajib yang menunggu.'
+                    : widget.manager && _managerSection == 'staff_confirmation'
+                    ? 'Supervisor belum menyelesaikan penilaian, penugasan Manager belum tersedia, atau tidak ada data pada tanggal ini.'
+                    : widget.manager
+                    ? 'Tidak ada KPI Supervisor yang ditugaskan pada tanggal ini.'
+                    : 'Belum ada fakta KPI yang siap diproses untuk tanggal ini.',
               ),
-            ..._entries.map(
-              (raw) => _entryCard(Map<String, dynamic>.from(raw as Map)),
-            ),
+            if (_visibleEntries.isEmpty && widget.kpiId != null)
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Kembali ke Penilaian Tim'),
+              ),
+            if (!widget.manager && widget.kpiId != null && _automaticReady) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _approvingKpi == null
+                      ? () => _approveAutomatic(_automaticEntries)
+                      : null,
+                  icon: const Icon(Icons.done_all_rounded),
+                  label: Text(
+                    _approvingKpi == null
+                        ? 'Konfirmasi otomatis'
+                        : 'Mengonfirmasi...',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (widget.manager &&
+                widget.kpiId == null &&
+                _managerSection == 'staff_confirmation')
+              ..._managerGroups.values.map(_managerGroup)
+            else
+              ..._visibleEntries.map(_entryCard),
           ],
         ),
       ),
     );
+  }
+
+  Widget _sectionButton(String label, String value) {
+    final selected = _managerSection == value;
+    return selected
+        ? FilledButton(
+            onPressed: () => setState(() => _managerSection = value),
+            child: Text(label),
+          )
+        : OutlinedButton(
+            onPressed: () => setState(() => _managerSection = value),
+            child: Text(label),
+          );
+  }
+
+  List<Map<String, dynamic>> get _visibleEntries {
+    final entries = _entries
+        .where(
+          (raw) =>
+              !widget.manager ||
+              widget.kpiId != null ||
+              raw['review_mode']?.toString() == _managerSection,
+        )
+        .map((raw) => Map<String, dynamic>.from(raw as Map))
+        .toList();
+    entries.sort(
+      (left, right) => _entryPriority(left).compareTo(_entryPriority(right)),
+    );
+    return entries;
+  }
+
+  int _entryPriority(Map<String, dynamic> entry) {
+    final item = Map<String, dynamic>.from(entry['item'] as Map? ?? const {});
+    if (item['input_type'] == 'attendance') return 0;
+    return _isOfficialSource(item) ? 2 : 1;
+  }
+
+  List<Map<String, dynamic>> get _automaticEntries => _visibleEntries.where((
+    entry,
+  ) {
+    final item = Map<String, dynamic>.from(entry['item'] as Map? ?? const {});
+    return item['input_type'] != 'attendance' && _isOfficialSource(item);
+  }).toList();
+
+  bool get _automaticReady =>
+      _automaticEntries.isNotEmpty &&
+      _automaticEntries.every((entry) {
+        final item = Map<String, dynamic>.from(
+          entry['item'] as Map? ?? const {},
+        );
+        return entry['system_actual_decimal'] != null ||
+            item['system_actual'] != null;
+      });
+
+  Map<String, List<Map<String, dynamic>>> get _managerGroups {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final entry in _visibleEntries) {
+      groups.putIfAbsent(entry['kpi_id'].toString(), () => []).add(entry);
+    }
+    return groups;
+  }
+
+  Widget _managerGroup(List<Map<String, dynamic>> entries) {
+    final employee = Map<String, dynamic>.from(
+      entries.first['employee'] as Map? ?? const {},
+    );
+    final allApproved = entries.every(
+      (entry) => entry['manager_status'] == 'approved',
+    );
+    final changed = entries.any(_managerChanged);
+    final status = allApproved
+        ? (changed ? 'Diubah Manager' : 'Disetujui')
+        : 'Menunggu tinjauan';
+    final kpiId = entries.first['kpi_id'].toString();
+
+    return OpsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      employee['name']?.toString() ?? 'Karyawan',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      '${employee['position'] ?? 'Jabatan belum tersedia'} · ${employee['branch'] ?? 'Cabang belum tersedia'}',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              KpiStatusPill(
+                label: status,
+                color: changed || allApproved
+                    ? AppTheme.statusApproved
+                    : AppTheme.textMuted,
+                icon: Icons.fact_check_rounded,
+              ),
+            ],
+          ),
+          if (!allApproved) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _approvingKpi == null
+                    ? () => _approveAll(entries)
+                    : null,
+                icon: const Icon(Icons.done_all_rounded),
+                label: Text(
+                  _approvingKpi == kpiId ? 'Menyetujui...' : 'Setujui semua',
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          ...entries.map(_managerEntry),
+        ],
+      ),
+    );
+  }
+
+  Widget _managerEntry(Map<String, dynamic> entry) {
+    final id = entry['id'].toString();
+    final item = Map<String, dynamic>.from(entry['item'] as Map? ?? const {});
+    final editing = _editing.contains(id);
+    final status = entry['manager_status'] == 'approved'
+        ? (_managerChanged(entry) ? 'Diubah Manager' : 'Disetujui')
+        : 'Menunggu tinjauan';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppTheme.border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item['code'] ?? 'KPI'} · ${item['name'] ?? 'Indikator'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Hasil Supervisor: ${_supervisorSummary(entry, item)}',
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(status, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!editing)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (entry['manager_status'] != 'approved')
+                  FilledButton.icon(
+                    onPressed: () => _assess(entry, 'approved'),
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Setujui'),
+                  ),
+                OutlinedButton(
+                  onPressed: () => setState(() => _editing.add(id)),
+                  child: const Text('Ubah'),
+                ),
+              ],
+            )
+          else ...[
+            _inputFor(entry, item, item['input_type']?.toString() ?? 'numeric'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _notes[id],
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Alasan perubahan'),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _assess(entry, 'approved'),
+                  icon: const Icon(Icons.save_rounded),
+                  label: const Text('Simpan'),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _editing.remove(id)),
+                  child: const Text('Batal'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _supervisorSummary(
+    Map<String, dynamic> entry,
+    Map<String, dynamic> item,
+  ) {
+    final type = item['input_type']?.toString();
+    if (type == 'rating') {
+      final code = _ratingCode(entry['supervisor_actual_json']);
+      final options = List<dynamic>.from(
+        item['manual_rating_options'] as List? ?? const [],
+      );
+      final option = options.whereType<Map>().firstWhere(
+        (candidate) => candidate['code']?.toString() == code,
+        orElse: () => const {},
+      );
+      return option['label']?.toString() ?? code ?? 'Belum tersedia';
+    }
+    if (type == 'attendance') {
+      return _attendanceStatus(entry['supervisor_actual_json']) ??
+          'Belum tersedia';
+    }
+    final value = item['formula'] == 'rubric'
+        ? entry['supervisor_score_percentage']
+        : entry['supervisor_actual_decimal'] ??
+              entry['employee_actual_decimal'] ??
+              entry['system_actual_decimal'] ??
+              item['system_actual'];
+    return value == null ? 'Belum tersedia' : value.toString();
+  }
+
+  bool _managerChanged(Map<String, dynamic> entry) {
+    if (entry['manager_status'] != 'approved') return false;
+    final item = Map<String, dynamic>.from(entry['item'] as Map? ?? const {});
+    final type = item['input_type']?.toString();
+    if (type == 'rating') {
+      return _ratingCode(entry['manager_actual_json']) !=
+          _ratingCode(entry['supervisor_actual_json']);
+    }
+    if (type == 'attendance') {
+      return _attendanceStatus(entry['manager_actual_json']) !=
+          _attendanceStatus(entry['supervisor_actual_json']);
+    }
+    if (item['formula'] == 'rubric') {
+      return !_sameIds(
+        _fulfilledIds(entry['manager_answers']),
+        _fulfilledIds(entry['supervisor_answers']),
+      );
+    }
+    final manager = num.tryParse(
+      entry['manager_actual_decimal']?.toString() ?? '',
+    );
+    final supervisor = num.tryParse(
+      (entry['supervisor_actual_decimal'] ??
+                  entry['employee_actual_decimal'] ??
+                  entry['system_actual_decimal'] ??
+                  item['system_actual'])
+              ?.toString() ??
+          '',
+    );
+    return manager != null &&
+        supervisor != null &&
+        (manager - supervisor).abs() > 0.000001;
   }
 
   Widget _entryCard(Map<String, dynamic> entry) {
@@ -377,7 +785,7 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Target: ${item['target_value'] ?? '—'} ${item['target_unit'] ?? ''}',
+            'Target: ${item['target_value'] ?? 'Belum ditentukan'} ${item['target_unit'] ?? ''}',
             style: const TextStyle(fontSize: 12),
           ),
           if (item['system_actual'] != null)
@@ -454,19 +862,42 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
       final options = List<dynamic>.from(
         item['manual_rating_options'] as List? ?? const [],
       );
-      return OpsSelectionField<String>(
-        label: 'Predikat',
-        sheetTitle: 'Pilih predikat',
-        value: _ratings[id]?.isEmpty == true ? null : _ratings[id],
-        options: options.map((raw) {
-          final option = Map<String, dynamic>.from(raw as Map);
-          return OpsSelectionOption<String>(
-            value: option['code'].toString(),
-            label: option['label']?.toString() ?? option['code'].toString(),
-            supportingText: 'Skor ${option['score'] ?? 0}%',
-          );
-        }).toList(),
-        onChanged: (value) => setState(() => _ratings[id] = value),
+      final criteria = List<dynamic>.from(
+        item['rubric']?['criteria'] as List? ?? const [],
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (criteria.isNotEmpty) ...[
+            const Text(
+              'Panduan kriteria',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            ...criteria.map((raw) {
+              final criterion = Map<String, dynamic>.from(raw as Map);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('• ${criterion['criterion_text'] ?? 'Kriteria'}'),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+          OpsSelectionField<String>(
+            label: 'Predikat',
+            sheetTitle: 'Pilih predikat',
+            value: _ratings[id]?.isEmpty == true ? null : _ratings[id],
+            options: options.map((raw) {
+              final option = Map<String, dynamic>.from(raw as Map);
+              return OpsSelectionOption<String>(
+                value: option['code'].toString(),
+                label: option['label']?.toString() ?? option['code'].toString(),
+                supportingText: 'Skor ${option['score'] ?? 0}%',
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => _ratings[id] = value),
+          ),
+        ],
       );
     }
     if (type == 'rubric') {
@@ -491,6 +922,11 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
             }),
           );
         }).toList(),
+      );
+    }
+    if (_isOfficialSource(item)) {
+      return const Text(
+        'Nilai resmi hanya dapat dikonfirmasi atau diminta koreksi sumber.',
       );
     }
     return TextField(
@@ -549,6 +985,12 @@ class _DailyAssessmentScreenState extends State<DailyAssessmentScreen> {
 
   static bool _sameIds(Set<String> left, Set<String> right) =>
       left.length == right.length && left.containsAll(right);
+
+  static bool _isOfficialSource(Map<String, dynamic> item) => const {
+    'system',
+    'cross_role',
+    'import',
+  }.contains(item['source_type']?.toString().toLowerCase());
 
   Color _statusColor(String? status) => status == 'revision_required'
       ? AppTheme.statusRevision

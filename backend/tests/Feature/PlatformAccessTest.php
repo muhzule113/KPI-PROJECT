@@ -28,7 +28,7 @@ class PlatformAccessTest extends TestCase
             'Supervisor' => ['supervisor', 'POS-SPV', ['mobile', 'web']],
             'Manager' => ['owner_manager', 'POS-OWN', ['mobile', 'web']],
             'Admin KPI' => ['kpi_admin', null, ['web']],
-            'Admin Sistem' => ['super_admin', null, ['web']],
+            'Super Admin' => ['super_admin', null, ['web']],
             'Auditor' => ['auditor', null, ['web']],
         ];
     }
@@ -106,9 +106,9 @@ class PlatformAccessTest extends TestCase
         $this->postJson('/api/v1/auth/login', ['email' => $staff->email, 'password' => 'password'])->assertForbidden();
     }
 
-    public function test_administrative_roles_have_no_operational_or_scoring_authority(): void
+    public function test_kpi_admin_and_auditor_have_no_operational_or_scoring_authority(): void
     {
-        foreach (CapabilityMatrix::ADMIN_ROLES as $role) {
+        foreach (['kpi_admin', 'auditor'] as $role) {
             $user = $this->account($role, 'POS-KSR');
             $this->assertFalse(CapabilityMatrix::has($user, 'tickets.payment'));
             $this->assertFalse(CapabilityMatrix::has($user, 'kpi.self.view'));
@@ -119,6 +119,16 @@ class PlatformAccessTest extends TestCase
         $this->actingAs($auditor, 'web')->get('/app/audit-events')->assertOk();
         $this->actingAs($auditor, 'web')->post('/app/kpi-periods', [])->assertForbidden();
         $this->actingAs($auditor, 'web')->post('/app/users', [])->assertForbidden();
+    }
+
+    public function test_super_admin_has_all_web_capabilities_but_still_cannot_use_mobile(): void
+    {
+        $admin = $this->account('super_admin', null);
+
+        $this->assertTrue(CapabilityMatrix::has($admin, 'tickets.payment'));
+        $this->assertTrue(CapabilityMatrix::has($admin, 'kpi.manager.approval'));
+        $this->actingAs($admin, 'web')->get('/app/service-tickets')->assertOk();
+        $this->actingAs($admin, 'sanctum')->getJson('/api/v1/resources/service-tickets')->assertForbidden();
     }
 
     public function test_system_admin_rejects_conflicting_roles_and_exposes_account_linkage(): void

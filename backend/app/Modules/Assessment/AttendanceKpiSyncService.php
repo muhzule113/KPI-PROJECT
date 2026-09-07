@@ -48,13 +48,12 @@ class AttendanceKpiSyncService
                 continue;
             }
 
-            $rate = $this->calculateAttendanceRate($emp, $period);
-
             if (! KpiWorkflow::canSystemSyncKpi($kpi)) {
                 continue;
             }
 
             foreach ($items as $item) {
+                $rate = $this->calculateAttendanceRate($emp, $period, $item);
                 $item->actual_decimal = $rate;
                 $item->status = 'draft';
                 $item->save();
@@ -74,7 +73,7 @@ class AttendanceKpiSyncService
         ];
     }
 
-    public function calculateAttendanceRate(Employee $emp, KpiPeriod $period): ?float
+    public function calculateAttendanceRate(Employee $emp, KpiPeriod $period, ?EmployeeKpiItem $item = null): ?float
     {
         $start = $period->start_date->copy();
         $end = $period->end_date->copy()->min(now()->startOfDay());
@@ -100,6 +99,15 @@ class AttendanceKpiSyncService
             ->whereBetween('attendance_date', [$start->toDateString(), $end->toDateString()])
             ->get(['attendance_date', 'status'])
             ->keyBy(fn (Attendance $attendance): string => $attendance->attendance_date->toDateString());
+        $managerOverrides = $item ? KpiDailyEntry::where('employee_kpi_item_id', $item->id)
+            ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
+            ->where('manager_status', 'approved')
+            ->get(['entry_date', 'manager_actual_json'])
+            ->mapWithKeys(fn (KpiDailyEntry $entry): array => [
+                $entry->entry_date->toDateString() => data_get($entry->manager_actual_json, 'attendance_status'),
+            ])
+            ->filter()
+            : collect();
 
         $eligibleDays = 0;
         $attendedDays = 0;
@@ -111,7 +119,8 @@ class AttendanceKpiSyncService
                 continue;
             }
 
-            $status = $statusesByDate->get($date->toDateString())?->status;
+            $status = $managerOverrides->get($date->toDateString())
+                ?? $statusesByDate->get($date->toDateString())?->status;
             if ($status === null) {
                 $date->addDay();
 

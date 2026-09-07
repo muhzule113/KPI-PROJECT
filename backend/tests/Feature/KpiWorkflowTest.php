@@ -219,25 +219,22 @@ class KpiWorkflowTest extends TestCase
             ->assertJsonPath('message', 'Pemisahan tugas (SoD): approver tidak boleh menjadi reviewer KPI yang sama.');
     }
 
-    public function test_admin_cannot_review_or_approve_employee_kpi(): void
+    public function test_super_admin_can_review_and_manage_any_employee_kpi_on_web(): void
     {
         $admin = User::where('email', 'admin@kpi.com')->firstOrFail();
         $period = KpiPeriod::where('status', 'OPEN')->firstOrFail();
         $employee = Employee::whereHas('user', fn ($query) => $query->where('email', 'teknisi@toko.com'))->firstOrFail();
         $kpi = EmployeeKpi::where('period_id', $period->id)->where('employee_id', $employee->id)->firstOrFail();
 
-        $this->assertFalse(KpiWorkflow::canReviewKpi($admin, $kpi));
-        $this->assertFalse(KpiWorkflow::canManageKpi($admin, $kpi));
-        $this->actingAs($admin, 'web')->get("/app/employee-kpis/{$kpi->id}/assessment")->assertForbidden();
+        $kpi->update(['status' => 'submitted']);
 
-        $admin->assignRole('owner_manager', 'supervisor');
-        $this->assertFalse(KpiWorkflow::canReviewKpi($admin->fresh(), $kpi));
-        $this->assertFalse(KpiWorkflow::canManageKpi($admin->fresh(), $kpi));
-
-        $kpi->update(['status' => 'pending_approval']);
-        $kpi->items()->update(['status' => 'verified']);
-
-        $this->actingAs($admin, 'web')->get("/app/employee-kpis/{$kpi->id}/assessment")->assertRedirect('/login');
+        $this->assertTrue(KpiWorkflow::canReviewKpi($admin, $kpi));
+        $this->assertTrue(KpiWorkflow::canManageKpi($admin, $kpi));
+        $this->actingAs($admin, 'web')->get('/app/supervisor-reviews')->assertInertia(
+            fn ($page) => $page->where('pagination.total', 1)
+        );
+        $this->actingAs($admin, 'web')->get("/app/supervisor-reviews/{$kpi->id}/review")->assertOk();
+        $this->actingAs($admin, 'web')->get("/app/employee-kpis/{$kpi->id}/assessment")->assertOk();
         $this->actingAs($admin, 'sanctum')->getJson('/api/v1/manager/queue')->assertForbidden();
     }
 

@@ -28,38 +28,65 @@ void main() {
   test('pencabutan sesi menghapus login, penolakan aksi biasa tidak', () async {
     var cleared = false;
     ApiService.onUnauthorized = () async => cleared = true;
-    ApiService.client = MockClient((_) async => http.Response(
-      jsonEncode({'message': 'Aksi tidak diizinkan'}), 403,
-    ));
-    await expectLater(ApiService.get('/dashboard'), throwsA(isA<ApiException>()));
+    ApiService.client = MockClient(
+      (_) async =>
+          http.Response(jsonEncode({'message': 'Aksi tidak diizinkan'}), 403),
+    );
+    await expectLater(
+      ApiService.get('/dashboard'),
+      throwsA(isA<ApiException>()),
+    );
     expect(cleared, false);
-    ApiService.client = MockClient((_) async => http.Response(
-      jsonEncode({'message': 'Akun tidak aktif', 'code': 'SESSION_REVOKED'}), 403,
-    ));
-    await expectLater(ApiService.get('/dashboard'), throwsA(isA<ApiException>()));
+    ApiService.client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({'message': 'Akun tidak aktif', 'code': 'SESSION_REVOKED'}),
+        403,
+      ),
+    );
+    await expectLater(
+      ApiService.get('/dashboard'),
+      throwsA(isA<ApiException>()),
+    );
     expect(cleared, true);
   });
 
-  testWidgets('notifikasi yang sudah dibaca membuka periode KPI terkait', (tester) async {
+  testWidgets('notifikasi yang sudah dibaca membuka periode KPI terkait', (
+    tester,
+  ) async {
     String? requestedPeriod;
     ApiService.client = MockClient((request) async {
       dynamic data;
       if (request.url.path.endsWith('/notifications')) {
-        data = [{'id': 'n-1', 'title': 'Hasil periode lalu', 'body': 'Sudah terbit',
-          'is_read': true, 'created_at': '2026-07-01T09:00:00',
-          'destination': {'screen': 'my-kpi', 'period_id': 7}}];
+        data = [
+          {
+            'id': 'n-1',
+            'title': 'Hasil periode lalu',
+            'body': 'Sudah terbit',
+            'is_read': true,
+            'created_at': '2026-07-01T09:00:00',
+            'destination': {'screen': 'my-kpi', 'period_id': 7},
+          },
+        ];
       } else {
         requestedPeriod = request.url.queryParameters['period_id'];
-        data = {'id': 'k-7', 'period': {'id': 7, 'name': 'Riwayat Juli'},
-          'status': 'locked', 'score_visible': true, 'final_score': 95,
-          'rating_label': 'Sangat Baik', 'items': []};
+        data = {
+          'id': 'k-7',
+          'period': {'id': 7, 'name': 'Riwayat Juli'},
+          'status': 'locked',
+          'score_visible': true,
+          'final_score': 95,
+          'rating_label': 'Sangat Baik',
+          'items': [],
+        };
       }
       return http.Response(jsonEncode({'success': true, 'data': data}), 200);
     });
-    await tester.pumpWidget(ChangeNotifierProvider<AuthProvider>(
-      create: (_) => _Session({'kpi.self.view'}),
-      child: const MaterialApp(home: NotificationScreen()),
-    ));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>(
+        create: (_) => _Session({'kpi.self.view'}),
+        child: const MaterialApp(home: NotificationScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Hasil periode lalu'));
     await tester.pumpAndSettle();
@@ -68,19 +95,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('tugas Manager menampilkan approval dan penilaian Supervisor', (tester) async {
-    ApiService.client = MockClient((_) async => http.Response(
-      jsonEncode({'success': true, 'data': {}}), 200,
-    ));
-    await tester.pumpWidget(ChangeNotifierProvider<AuthProvider>(
-      create: (_) => _Session({'kpi.manager.approval', 'reports.view'}),
-      child: const MaterialApp(home: DashboardScreen()),
-    ));
+  testWidgets('tugas Manager memakai satu pintu Penilaian Tim', (tester) async {
+    ApiService.client = MockClient(
+      (_) async =>
+          http.Response(jsonEncode({'success': true, 'data': {}}), 200),
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>(
+        create: (_) => _Session({'kpi.manager.approval', 'reports.view'}),
+        child: const MaterialApp(home: DashboardScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Tugas'));
     await tester.pumpAndSettle();
-    expect(find.text('Approval'), findsOneWidget);
-    expect(find.text('Nilai Supervisor'), findsOneWidget);
+    expect(find.text('Penilaian Tim'), findsOneWidget);
+    expect(find.text('Approval'), findsNothing);
+    expect(find.text('Penilaian Harian'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 }

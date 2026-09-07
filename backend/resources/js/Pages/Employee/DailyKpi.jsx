@@ -1,9 +1,9 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, CalendarDays } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { DatePicker, formatDateValue } from '@/components/ui/date-picker';
 
 const statusLabels = {
     draft: 'Draft',
@@ -14,8 +14,8 @@ const statusLabels = {
 };
 
 export default function DailyKpi({ date, period, kpi, items = [], message }) {
-    const changeDate = (event) => {
-        router.get('/app/my-kpi/daily', { date: event.target.value }, { preserveState: false, replace: true });
+    const changeDate = (value) => {
+        router.get('/app/my-kpi/daily', { date: value }, { preserveState: false, replace: true });
     };
 
     return (
@@ -31,10 +31,9 @@ export default function DailyKpi({ date, period, kpi, items = [], message }) {
                             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">KPI Harian Saya</h1>
                             <p className="mt-1 text-sm text-muted-foreground">Pantau fakta harian yang disiapkan sistem dan hasil review Supervisor.</p>
                         </div>
-                        <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2">
-                            <CalendarDays className="size-4 text-primary" />
+                        <div>
                             <label htmlFor="daily-date" className="sr-only">Tanggal KPI</label>
-                            <Input id="daily-date" type="date" value={date} max={new Date().toISOString().slice(0, 10)} onChange={changeDate} className="w-auto" />
+                            <DatePicker id="daily-date" value={date} max={formatDateValue()} onChange={changeDate} aria-label="Tanggal KPI" />
                         </div>
                     </div>
 

@@ -6,21 +6,19 @@ import '../../app/theme/app_theme.dart';
 import '../../core/api/api_service.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/realtime/realtime_service.dart';
-import '../approval/manager_approval_screen.dart';
 import '../imports/cashier_upload_screen.dart';
 import '../operational/create_ticket_screen.dart';
 import '../operational/feedback_screen.dart';
 import '../operational/resource_screen.dart';
 import '../operational/sparepart_screen.dart';
-import '../attendance/supervisor_attendance_screen.dart';
 import '../reports/kpi_report_screen.dart';
 import '../../app/widgets/kpi_ui.dart';
 import '../my_kpi/my_kpi_screen.dart';
 import '../notifications/notification_screen.dart';
 import '../operational/tickets_list_screen.dart';
 import '../profile/profile_screen.dart';
-import '../review/supervisor_queue_screen.dart';
 import '../review/daily_assessment_screen.dart';
+import '../team_tasks/team_tasks_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -100,11 +98,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _buildHomeTab(auth, employee),
       SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Tugas', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 16),
-          _buildQuickActions(auth),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Tugas', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 16),
+            _buildQuickActions(auth),
+          ],
+        ),
       ),
       if (hasMyKpi) const MyKpiScreen(),
       const ProfileScreen(),
@@ -124,10 +125,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         label: 'Beranda',
       ),
       const NavigationDestination(
-          icon: Icon(Icons.handyman_outlined),
-          selectedIcon: Icon(Icons.handyman_rounded),
-          label: 'Tugas',
-        ),
+        icon: Icon(Icons.handyman_outlined),
+        selectedIcon: Icon(Icons.handyman_rounded),
+        label: 'Tugas',
+      ),
       if (hasMyKpi)
         const NavigationDestination(
           icon: Icon(Icons.insights_outlined),
@@ -275,38 +276,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       );
     }
-    if (auth.isSupervisor) {
+    if (auth.isSupervisor && !auth.isManager) {
       actions.add(
         KpiQuickAction(
-          icon: Icons.rate_review_rounded,
-          label: 'Rekap tim',
+          icon: Icons.assignment_turned_in_rounded,
+          label: 'Penilaian Tim',
           color: AppTheme.statusUnderReview,
-          onTap: () => _pushScreen(const SupervisorQueueScreen()),
-        ),
-      );
-      actions.add(
-        KpiQuickAction(
-          icon: Icons.today_rounded,
-          label: 'Penilaian harian',
-          color: AppTheme.statusVerified,
-          onTap: () => _pushScreen(const DailyAssessmentScreen(manager: false)),
-        ),
-      );
-      actions.add(
-        KpiQuickAction(
-          icon: Icons.fact_check_rounded,
-          label: 'Absensi tim',
-          color: AppTheme.statusSubmitted,
-          onTap: () => _pushScreen(const SupervisorAttendanceScreen()),
-        ),
-      );
-      actions.add(
-        KpiQuickAction(
-          icon: Icons.school_rounded,
-          label: 'Coaching',
-          color: AppTheme.statusUnderReview,
-          onTap: () =>
-              _pushScreen(const ResourceScreen(resource: 'coaching-logs')),
+          onTap: () => _pushScreen(const TeamTasksScreen(manager: false)),
         ),
       );
     }
@@ -314,25 +290,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       actions.add(
         KpiQuickAction(
           icon: Icons.verified_user_rounded,
-          label: 'Approval',
+          label: 'Penilaian Tim',
           color: AppTheme.statusApproved,
-          onTap: () => _pushScreen(const ManagerApprovalScreen()),
+          onTap: () => _pushScreen(const TeamTasksScreen(manager: true)),
         ),
       );
       actions.add(
         KpiQuickAction(
-          icon: Icons.today_rounded,
-          label: 'Nilai Supervisor',
-          color: AppTheme.statusVerified,
+          icon: Icons.rule_rounded,
+          label: 'Tinjauan Opsional',
+          color: AppTheme.statusSubmitted,
           onTap: () => _pushScreen(const DailyAssessmentScreen(manager: true)),
-        ),
-      );
-      actions.add(
-        KpiQuickAction(
-          icon: Icons.assessment_rounded,
-          label: 'Laporan KPI',
-          color: AppTheme.statusVerified,
-          onTap: () => _pushScreen(const KpiReportScreen()),
         ),
       );
       if (auth.hasCapability('attendance.manage')) {
@@ -347,19 +315,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     }
-    if (auth.hasCapability('reports.view') && !auth.isManager) {
-      actions.add(KpiQuickAction(
-        icon: Icons.assessment_rounded,
-        label: 'Laporan tim',
-        onTap: () => _pushScreen(const KpiReportScreen()),
-      ));
+    if (auth.hasCapability('reports.view')) {
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.assessment_rounded,
+          label: 'Hasil KPI',
+          onTap: () => _pushScreen(const KpiReportScreen()),
+        ),
+      );
+    }
+    if (auth.hasCapability('coaching.manage')) {
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.school_outlined,
+          label: 'Coaching',
+          onTap: () => _pushScreen(
+            const ResourceScreen(resource: 'coaching-logs', title: 'Coaching'),
+          ),
+        ),
+      );
     }
     if (auth.isGudang) {
-      actions.add(KpiQuickAction(
-        icon: Icons.inventory_outlined,
-        label: 'Daftar stok',
-        onTap: () => _pushScreen(const ResourceScreen(resource: 'spareparts')),
-      ));
+      actions.add(
+        KpiQuickAction(
+          icon: Icons.inventory_outlined,
+          label: 'Daftar stok',
+          onTap: () =>
+              _pushScreen(const ResourceScreen(resource: 'spareparts')),
+        ),
+      );
     }
     if (auth.hasCapability('feedback.view')) {
       actions.add(
@@ -401,9 +385,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         KpiQuickAction(
           icon: Icons.assignment_turned_in_rounded,
           label: 'Lihat KPI saya',
-          onTap: () => setState(
-            () => _currentIndex = hasMyKpi ? 2 : 0,
-          ),
+          onTap: () => setState(() => _currentIndex = hasMyKpi ? 2 : 0),
         ),
       );
     }
@@ -586,7 +568,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 24),
 
-            // Quick actions — role-aware, mengikuti pola shortcut pada referensi.
+            // Quick actions mengikuti role dan pola shortcut pada referensi.
             KpiSectionHeader(title: 'Akses cepat'),
             const SizedBox(height: 12),
             _buildQuickActions(auth),

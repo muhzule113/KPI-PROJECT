@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\EmployeeKpiItem;
 use App\Models\KpiDailyEntry;
 use App\Modules\Assessment\DailyAssessmentService;
+use App\Support\CapabilityMatrix;
 use App\Support\KpiVisibility;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,7 @@ final class DailyAssessmentController extends Controller
 
     public function employee(Request $request): Response
     {
-        abort_unless($request->user()->employee, 403);
+        abort_unless($request->user()->employee || $request->user()->hasRole('super_admin'), 403);
         $date = $this->date($request);
 
         try {
@@ -85,7 +86,7 @@ final class DailyAssessmentController extends Controller
 
     public function legacyKpi(Request $request, string $kpi): RedirectResponse
     {
-        abort_unless($request->user()->employee, 403);
+        abort_unless($request->user()->employee || $request->user()->hasRole('super_admin'), 403);
 
         return redirect('/app/my-kpi/daily');
     }
@@ -124,14 +125,17 @@ final class DailyAssessmentController extends Controller
 
     public function supervisorQueue(Request $request): Response
     {
-        abort_unless($request->user()->hasRole('supervisor') && ! $request->user()->hasRole('super_admin'), 403);
+        abort_unless(CapabilityMatrix::has($request->user(), 'kpi.supervisor.daily'), 403);
         $date = $this->date($request);
+        $kpiId = $request->validate(['kpi_id' => ['nullable', 'string']])['kpi_id'] ?? null;
 
         try {
-            $entries = $this->dailyAssessmentService->supervisorQueue($request->user(), $date);
+            $entries = $this->dailyAssessmentService->supervisorQueue($request->user(), $date, $kpiId);
             $deadline = $this->dailyAssessmentService->assessmentDeadline($date, 'supervisor');
             $message = null;
             $canAssess = $deadline === null || ! $deadline->isPast();
+        } catch (AuthorizationException $exception) {
+            abort(403, $exception->getMessage());
         } catch (\Throwable $exception) {
             $entries = collect();
             $deadline = null;
@@ -141,9 +145,10 @@ final class DailyAssessmentController extends Controller
 
         return Inertia::render('Admin/DailyAssessmentQueue', [
             'role' => 'supervisor',
-            'title' => 'Review KPI Harian',
-            'description' => 'Data KPI disiapkan otomatis. Untuk indikator subjektif pilih Cukup, Baik, atau Sangat Baik; status kehadiran dicatat di sini sebelum diteruskan ke Manager.',
+            'title' => $kpiId ? 'Penilaian Tim' : 'Penilaian Harian Tim',
+            'description' => $kpiId ? 'Selesaikan kehadiran dan penilaian karyawan ini dari atas ke bawah.' : 'Pilih tanggal untuk membuka antrean penilaian harian lama.',
             'date' => $date,
+            'kpi_id' => $kpiId,
             'entries' => $entries->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))->values()->all(),
             'message' => $message,
             'deadline' => $deadline?->toIso8601String(),
@@ -166,8 +171,27 @@ final class DailyAssessmentController extends Controller
                 note: $data['note'] ?? null
             );
 
-            return redirect("/app/supervisor-daily-assessments?date={$result->entry_date->toDateString()}")
+            $query = ['date' => $result->entry_date->toDateString()];
+            if ($request->filled('kpi_id')) {
+                $query['kpi_id'] = $request->string('kpi_id')->toString();
+            }
+
+            return redirect('/app/supervisor-daily-assessments?'.http_build_query($query))
                 ->with('success', 'Penilaian harian Supervisor berhasil disimpan.');
+        } catch (\Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+    }
+
+    public function approveAllSupervisor(Request $request, string $kpi): RedirectResponse
+    {
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+
+        try {
+            $result = $this->dailyAssessmentService->approveAllSupervisor($request->user(), $kpi, $data['date']);
+
+            return redirect('/app/supervisor-daily-assessments?'.http_build_query(['date' => $result['date'], 'kpi_id' => $kpi]))
+                ->with('success', "{$result['approved_count']} indikator otomatis berhasil dikonfirmasi.");
         } catch (\Throwable $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -175,14 +199,17 @@ final class DailyAssessmentController extends Controller
 
     public function managerQueue(Request $request): Response
     {
-        abort_unless($request->user()->hasRole('owner_manager') && ! $request->user()->hasRole('super_admin'), 403);
+        abort_unless(CapabilityMatrix::has($request->user(), 'kpi.manager.daily'), 403);
         $date = $this->date($request);
+        $kpiId = $request->validate(['kpi_id' => ['nullable', 'string']])['kpi_id'] ?? null;
 
         try {
-            $entries = $this->dailyAssessmentService->managerQueue($request->user(), $date);
+            $entries = $this->dailyAssessmentService->managerQueue($request->user(), $date, $kpiId);
             $deadline = $this->dailyAssessmentService->assessmentDeadline($date, 'manager');
             $message = null;
             $canAssess = $deadline === null || ! $deadline->isPast();
+        } catch (AuthorizationException $exception) {
+            abort(403, $exception->getMessage());
         } catch (\Throwable $exception) {
             $entries = collect();
             $deadline = null;
@@ -192,9 +219,10 @@ final class DailyAssessmentController extends Controller
 
         return Inertia::render('Admin/DailyAssessmentQueue', [
             'role' => 'manager',
-            'title' => 'Penilaian Harian Supervisor',
-            'description' => 'Manager menilai KPI Supervisor yang ditugaskan. KPI staf disahkan melalui rekap bulanan.',
+            'title' => $kpiId ? 'Penilaian Tim' : 'Tinjauan Opsional',
+            'description' => $kpiId ? 'Selesaikan penilaian karyawan ini dari atas ke bawah.' : 'Tinjauan harian staf tidak memengaruhi daftar pekerjaan wajib.',
             'date' => $date,
+            'kpi_id' => $kpiId,
             'entries' => $entries->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))->values()->all(),
             'message' => $message,
             'deadline' => $deadline?->toIso8601String(),
@@ -217,8 +245,27 @@ final class DailyAssessmentController extends Controller
                 note: $data['note'] ?? null
             );
 
-            return redirect("/app/manager-daily-assessments?date={$result->entry_date->toDateString()}")
+            $query = ['date' => $result->entry_date->toDateString()];
+            if ($request->filled('kpi_id')) {
+                $query['kpi_id'] = $request->string('kpi_id')->toString();
+            }
+
+            return redirect('/app/manager-daily-assessments?'.http_build_query($query))
                 ->with('success', 'Penilaian harian Manager berhasil disimpan dan total bulanan diperbarui.');
+        } catch (\Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+    }
+
+    public function approveAllManager(Request $request, string $kpi): RedirectResponse
+    {
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+
+        try {
+            $result = $this->dailyAssessmentService->approveAllManager($request->user(), $kpi, $data['date']);
+
+            return redirect("/app/manager-daily-assessments?date={$result['date']}")
+                ->with('success', "{$result['approved_count']} indikator staf berhasil disetujui.");
         } catch (\Throwable $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -235,6 +282,7 @@ final class DailyAssessmentController extends Controller
             'answers.*.is_fulfilled' => ['required', 'boolean'],
             'answers.*.notes' => ['nullable', 'string'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'kpi_id' => ['nullable', 'string'],
         ]);
     }
 
@@ -255,6 +303,7 @@ final class DailyAssessmentController extends Controller
             'id' => $entry->id,
             'date' => $entry->entry_date?->toDateString(),
             'kpi_id' => (string) $kpi->id,
+            'review_mode' => $kpi->isSupervisorKpi() ? 'supervisor_assessment' : 'staff_confirmation',
             'employee' => [
                 'id' => (string) $employee?->id,
                 'name' => $employee?->name,

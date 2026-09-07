@@ -16,21 +16,30 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
 final class CustomerFeedbackController extends Controller
 {
-    private const FEEDBACK_WINDOW_DAYS = 7;
+    private const STATUS_LABELS = [
+        ServiceTicket::STATUS_INTAKE => 'Diterima',
+        ServiceTicket::STATUS_DIAGNOSING => 'Diagnosis',
+        ServiceTicket::STATUS_WAITING_SPAREPART => 'Menunggu sparepart',
+        ServiceTicket::STATUS_IN_PROGRESS => 'Dikerjakan',
+        ServiceTicket::STATUS_QC_READY => 'Siap QC',
+        ServiceTicket::STATUS_COMPLETED => 'Selesai',
+        ServiceTicket::STATUS_DELIVERED => 'Diserahkan',
+        ServiceTicket::STATUS_CANCELLED => 'Dibatalkan',
+    ];
 
     public function index(Request $request): Response
     {
         $this->authorizeAdmin($request);
         $ticketScope = app(ServiceTicketService::class)->scopeTickets($request->user());
         $tickets = (clone $ticketScope)
-            ->where('status', ServiceTicket::STATUS_DELIVERED)
-            ->whereDoesntHave('feedback')
-            ->orderByDesc('delivered_at')
+            ->customerProgressAvailable()
+            ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get([
                 'id',
@@ -40,29 +49,26 @@ final class CustomerFeedbackController extends Controller
                 'device_model',
                 'status',
                 'delivered_at',
+                'updated_at',
             ]);
         $selectedTicket = $tickets->firstWhere('id', $request->integer('ticket'));
 
         $feedbackQuery = CustomerFeedback::whereIn('service_ticket_id', (clone $ticketScope)->select('id'));
         $feedbackStats = (clone $feedbackQuery)
-            ->selectRaw('COUNT(*) AS total, AVG(rating) AS average')
+            ->selectRaw('COUNT(*) AS total, AVG(rating) AS average, AVG(technician_rating) AS technician_average')
             ->first();
         $feedbacks = $feedbackQuery
-            ->with(['ticket', 'csEmployee'])
+            ->with(['ticket', 'csEmployee', 'technicianEmployee'])
             ->latest()
             ->limit(12)
             ->get()
-            ->map(fn (CustomerFeedback $feedback): array => [
-                'id' => $feedback->getKey(),
-                'ticket_number' => $feedback->ticket?->ticket_number,
-                'customer_name' => $feedback->customer_name,
-                'rating' => $feedback->rating,
-                'comments' => $feedback->comments,
-                'employee' => $feedback->csEmployee?->name,
-                'created_at' => $feedback->created_at?->format('d M Y, H:i'),
-            ])
+            ->map(fn (CustomerFeedback $feedback): array => $this->feedbackPayload($feedback))
             ->values()
             ->all();
+        $pelayanAverage = round((float) ($feedbackStats?->average ?? 0), 1);
+        $technicianAverage = $feedbackStats?->technician_average === null
+            ? null
+            : round((float) $feedbackStats->technician_average, 1);
 
         return Inertia::render('Admin/CustomerFeedback', [
             'tickets' => $tickets->map(fn (ServiceTicket $ticket): array => [
@@ -77,73 +83,85 @@ final class CustomerFeedbackController extends Controller
                 'ticket_number' => $selectedTicket->ticket_number,
                 'customer_name' => $selectedTicket->customer_name,
                 'device' => trim("{$selectedTicket->device_brand} {$selectedTicket->device_model}"),
+                'status' => $selectedTicket->status,
             ] : null,
-            'feedback_url' => $selectedTicket
-                ? $this->feedbackUrl($selectedTicket)
-                : null,
+            'feedback_url' => $selectedTicket ? $this->feedbackUrl($selectedTicket) : null,
             'feedbacks' => $feedbacks,
             'stats' => [
                 'total' => (int) ($feedbackStats?->total ?? 0),
-                'average' => round((float) ($feedbackStats?->average ?? 0), 1),
-                'pending' => $tickets->count(),
+                'average' => $pelayanAverage,
+                'pelayan_average' => $pelayanAverage,
+                'technician_average' => $technicianAverage,
+                'pending' => (clone $ticketScope)
+                    ->customerProgressAvailable()
+                    ->where('status', ServiceTicket::STATUS_DELIVERED)
+                    ->whereDoesntHave('feedback')
+                    ->count(),
             ],
         ]);
     }
 
-    public function show(Request $request, ServiceTicket $ticket): Response
+    public function show(ServiceTicket $ticket): Response
     {
-        $ticket->load(['feedback', 'branch']);
-        $feedbackDeadline = $ticket->delivered_at?->copy()->addDays(self::FEEDBACK_WINDOW_DAYS);
-        abort_unless(
-            $ticket->status === ServiceTicket::STATUS_DELIVERED
-                && ($ticket->feedback || ($feedbackDeadline && now()->lessThan($feedbackDeadline))),
-            404,
-        );
+        $ticket->load(['feedback', 'branch', 'intakeEmployee', 'technicianEmployee']);
+        abort_unless($ticket->customerProgressIsAvailable(), 404);
 
         return Inertia::render('CustomerFeedback/Form', [
             'ticket' => [
                 'number' => $ticket->ticket_number,
                 'customer_name' => $ticket->customer_name,
                 'device' => trim("{$ticket->device_brand} {$ticket->device_model}"),
+                'initial_complaint' => $ticket->initial_complaint,
                 'branch' => $ticket->branch?->name,
+                'pelayan' => $ticket->intakeEmployee?->name,
+                'technician' => $ticket->technicianEmployee?->name,
+                'estimated_completion_at' => $ticket->estimated_completion_at?->toIso8601String(),
+                'updated_at' => $ticket->updated_at?->toIso8601String(),
+                'status' => $ticket->status,
+                'status_label' => self::STATUS_LABELS[$ticket->status] ?? $ticket->status,
+                'timeline' => $this->timeline($ticket->status),
+                'can_feedback' => $ticket->status === ServiceTicket::STATUS_DELIVERED
+                    && ! $ticket->feedback
+                    && $ticket->customerProgressIsAvailable(),
             ],
             'has_feedback' => (bool) $ticket->feedback,
-            'submit_url' => $request->fullUrl(),
+            'submit_url' => URL::signedRoute('customer-feedback.store', ['ticket' => $ticket->getKey()]),
         ]);
     }
 
     public function store(Request $request, ServiceTicket $ticket): RedirectResponse
     {
-        $validated = $request->validate([
-            'rating' => ['required', 'integer', 'between:1,5'],
-            'comments' => ['nullable', 'string', 'max:2000'],
-        ]);
-
-        DB::transaction(function () use ($ticket, $validated): void {
+        DB::transaction(function () use ($request, $ticket): void {
             $lockedTicket = ServiceTicket::query()->lockForUpdate()->findOrFail($ticket->getKey());
 
-            if ($lockedTicket->feedback()->exists()) {
-                return;
-            }
-
+            abort_if($lockedTicket->feedback()->exists(), 409, 'Feedback untuk tiket ini sudah pernah dikirim.');
             abort_unless(
                 $lockedTicket->status === ServiceTicket::STATUS_DELIVERED
-                    && $lockedTicket->delivered_at
-                    && now()->lessThan($lockedTicket->delivered_at->copy()->addDays(self::FEEDBACK_WINDOW_DAYS)),
+                    && $lockedTicket->customerProgressIsAvailable(),
                 422,
                 'Feedback hanya dapat diberikan maksimal 7 hari kalender setelah barang diserahkan.',
             );
 
+            $validated = Validator::make($request->all(), [
+                'rating' => ['required', 'integer', 'between:1,5'],
+                'technician_rating' => $lockedTicket->technician_employee_id
+                    ? ['required', 'integer', 'between:1,5']
+                    : ['prohibited'],
+                'comments' => ['nullable', 'string', 'max:2000'],
+            ])->validate();
+
             $feedback = CustomerFeedback::create([
                 'service_ticket_id' => $lockedTicket->getKey(),
                 'cs_employee_id' => $lockedTicket->intake_by_employee_id,
+                'technician_employee_id' => $lockedTicket->technician_employee_id,
                 'customer_name' => $lockedTicket->customer_name,
                 'rating' => $validated['rating'],
+                'technician_rating' => $validated['technician_rating'] ?? null,
                 'comments' => $validated['comments'] ?? null,
                 'feedback_channel' => 'qr_code',
             ]);
 
-            if ((int) $feedback->rating <= 2) {
+            if ((int) $feedback->rating <= 2 || ($feedback->technician_rating !== null && (int) $feedback->technician_rating <= 2)) {
                 $assignee = Employee::query()
                     ->whereKey($lockedTicket->intake_by_employee_id)
                     ->where('status', 'active')
@@ -177,6 +195,7 @@ final class CustomerFeedbackController extends Controller
                 after: [
                     'service_ticket_id' => $lockedTicket->getKey(),
                     'rating' => $feedback->rating,
+                    'technician_rating' => $feedback->technician_rating,
                     'feedback_channel' => $feedback->feedback_channel,
                 ],
                 actorType: 'customer',
@@ -191,22 +210,61 @@ final class CustomerFeedbackController extends Controller
         return redirect()->to(URL::signedRoute('customer-feedback.show', ['ticket' => $ticket->getKey()]));
     }
 
-    private function feedbackUrl(ServiceTicket $ticket): ?string
+    private function feedbackUrl(ServiceTicket $ticket): string
     {
-        if (! $ticket->delivered_at) {
-            return null;
-        }
+        return URL::signedRoute('customer-feedback.show', ['ticket' => $ticket->getKey()]);
+    }
 
-        $expiresAt = $ticket->delivered_at->copy()->addDays(self::FEEDBACK_WINDOW_DAYS);
-        if (now()->greaterThanOrEqualTo($expiresAt)) {
-            return null;
-        }
+    private function feedbackPayload(CustomerFeedback $feedback): array
+    {
+        return [
+            'id' => $feedback->getKey(),
+            'ticket_number' => $feedback->ticket?->ticket_number,
+            'customer_name' => $feedback->customer_name,
+            'rating' => $feedback->rating,
+            'pelayan_rating' => $feedback->rating,
+            'technician_rating' => $feedback->technician_rating,
+            'comments' => $feedback->comments,
+            'employee' => $feedback->csEmployee?->name,
+            'pelayan_employee' => $feedback->csEmployee?->name,
+            'technician_employee' => $feedback->technicianEmployee?->name,
+            'created_at' => $feedback->created_at?->format('d M Y, H:i'),
+        ];
+    }
 
-        return URL::temporarySignedRoute(
-            'customer-feedback.show',
-            $expiresAt,
-            ['ticket' => $ticket->getKey()],
-        );
+    private function timeline(string $currentStatus): array
+    {
+        $statuses = $currentStatus === ServiceTicket::STATUS_CANCELLED
+            ? [
+                ServiceTicket::STATUS_INTAKE => self::STATUS_LABELS[ServiceTicket::STATUS_INTAKE],
+                ServiceTicket::STATUS_CANCELLED => self::STATUS_LABELS[ServiceTicket::STATUS_CANCELLED],
+            ]
+            : array_diff_key(self::STATUS_LABELS, [ServiceTicket::STATUS_CANCELLED => true]);
+        $keys = array_keys($statuses);
+        $currentPosition = array_search($currentStatus, $keys, true);
+        $optionalStatuses = [
+            ServiceTicket::STATUS_WAITING_SPAREPART,
+            ServiceTicket::STATUS_IN_PROGRESS,
+            ServiceTicket::STATUS_QC_READY,
+        ];
+
+        return collect($statuses)
+            ->map(function (string $label, string $key) use ($currentPosition, $keys, $optionalStatuses): array {
+                $position = array_search($key, $keys, true);
+
+                return [
+                    'key' => $key,
+                    'label' => $label,
+                    'position' => $position + 1,
+                    'state' => $key === $keys[$currentPosition]
+                        ? 'current'
+                        : (in_array($key, $optionalStatuses, true)
+                            ? 'optional'
+                            : ($position < $currentPosition ? 'completed' : 'upcoming')),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function authorizeAdmin(Request $request): void

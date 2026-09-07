@@ -80,17 +80,20 @@ final class DailyAssessmentController extends Controller
     {
         $data = $request->validate([
             'date' => ['nullable', 'date_format:Y-m-d'],
+            'kpi_id' => ['nullable', 'string'],
         ]);
 
         try {
             $date = $data['date'] ?? now()->toDateString();
-            $entries = $this->dailyAssessmentService->supervisorQueue($request->user(), $date);
+            $entries = $this->dailyAssessmentService->supervisorQueue($request->user(), $date, $data['kpi_id'] ?? null);
 
             return response()->json([
                 'success' => true,
                 'date' => $date,
                 'data' => $entries->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))->values(),
             ]);
+        } catch (AuthorizationException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 403);
         } catch (Exception $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
         }
@@ -130,21 +133,39 @@ final class DailyAssessmentController extends Controller
         }
     }
 
+    public function approveAllSupervisor(Request $request, string $kpiId): JsonResponse
+    {
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+
+        try {
+            return response()->json([
+                'success' => true,
+                'message' => 'Data otomatis berhasil dikonfirmasi.',
+                'data' => $this->dailyAssessmentService->approveAllSupervisor($request->user(), $kpiId, $data['date']),
+            ]);
+        } catch (Exception $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+    }
+
     public function managerQueue(Request $request): JsonResponse
     {
         $data = $request->validate([
             'date' => ['nullable', 'date_format:Y-m-d'],
+            'kpi_id' => ['nullable', 'string'],
         ]);
 
         try {
             $date = $data['date'] ?? now()->toDateString();
-            $entries = $this->dailyAssessmentService->managerQueue($request->user(), $date);
+            $entries = $this->dailyAssessmentService->managerQueue($request->user(), $date, $data['kpi_id'] ?? null);
 
             return response()->json([
                 'success' => true,
                 'date' => $date,
                 'data' => $entries->map(fn (KpiDailyEntry $entry) => $this->entryPayload($entry))->values(),
             ]);
+        } catch (AuthorizationException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 403);
         } catch (Exception $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
         }
@@ -178,6 +199,21 @@ final class DailyAssessmentController extends Controller
                 'success' => true,
                 'message' => 'Penilaian harian Manager berhasil disimpan dan total bulanan diperbarui.',
                 'data' => $this->entryPayload($entry),
+            ]);
+        } catch (Exception $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function approveAllManager(Request $request, string $kpiId): JsonResponse
+    {
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+
+        try {
+            return response()->json([
+                'success' => true,
+                'message' => 'Seluruh penilaian harian staf berhasil disetujui.',
+                'data' => $this->dailyAssessmentService->approveAllManager($request->user(), $kpiId, $data['date']),
             ]);
         } catch (Exception $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
@@ -219,6 +255,7 @@ final class DailyAssessmentController extends Controller
             'row_version' => $entry->row_version,
             'date' => $entry->entry_date?->toDateString(),
             'kpi_id' => $kpi->id,
+            'review_mode' => $kpi->isSupervisorKpi() ? 'supervisor_assessment' : 'staff_confirmation',
             'employee' => [
                 'id' => $employee?->id,
                 'name' => $employee?->name,

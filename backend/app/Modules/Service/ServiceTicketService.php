@@ -94,7 +94,7 @@ final class ServiceTicketService
                 fn ($query) => $query->where('branch_id', $user->employee->branch_id)
             )
             ->whereHas('position', fn ($query) => $query->where('code', 'POS-TEK'))
-            ->when(CapabilityMatrix::has($user, 'tickets.supervise'), fn ($query) => $query->where('supervisor_id', $user->employee->id))
+            ->when(CapabilityMatrix::has($user, 'tickets.supervise') && ! $user->hasRole('super_admin'), fn ($query) => $query->where('supervisor_id', $user->employee->id))
             ->orderBy('name')
             ->get();
 
@@ -274,7 +274,7 @@ final class ServiceTicketService
                 throw new HttpException(409, 'Tiket telah berubah oleh pengguna lain.');
             }
 
-            abort_if($ticket->cashier_employee_id && (string) $ticket->cashier_employee_id !== (string) $user->employee->id, 403, 'Biaya dan pembayaran tiket ini ditangani Kasir lain.');
+            abort_if(! $user->hasRole('super_admin') && $ticket->cashier_employee_id && (string) $ticket->cashier_employee_id !== (string) $user->employee?->id, 403, 'Biaya dan pembayaran tiket ini ditangani Kasir lain.');
             $oldCost = (float) $ticket->estimated_cost;
             $newCost = (float) data_get($input, 'estimated_cost');
             if (abs($oldCost - $newCost) > 0.000001 && trim((string) data_get($input, 'note')) === '') {
@@ -334,7 +334,7 @@ final class ServiceTicketService
             }
             if ($ticket->customer_consent_status === 'approved'
                 && data_get($input, 'consent_status') !== 'approved'
-                && ! $user->hasAnyRole(['owner_manager'])) {
+                && ! $user->hasAnyRole(['owner_manager', 'super_admin'])) {
                 throw new HttpException(403, 'Persetujuan customer yang sudah disahkan tidak dapat ditarik oleh Pelayan.');
             }
 
@@ -385,7 +385,7 @@ final class ServiceTicketService
             if (filled(data_get($input, 'row_version')) && (int) data_get($input, 'row_version') !== (int) ($ticket->row_version ?? 1)) {
                 throw new HttpException(409, 'Tiket telah berubah oleh pengguna lain.');
             }
-            abort_if($ticket->cashier_employee_id && (string) $ticket->cashier_employee_id !== (string) $user->employee->id, 403, 'Biaya dan pembayaran tiket ini ditangani Kasir lain.');
+            abort_if(! $user->hasRole('super_admin') && $ticket->cashier_employee_id && (string) $ticket->cashier_employee_id !== (string) $user->employee?->id, 403, 'Biaya dan pembayaran tiket ini ditangani Kasir lain.');
             $oldCost = (float) $ticket->final_cost;
             $newCost = (float) data_get($input, 'final_cost');
             if (abs($oldCost - $newCost) > 0.000001 && trim((string) data_get($input, 'note')) === '') {
@@ -452,7 +452,7 @@ final class ServiceTicketService
                 throw new HttpException(409, 'Tiket telah berubah oleh pengguna lain.');
             }
 
-            abort_if($ticket->cashier_employee_id && (string) $ticket->cashier_employee_id !== (string) $user->employee->id, 403, 'Biaya dan pembayaran tiket ini ditangani Kasir lain.');
+            abort_if(! $user->hasRole('super_admin') && $ticket->cashier_employee_id && (string) $ticket->cashier_employee_id !== (string) $user->employee?->id, 403, 'Biaya dan pembayaran tiket ini ditangani Kasir lain.');
             $amount = (float) data_get($input, 'paid_amount');
             $finalCost = (float) $ticket->final_cost;
             if ($amount > $finalCost) {
@@ -491,7 +491,7 @@ final class ServiceTicketService
             'row_version' => 'required|integer|min:1',
         ])->validate();
         $user = $actorUser->loadMissing(['employee.position', 'roles']);
-        if (! $user->hasAnyRole(['owner_manager'])) {
+        if (! $user->hasAnyRole(['owner_manager', 'super_admin'])) {
             throw new HttpException(403, 'Hanya Manager yang dapat mengesahkan pengecualian pembayaran.');
         }
 
@@ -658,7 +658,7 @@ final class ServiceTicketService
                 ->where('branch_id', $ticket->branch_id)
                 ->whereHas('position', fn ($query) => $query->where('code', 'POS-TEK'))
                 ->first();
-            if ($technician && CapabilityMatrix::has($actor, 'tickets.supervise') && (string) $technician->supervisor_id !== (string) $employee->id) {
+            if ($technician && ! $actor->hasRole('super_admin') && CapabilityMatrix::has($actor, 'tickets.supervise') && (string) $technician->supervisor_id !== (string) $employee->id) {
                 abort(403, 'Teknisi berada di luar tim Anda.');
             }
             if (! $technician) {
@@ -1026,7 +1026,7 @@ final class ServiceTicketService
             'row_version' => 'required|integer|min:1',
         ])->validate();
         $user = $actorUser->loadMissing(['employee.position', 'roles']);
-        if (! $user->hasAnyRole(['owner_manager', 'supervisor'])) {
+        if (! $user->hasAnyRole(['owner_manager', 'supervisor', 'super_admin'])) {
             throw new HttpException(403, 'Hanya Supervisor atau Manager yang dapat memvalidasi retur garansi.');
         }
 
@@ -1076,7 +1076,7 @@ final class ServiceTicketService
         $this->requireCapability($actorUser, ['tickets.deliver', 'tickets.supervise', 'tickets.manage']);
         $user = $actorUser->loadMissing(['employee.position', 'roles']);
         $positionCode = $user->employee?->position?->code;
-        $managerOverride = $user->hasAnyRole(['owner_manager']);
+        $managerOverride = $user->hasAnyRole(['owner_manager', 'super_admin']);
         $supervisorOverride = $user->hasRole('supervisor');
         if ($positionCode !== 'POS-CS' && ! $managerOverride && ! $supervisorOverride) {
             throw new HttpException(403, 'Hanya Pelayan atau delegasi Supervisor/Manager yang dapat melakukan serah terima.');
@@ -1190,7 +1190,7 @@ final class ServiceTicketService
             }
 
             $employee = $user->employee;
-            $manager = $user->hasAnyRole(['owner_manager']);
+            $manager = $user->hasAnyRole(['owner_manager', 'super_admin']);
             $supervisor = $user->hasRole('supervisor');
             $isAssignee = $employee?->status === 'active'
                 && (string) $followUp->assigned_employee_id === (string) $employee->id;
@@ -1608,7 +1608,7 @@ final class ServiceTicketService
             $partRequest->update([
                 'status' => 'fulfilled',
                 'fulfilled_at' => now(),
-                'warehouse_employee_id' => $user->employee->id,
+                'warehouse_employee_id' => $user->employee?->id,
                 'availability_note' => null,
             ]);
             $ticket->row_version++;
@@ -1798,7 +1798,13 @@ final class ServiceTicketService
         $user->loadMissing(['employee.position', 'roles']);
         $query = ServiceTicket::query();
         $employee = $user->employee;
-        if (! CapabilityMatrix::has($user, 'tickets.view') || ! $employee?->branch_id) {
+        if (! CapabilityMatrix::has($user, 'tickets.view')) {
+            return $query->whereRaw('1 = 0');
+        }
+        if ($user->hasRole('super_admin')) {
+            return $query;
+        }
+        if (! $employee?->branch_id) {
             return $query->whereRaw('1 = 0');
         }
         $query->where('branch_id', $employee->branch_id);
@@ -1830,8 +1836,8 @@ final class ServiceTicketService
         $open = in_array($ticket->status, ServiceTicket::ESTIMATED_COST_EDITABLE_STATUSES, true);
         $technical = $this->authorizeTechnicalWrite($ticket, $user);
         $supervise = $can('tickets.supervise') || $can('tickets.manage');
-        $intakeOwner = (string) $ticket->intake_by_employee_id === (string) $user->employee->id;
-        $cashierOwner = ! $ticket->cashier_employee_id || (string) $ticket->cashier_employee_id === (string) $user->employee->id;
+        $intakeOwner = (string) $ticket->intake_by_employee_id === (string) $user->employee?->id;
+        $cashierOwner = ! $ticket->cashier_employee_id || (string) $ticket->cashier_employee_id === (string) $user->employee?->id;
         $actions = [];
         if ($open && ($supervise || ($can('tickets.claim') && $ticket->technician_employee_id === null && $ticket->status === ServiceTicket::STATUS_INTAKE))) {
             $actions[] = 'assign';
@@ -1899,7 +1905,7 @@ final class ServiceTicketService
 
         return $user && CapabilityMatrix::has($user, 'tickets.progress')
             && $this->authorizeTicketAccess($ticket, $user)
-            && (string) $ticket->technician_employee_id === (string) $user->employee?->id;
+            && ($user->hasRole('super_admin') || (string) $ticket->technician_employee_id === (string) $user->employee?->id);
     }
 
     private function isSparepartRequester(User $user): bool
@@ -1909,8 +1915,9 @@ final class ServiceTicketService
 
     private function canViewSensitiveTicketFields(User $user, ServiceTicket $ticket): bool
     {
-        return (CapabilityMatrix::has($user, 'tickets.progress') && (string) $ticket->technician_employee_id === (string) $user->employee->id)
-            || (CapabilityMatrix::has($user, 'tickets.create') && (string) $ticket->intake_by_employee_id === (string) $user->employee->id);
+        return $user->hasRole('super_admin')
+            || (CapabilityMatrix::has($user, 'tickets.progress') && (string) $ticket->technician_employee_id === (string) $user->employee?->id)
+            || (CapabilityMatrix::has($user, 'tickets.create') && (string) $ticket->intake_by_employee_id === (string) $user->employee?->id);
     }
 
     private function authorizePickup(ServiceTicket $ticket, User $user): bool

@@ -64,7 +64,7 @@ class ApiRoleAuthorizationTest extends TestCase
         $period = $kpi->period;
         $period->update(['submission_deadline' => now()->addDay()]);
         $item = $kpi->items()
-            ->where('source_type_snapshot', 'employee')
+            ->where('definition_code_snapshot', 'TEK-05')
             ->firstOrFail();
         $date = $period->start_date->toDateString();
 

@@ -44,7 +44,7 @@ class DailyAssessmentTest extends TestCase
         $day = $this->service->employeeDay($employee, $date);
 
         $this->assertNotEmpty($day['entries']);
-        $employeeItem = $day['kpi']->items->firstWhere('definition_code_snapshot', 'TEK-01');
+        $employeeItem = $day['kpi']->items->firstWhere('definition_code_snapshot', 'TEK-05');
         $entry = $day['entries']->firstWhere('employee_kpi_item_id', $employeeItem->id);
         $this->assertSame('submitted', $entry->entry_status);
 
@@ -55,7 +55,7 @@ class DailyAssessmentTest extends TestCase
         ]]);
     }
 
-    public function test_supervisor_completes_staff_daily_review_without_employee_input_or_manager_daily_review(): void
+    public function test_supervisor_completes_staff_daily_review_before_optional_manager_review(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
@@ -82,33 +82,27 @@ class DailyAssessmentTest extends TestCase
         $this->assertCount($kpi->items()->count(), $employeeQueue);
 
         foreach ($employeeQueue as $entry) {
-            $answers = $entry->item->formula_key_snapshot === 'rubric'
-                ? collect($entry->item->rubric_snapshot['criteria'] ?? [])->map(fn (array $criterion) => [
-                    'criterion_id' => $criterion['id'],
-                    'is_fulfilled' => true,
-                ])->all()
-                : null;
-
             $this->service->assessSupervisor(
                 user: $supervisor,
                 entryId: $entry->id,
                 decision: 'approved',
-                actualDecimal: $answers || $entry->item->isSystemSourced() ? null : 80,
-                answers: $answers
+                actualDecimal: $entry->item->isManualRated() || $entry->item->isSystemSourced() ? null : 80,
+                actualJson: $entry->item->isManualRated() ? ['rating_code' => 'VERY_GOOD'] : null,
             );
         }
 
         $managerQueue = $this->service->managerQueue($manager, $date)
             ->filter(fn (KpiDailyEntry $entry): bool => (string) $entry->item->employee_kpi_id === (string) $kpi->id)
             ->values();
-        $this->assertCount(0, $managerQueue);
+        $this->assertNotEmpty($managerQueue);
+        $this->assertTrue($managerQueue->every(fn (KpiDailyEntry $entry): bool => $entry->supervisor_status === 'approved'));
 
         $serviceItem = $kpi->items()->where('definition_code_snapshot', 'TEK-01')->firstOrFail()->fresh();
-        $this->assertSame(80.0, (float) $serviceItem->actual_decimal);
-        $this->assertSame('sum', $serviceItem->actual_json['aggregation']);
+        $this->assertSame(9.0, (float) $serviceItem->actual_decimal);
+        $this->assertFalse((bool) data_get($serviceItem->actual_json, '_daily_aggregate', false));
     }
 
-    public function test_manager_cannot_assess_staff_and_supervisor_cannot_assess_as_manager(): void
+    public function test_manager_must_wait_for_supervisor_and_supervisor_cannot_assess_as_manager(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
@@ -128,9 +122,9 @@ class DailyAssessmentTest extends TestCase
 
         try {
             $this->service->assessManager($manager, $entry->id, 'approved', 45);
-            $this->fail('Manager tidak boleh menilai harian staf.');
+            $this->fail('Manager tidak boleh menilai staf sebelum Supervisor.');
         } catch (\Exception $exception) {
-            $this->assertSame('Anda tidak berwenang menilai KPI harian ini.', $exception->getMessage());
+            $this->assertSame('Penilaian Supervisor harus disetujui terlebih dahulu.', $exception->getMessage());
         }
 
         try {
@@ -141,7 +135,7 @@ class DailyAssessmentTest extends TestCase
         }
     }
 
-    public function test_system_creates_daily_queue_by_cadence_without_manager_staff_tasks(): void
+    public function test_system_creates_daily_queue_by_cadence_and_exposes_completed_staff_reviews_to_manager(): void
     {
         $employee = User::where('email', 'teknisi@toko.com')->firstOrFail();
         $supervisor = User::where('email', 'supervisor@toko.com')->firstOrFail();
@@ -180,7 +174,7 @@ class DailyAssessmentTest extends TestCase
         $this->assertSame($beforeCount, KpiDailyEntry::count());
         $this->assertSame($assignedKpis->count(), SystemNotification::where('type', 'daily_kpi_ready')->count());
 
-        foreach ($employeeQueue as $index => $entry) {
+        foreach ($employeeQueue as $entry) {
             $answers = $entry->item->formula_key_snapshot === 'rubric'
                 ? collect($entry->item->rubric_snapshot['criteria'] ?? [])->map(fn (array $criterion) => [
                     'criterion_id' => $criterion['id'],
@@ -196,19 +190,12 @@ class DailyAssessmentTest extends TestCase
                 answers: $answers
             );
 
-            $managerQueue = $this->service->managerQueue($manager, $date)
-                ->filter(fn (KpiDailyEntry $candidate): bool => (string) $candidate->item->employee_kpi_id === (string) $kpi->id)
-                ->values();
-            if ($index < $employeeQueue->count() - 1) {
-                $this->assertCount(0, $managerQueue);
-            }
         }
 
-        $this->assertCount(
-            0,
-            $this->service->managerQueue($manager, $date)
-                ->filter(fn (KpiDailyEntry $candidate): bool => (string) $candidate->item->employee_kpi_id === (string) $kpi->id)
-        );
+        $managerQueue = $this->service->managerQueue($manager, $date)
+            ->filter(fn (KpiDailyEntry $candidate): bool => (string) $candidate->item->employee_kpi_id === (string) $kpi->id);
+        $this->assertNotEmpty($managerQueue);
+        $this->assertTrue($managerQueue->every(fn (KpiDailyEntry $entry): bool => $entry->supervisor_status === 'approved'));
         $this->assertSame(0, SystemNotification::where('type', 'daily_kpi_reviewed')->count());
     }
 

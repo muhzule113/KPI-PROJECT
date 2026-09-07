@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Modules\Assessment\DailyAssessmentService;
 use App\Modules\Assessment\SupervisorAttendanceService;
+use App\Support\CapabilityMatrix;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ final class SupervisorAttendanceController extends Controller
 
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->hasRole('supervisor') && ! $request->user()->hasRole('super_admin'), 403);
+        abort_unless(CapabilityMatrix::has($request->user(), 'attendance.team.manage'), 403);
         $date = $this->date($request);
 
         try {

@@ -25,9 +25,9 @@ class KpiConfigurationAccessTest extends TestCase
 
     protected $seed = true;
 
-    public function test_kpi_admin_can_configure_draft_templates_but_cannot_mutate_active_versions(): void
+    public function test_super_admin_can_configure_draft_templates_but_cannot_mutate_active_versions(): void
     {
-        $admin = User::role('kpi_admin')->firstOrFail();
+        $admin = User::role('super_admin')->firstOrFail();
         $this->actingAs($admin, 'web');
         foreach (array_keys(KpiConfigurationResources::definitions()) as $resource) {
             $this->get('/app/'.$resource)->assertOk();
@@ -48,7 +48,7 @@ class KpiConfigurationAccessTest extends TestCase
         $this->assertSame('active', $draft->fresh()->status);
         $this->assertSame('retired', $version->fresh()->status);
         $this->assertSame($snapshotCount, EmployeeKpi::where('template_version_id', $version->id)->count());
-        $this->actingAs(User::role('super_admin')->firstOrFail(), 'web')->get('/app/kpi-template-items')->assertForbidden();
+        $this->actingAs(User::role('super_admin')->firstOrFail(), 'web')->get('/app/kpi-template-items')->assertOk();
     }
 
     public function test_mapping_config_is_applied_to_cashier_upload_and_used_version_is_immutable(): void
@@ -98,8 +98,8 @@ class KpiConfigurationAccessTest extends TestCase
         $systemRows = $this->actingAs(User::role('super_admin')->firstOrFail(), 'web')->get('/app/audit-events?per_page=50')->assertOk()->inertiaProps('records');
         $systemIds = array_column($systemRows, 'id');
         $this->assertContains((string) $technical->id, $systemIds);
-        $this->assertNotContains((string) $sync->id, $systemIds);
-        $this->assertNotContains((string) $business->id, $systemIds);
+        $this->assertContains((string) $sync->id, $systemIds);
+        $this->assertContains((string) $business->id, $systemIds);
         $kpiRows = $this->actingAs($admin, 'web')->get('/app/audit-events?per_page=50')->assertOk()->inertiaProps('records');
         $this->assertContains((string) $sync->id, array_column($kpiRows, 'id'));
     }
@@ -117,7 +117,7 @@ class KpiConfigurationAccessTest extends TestCase
 
     public function test_active_rating_scheme_is_replaced_through_a_validated_version(): void
     {
-        $admin = User::role('kpi_admin')->firstOrFail();
+        $admin = User::role('super_admin')->firstOrFail();
         $scheme = KpiRatingScheme::where('is_active', true)->firstOrFail();
         $this->actingAs($admin, 'web')->get("/app/kpi-rating-schemes/{$scheme->id}/edit")->assertForbidden();
         $this->post("/app/kpi-rating-schemes/{$scheme->id}/actions/copy")->assertSessionHas('success');
@@ -131,5 +131,44 @@ class KpiConfigurationAccessTest extends TestCase
         $this->post("/app/kpi-rating-schemes/{$draft->id}/actions/activate")->assertSessionHas('success');
         $this->assertTrue($draft->fresh()->is_active);
         $this->assertFalse($scheme->fresh()->is_active);
+    }
+
+    public function test_kpi_admin_cannot_manage_catalog_but_keeps_operational_configuration(): void
+    {
+        $admin = User::role('kpi_admin')->firstOrFail();
+
+        foreach ([
+            'kpi-definitions', 'kpi-rating-schemes', 'kpi-rating-bands', 'kpi-templates',
+            'kpi-template-versions', 'kpi-template-items', 'kpi-rubrics', 'kpi-rubric-criteria',
+        ] as $resource) {
+            $this->actingAs($admin, 'web')->get('/app/'.$resource)->assertForbidden();
+        }
+
+        foreach (['kpi-periods', 'employee-kpis', 'kpi-assignments', 'import-mapping-templates', 'import-mapping-versions'] as $resource) {
+            $this->actingAs($admin, 'web')->get('/app/'.$resource)->assertOk();
+        }
+    }
+
+    public function test_rating_scheme_activation_requires_five_unique_valid_manual_predicates(): void
+    {
+        $admin = User::role('super_admin')->firstOrFail();
+        $scheme = KpiRatingScheme::where('is_active', true)->firstOrFail();
+        $this->actingAs($admin, 'web')
+            ->post("/app/kpi-rating-schemes/{$scheme->id}/actions/copy")
+            ->assertSessionHas('success');
+        $draft = KpiRatingScheme::where('name', $scheme->name)->where('is_active', false)->firstOrFail();
+        $poor = $draft->bands()->where('code', 'POOR')->firstOrFail();
+
+        $poor->update(['manual_score' => null]);
+        $this->post("/app/kpi-rating-schemes/{$draft->id}/actions/activate")->assertSessionHas('error');
+        $this->assertFalse($draft->fresh()->is_active);
+
+        $poor->update(['manual_score' => 60, 'code' => 'FAIR']);
+        $this->post("/app/kpi-rating-schemes/{$draft->id}/actions/activate")->assertSessionHas('error');
+        $this->assertFalse($draft->fresh()->is_active);
+
+        $poor->update(['manual_score' => 101, 'code' => 'POOR']);
+        $this->post("/app/kpi-rating-schemes/{$draft->id}/actions/activate")->assertSessionHas('error');
+        $this->assertFalse($draft->fresh()->is_active);
     }
 }

@@ -12,15 +12,15 @@ final class CapabilityMatrix
     public static function roleLabel(string $role): string
     {
         return match ($role) {
-            'super_admin' => 'Admin Sistem', 'kpi_admin' => 'Admin KPI', 'auditor' => 'Auditor',
+            'super_admin' => 'Super Admin', 'kpi_admin' => 'Admin KPI', 'auditor' => 'Auditor',
             'owner_manager' => 'Manager / Owner', 'supervisor' => 'Supervisor', 'employee' => 'Karyawan Operasional',
             default => $role,
         };
     }
 
     private const ROLE_CAPABILITIES = [
-        'super_admin' => ['accounts.manage', 'organization.manage', 'audit.view'],
-        'kpi_admin' => ['kpi.configure', 'kpi.period.manage', 'kpi.monitor', 'kpi.sync', 'audit.sync.view', 'imports.configure', 'reports.view', 'reports.export'],
+        'super_admin' => ['accounts.manage', 'organization.manage', 'kpi.catalog.configure', 'audit.view'],
+        'kpi_admin' => ['kpi.assignments.manage', 'kpi.period.manage', 'kpi.monitor', 'kpi.sync', 'audit.sync.view', 'imports.configure', 'reports.view', 'reports.export'],
         'auditor' => ['reports.view', 'reports.export', 'kpi.monitor', 'audit.view'],
         'supervisor' => [
             'kpi.supervisor.daily', 'kpi.supervisor.review', 'attendance.team.manage',
@@ -53,24 +53,24 @@ final class CapabilityMatrix
     public static function accessError(User $user, ?string $platform = null): ?string
     {
         if (! $user->is_active) {
-            return 'Akun Anda tidak aktif. Hubungi Admin Sistem.';
+            return 'Akun Anda tidak aktif. Hubungi Super Admin.';
         }
 
         $roles = $user->roles->pluck('name')->all();
         if (self::roleConflict($roles)) {
-            return 'Kombinasi peran akun bertentangan. Hubungi Admin Sistem untuk memisahkan tugas akun.';
+            return 'Kombinasi peran akun bertentangan. Hubungi Super Admin untuk memisahkan tugas akun.';
         }
 
         if (! $user->hasAnyRole(self::ADMIN_ROLES)) {
             $employee = $user->employee;
             if (! $employee || ! $employee->position || ! $employee->branch) {
-                return 'Profil operasional belum lengkap. Admin Sistem perlu menghubungkan akun dengan karyawan, jabatan, dan cabang.';
+                return 'Profil operasional belum lengkap. Super Admin perlu menghubungkan akun dengan karyawan, jabatan, dan cabang.';
             }
             if ($employee->status !== 'active' || ! $employee->position->is_active || ! $employee->branch->is_active) {
-                return 'Profil karyawan, jabatan, atau cabang Anda tidak aktif. Hubungi Admin Sistem.';
+                return 'Profil karyawan, jabatan, atau cabang Anda tidak aktif. Hubungi Super Admin.';
             }
             if (! self::platformsForProfile($user)) {
-                return 'Peran dan jabatan akun belum sesuai. Hubungi Admin Sistem.';
+                return 'Peran dan jabatan akun belum sesuai. Hubungi Super Admin.';
             }
         }
 
@@ -118,6 +118,13 @@ final class CapabilityMatrix
             return [];
         }
         $capabilities = ['dashboard.view', 'notifications.view', 'profile.view'];
+        if ($user->hasRole('super_admin')) {
+            return array_values(array_unique([
+                ...$capabilities,
+                ...array_merge(...array_values(self::ROLE_CAPABILITIES)),
+                ...array_merge(...array_values(self::POSITION_CAPABILITIES)),
+            ]));
+        }
         foreach ($user->roles->pluck('name') as $role) {
             $capabilities = [...$capabilities, ...(self::ROLE_CAPABILITIES[$role] ?? [])];
         }
@@ -143,7 +150,8 @@ final class CapabilityMatrix
         $capabilities = match ($resource) {
             'users' => ['accounts.manage'],
             'employees', 'branches', 'positions' => ['organization.manage'],
-            'kpi-definitions', 'kpi-rating-schemes', 'kpi-rating-bands', 'kpi-templates', 'kpi-template-versions', 'kpi-template-items', 'kpi-rubrics', 'kpi-rubric-criteria', 'kpi-assignments' => ['kpi.configure'],
+            'kpi-definitions', 'kpi-rating-schemes', 'kpi-rating-bands', 'kpi-templates', 'kpi-template-versions', 'kpi-template-items', 'kpi-rubrics', 'kpi-rubric-criteria' => ['kpi.catalog.configure'],
+            'kpi-assignments' => ['kpi.assignments.manage'],
             'import-mapping-templates', 'import-mapping-versions' => ['imports.configure'],
             'kpi-periods' => $read ? ['kpi.period.manage', 'reports.view'] : ['kpi.period.manage'],
             'employee-kpis' => $read ? ['kpi.monitor', 'reports.view'] : ['kpi.manager.approval'],
@@ -170,6 +178,10 @@ final class CapabilityMatrix
     {
         if (self::accessError($user) !== null) {
             return false;
+        }
+
+        if ($user->hasRole('super_admin')) {
+            return true;
         }
 
         return $user->hasAnyRole($roles) || (! $user->hasAnyRole(self::ADMIN_ROLES)

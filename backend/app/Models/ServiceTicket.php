@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +31,17 @@ class ServiceTicket extends Model
     public const STATUS_DELIVERED = 'delivered';
 
     public const STATUS_CANCELLED = 'cancelled';
+
+    public const CUSTOMER_PROGRESS_WINDOW_DAYS = 7;
+
+    public const CUSTOMER_PROGRESS_ACTIVE_STATUSES = [
+        self::STATUS_INTAKE,
+        self::STATUS_DIAGNOSING,
+        self::STATUS_WAITING_SPAREPART,
+        self::STATUS_IN_PROGRESS,
+        self::STATUS_QC_READY,
+        self::STATUS_COMPLETED,
+    ];
 
     public const ESTIMATED_COST_EDITABLE_STATUSES = [
         self::STATUS_INTAKE,
@@ -79,6 +92,36 @@ class ServiceTicket extends Model
         return in_array($this->status, [self::STATUS_DELIVERED, self::STATUS_CANCELLED], true);
     }
 
+    public function customerProgressExpiresAt(): ?CarbonInterface
+    {
+        return match ($this->status) {
+            self::STATUS_DELIVERED => $this->delivered_at?->copy()->addDays(self::CUSTOMER_PROGRESS_WINDOW_DAYS),
+            self::STATUS_CANCELLED => $this->cancelled_at?->copy()->addDays(self::CUSTOMER_PROGRESS_WINDOW_DAYS),
+            default => null,
+        };
+    }
+
+    public function customerProgressIsAvailable(): bool
+    {
+        return in_array($this->status, self::CUSTOMER_PROGRESS_ACTIVE_STATUSES, true)
+            || ($this->isFinal() && ($this->customerProgressExpiresAt()?->isFuture() ?? false));
+    }
+
+    public function scopeCustomerProgressAvailable(Builder $query): Builder
+    {
+        $cutoff = now()->subDays(self::CUSTOMER_PROGRESS_WINDOW_DAYS);
+
+        return $query->where(function (Builder $query) use ($cutoff): void {
+            $query->whereIn('status', self::CUSTOMER_PROGRESS_ACTIVE_STATUSES)
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('status', self::STATUS_DELIVERED)
+                    ->where('delivered_at', '>', $cutoff))
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('status', self::STATUS_CANCELLED)
+                    ->where('cancelled_at', '>', $cutoff));
+        });
+    }
+
     public function hasPendingSparepartRequests(): bool
     {
         return $this->sparepartRequests()->where('status', 'pending')->exists();
@@ -95,6 +138,12 @@ class ServiceTicket extends Model
     protected static function booted(): void
     {
         static::saving(function (ServiceTicket $ticket): void {
+            if ($ticket->status === self::STATUS_CANCELLED) {
+                $ticket->cancelled_at ??= now();
+
+                return;
+            }
+
             if (! in_array($ticket->status, ['completed', 'delivered'], true)) {
                 return;
             }
@@ -137,6 +186,7 @@ class ServiceTicket extends Model
         'started_at',
         'completed_at',
         'delivered_at',
+        'cancelled_at',
         'customer_consent_status',
         'customer_consent_at',
         'customer_consent_by_employee_id',
@@ -179,6 +229,7 @@ class ServiceTicket extends Model
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'qc_checklist_json' => 'array',
         'row_version' => 'integer',
         'is_warranty_return' => 'boolean',

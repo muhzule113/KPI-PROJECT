@@ -17,7 +17,7 @@ final class KpiVisibility
     public static function applyScope(Builder $query, User $user): Builder
     {
         if ($user->hasRole('super_admin')) {
-            return $query->whereRaw('1 = 0');
+            return $query;
         }
         if ($user->hasAnyRole(['kpi_admin', 'auditor'])) {
             return $query;

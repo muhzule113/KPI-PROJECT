@@ -29,7 +29,8 @@ final class KpiConfigurationResources
 
     public static function definitions(): array
     {
-        $permission = ['roles' => ['kpi_admin'], 'positions' => []];
+        $catalogPermission = ['roles' => ['super_admin'], 'positions' => []];
+        $operationsPermission = ['roles' => ['kpi_admin'], 'positions' => []];
         $versionEditable = static fn ($user, ?KpiTemplateVersion $record = null): bool => ! $record || $record->status === 'draft';
         $itemEditable = static fn ($user, ?KpiTemplateItem $record = null): bool => ! $record || $record->version->status === 'draft';
         $draftVersionRule = Rule::exists('kpi_template_versions', 'id')->where('status', 'draft');
@@ -37,8 +38,8 @@ final class KpiConfigurationResources
         return [
             'kpi-rating-schemes' => [
                 'model' => KpiRatingScheme::class, 'label' => 'Versi Scheme Rating', 'plural_label' => 'Versi Scheme Rating',
-                'description' => 'Scheme aktif immutable. Salin sebagai versi baru, lengkapi band tanpa gap/overlap, lalu aktifkan.',
-                'permission' => $permission, 'search' => ['name'], 'columns' => [
+                'description' => 'Urutan perubahan: salin versi aktif, edit lima band pada draft, validasi rentang dan nilai, lalu aktifkan untuk periode berikutnya.',
+                'permission' => $catalogPermission, 'search' => ['name'], 'columns' => [
                     ['key' => 'name', 'label' => 'Nama'], ['key' => 'version', 'label' => 'Versi'],
                     ['key' => 'score_cap', 'label' => 'Score Cap'], ['key' => 'is_active', 'label' => 'Aktif', 'type' => 'boolean'],
                 ],
@@ -66,8 +67,8 @@ final class KpiConfigurationResources
             ],
             'kpi-template-versions' => [
                 'model' => KpiTemplateVersion::class, 'label' => 'Versi Template', 'plural_label' => 'Versi Template KPI',
-                'description' => 'Siapkan versi draft, lengkapi target dan bobot serta rubrik, lalu aktifkan. Salin versi untuk perubahan berikutnya; snapshot periode tetap tersimpan.',
-                'permission' => $permission, 'search' => ['template.name', 'status'], 'with' => ['template', 'ratingScheme'],
+                'description' => 'Urutan perubahan: salin versi aktif, edit target, bobot, sumber, dan rubrik pada draft, validasi, lalu aktifkan untuk periode berikutnya. Snapshot periode lama tetap tersimpan.',
+                'permission' => $catalogPermission, 'search' => ['template.name', 'status'], 'with' => ['template', 'ratingScheme'],
                 'columns' => [['key' => 'template.name', 'label' => 'Template'], ['key' => 'version_number', 'label' => 'Versi'], ['key' => 'status', 'label' => 'Status'], ['key' => 'total_weight', 'label' => 'Bobot', 'suffix' => '%']],
                 'fields' => [
                     ['name' => 'kpi_template_id', 'label' => 'Template', 'type' => 'select', 'required' => true],
@@ -92,7 +93,7 @@ final class KpiConfigurationResources
             'kpi-template-items' => [
                 'model' => KpiTemplateItem::class, 'label' => 'Target dan Bobot', 'plural_label' => 'Target dan Bobot Indikator',
                 'description' => 'Edit indikator pada versi draft. Total bobot harus 100% sebelum versi dapat diaktifkan.',
-                'permission' => $permission, 'search' => ['definition.name', 'version.template.name'], 'with' => ['definition', 'version.template'],
+                'permission' => $catalogPermission, 'search' => ['definition.name', 'version.template.name'], 'with' => ['definition', 'version.template'],
                 'columns' => [['key' => 'version.template.name', 'label' => 'Template'], ['key' => 'version.version_number', 'label' => 'Versi'], ['key' => 'definition.name', 'label' => 'Indikator'], ['key' => 'target_value', 'label' => 'Target'], ['key' => 'weight', 'label' => 'Bobot', 'suffix' => '%']],
                 'fields' => [
                     ['name' => 'template_version_id', 'label' => 'Versi Draft', 'type' => 'select', 'required' => true],
@@ -129,7 +130,7 @@ final class KpiConfigurationResources
             'kpi-rubrics' => [
                 'model' => KpiRubric::class, 'label' => 'Rubrik', 'plural_label' => 'Rubrik Penilaian',
                 'description' => 'Lengkapi rubrik dan kriteria untuk indikator dengan formula rubrik pada versi draft.',
-                'permission' => $permission, 'search' => ['name'], 'with' => ['templateItem.definition'],
+                'permission' => $catalogPermission, 'search' => ['name'], 'with' => ['templateItem.definition'],
                 'columns' => [['key' => 'name', 'label' => 'Rubrik'], ['key' => 'templateItem.definition.name', 'label' => 'Indikator']],
                 'fields' => [['name' => 'template_item_id', 'label' => 'Indikator Draft', 'type' => 'select', 'required' => true], ['name' => 'name', 'label' => 'Nama Rubrik', 'type' => 'text', 'required' => true], ['name' => 'description', 'label' => 'Petunjuk Penilaian', 'type' => 'textarea']],
                 'rules' => static fn (?Model $record): array => ['template_item_id' => ['required', 'integer', Rule::exists('kpi_template_items', 'id')->whereIn('template_version_id', KpiTemplateVersion::where('status', 'draft')->select('id')), Rule::unique('kpi_rubrics', 'template_item_id')->ignore($record?->id)], 'name' => ['required', 'string', 'max:150'], 'description' => ['nullable', 'string']],
@@ -139,7 +140,7 @@ final class KpiConfigurationResources
             ],
             'kpi-rubric-criteria' => [
                 'model' => KpiRubricCriterion::class, 'label' => 'Kriteria Rubrik', 'plural_label' => 'Kriteria Rubrik',
-                'description' => 'Tentukan kriteria dan poin penilaian pada rubrik versi draft.', 'permission' => $permission,
+                'description' => 'Tentukan kriteria dan poin penilaian pada rubrik versi draft.', 'permission' => $catalogPermission,
                 'search' => ['criterion_text', 'rubric.name'], 'with' => ['rubric'],
                 'columns' => [['key' => 'rubric.name', 'label' => 'Rubrik'], ['key' => 'criterion_text', 'label' => 'Kriteria'], ['key' => 'points', 'label' => 'Poin']],
                 'fields' => [['name' => 'rubric_id', 'label' => 'Rubrik Draft', 'type' => 'select', 'required' => true], ['name' => 'criterion_text', 'label' => 'Kriteria', 'type' => 'textarea', 'required' => true], ['name' => 'points', 'label' => 'Poin', 'type' => 'number', 'step' => '0.01', 'required' => true], ['name' => 'sort_order', 'label' => 'Urutan', 'type' => 'number', 'default' => 1, 'required' => true], ['name' => 'is_mandatory', 'label' => 'Kriteria Wajib', 'type' => 'checkbox', 'default' => true]],
@@ -151,7 +152,7 @@ final class KpiConfigurationResources
             'kpi-assignments' => [
                 'model' => Employee::class, 'label' => 'Penugasan Penilai', 'plural_label' => 'Penugasan Penilai KPI',
                 'description' => 'Tetapkan Supervisor untuk staf dan Manager untuk Supervisor sebelum periode dibuka. Assignment disalin ke snapshot periode.',
-                'permission' => $permission, 'search' => ['name', 'employee_number'], 'with' => ['position', 'branch', 'supervisor'],
+                'permission' => $operationsPermission, 'search' => ['name', 'employee_number'], 'with' => ['position', 'branch', 'supervisor'],
                 'columns' => [['key' => 'name', 'label' => 'Karyawan'], ['key' => 'position.name', 'label' => 'Jabatan'], ['key' => 'branch.name', 'label' => 'Cabang'], ['key' => 'supervisor.name', 'label' => 'Penilai']],
                 'scope' => static fn ($query) => $query->where('status', 'active')->whereHas('position', fn ($positions) => $positions->whereNotIn('code', ['POS-OWN', 'POS-EXEC'])),
                 'fields' => [['name' => 'supervisor_id', 'label' => 'Penilai', 'type' => 'select', 'required' => true]],
@@ -168,13 +169,13 @@ final class KpiConfigurationResources
             'import-mapping-templates' => [
                 'model' => ImportMappingTemplate::class, 'label' => 'Mapping Import', 'plural_label' => 'Mapping Import Kasir',
                 'description' => 'Daftar sumber laporan kasir. Atur nama kolom pada versi mapping sebelum digunakan Kasir.',
-                'permission' => $permission, 'search' => ['name', 'source_application'],
+                'permission' => $operationsPermission, 'search' => ['name', 'source_application'],
                 'columns' => [['key' => 'name', 'label' => 'Mapping'], ['key' => 'source_application', 'label' => 'Sumber'], ['key' => 'is_active', 'label' => 'Aktif', 'type' => 'boolean']],
                 'fields' => [['name' => 'name', 'label' => 'Nama Mapping', 'type' => 'text', 'required' => true], ['name' => 'source_application', 'label' => 'Aplikasi Kasir', 'type' => 'text', 'required' => true], ['name' => 'description', 'label' => 'Keterangan', 'type' => 'textarea'], ['name' => 'is_active', 'label' => 'Aktif', 'type' => 'checkbox', 'default' => true]],
                 'rules' => static fn (?Model $record): array => ['name' => ['required', 'string', 'max:100'], 'source_application' => ['required', 'string', 'max:100'], 'description' => ['nullable', 'string'], 'is_active' => ['required', 'boolean']],
                 'can_delete' => false,
             ],
-            'import-mapping-versions' => self::mappingVersions($permission),
+            'import-mapping-versions' => self::mappingVersions($operationsPermission),
         ];
     }
 
