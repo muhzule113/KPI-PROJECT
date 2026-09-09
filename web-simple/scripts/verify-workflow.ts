@@ -15,9 +15,9 @@ const rollback = new Error("ROLLBACK_VERIFICATION");
 
 try {
   await prisma.$transaction(async (tx) => {
-    const supervisorUser = await tx.user.findUniqueOrThrow({ where: { email: "supervisor@kpi-simple.local" }, include: { employee: true } });
-    const managerUser = await tx.user.findUniqueOrThrow({ where: { email: "manager@kpi-simple.local" }, include: { employee: true } });
-    const adminUser = await tx.user.findUniqueOrThrow({ where: { email: "admin@kpi-simple.local" } });
+    const supervisorUser = await tx.user.findUniqueOrThrow({ where: { username: "supervisor" }, include: { employee: true } });
+    const managerUser = await tx.user.findUniqueOrThrow({ where: { username: "manager" }, include: { employee: true } });
+    const adminUser = await tx.user.findUniqueOrThrow({ where: { username: "admin" } });
     const supervisor: AccessProfile = { userId: supervisorUser.id, role: "SUPERVISOR", employeeId: supervisorUser.employee!.id, branchId: supervisorUser.employee!.branchId, active: true };
     const manager: AccessProfile = { userId: managerUser.id, role: "MANAGER", employeeId: managerUser.employee!.id, branchId: managerUser.employee!.branchId, active: true };
     const admin: AccessProfile = { userId: adminUser.id, role: "ADMIN", employeeId: null, branchId: null, active: true };
@@ -37,28 +37,28 @@ try {
       where: { periodId: period.id, positionCodeSnapshot: "PELAYAN" },
       include: { items: { orderBy: { sortOrderSnapshot: "asc" } }, dailySheets: { where: { entryDate: new Date(Date.UTC(slot.year, slot.month - 1, 9)) } } },
     });
-    const staffValues = staffKpi.items.map((item) => ({ itemId: item.id, value: item.kindSnapshot === "RATING" ? (item.codeSnapshot === "KUALITAS" ? 4 : 5) : 5 }));
+    const staffValues = staffKpi.items.map((item) => ({ itemId: item.id, value: item.unitSnapshot === "%" ? 90 : 1 }));
     const submitted = await saveDailySheet(tx, supervisor, { sheetId: staffKpi.dailySheets[0].id, rowVersion: staffKpi.dailySheets[0].rowVersion, workStatus: "WORKED", values: staffValues, submit: true, note: "Pelayanan harian selesai." }, now);
     assert.equal(submitted.status, "SUBMITTED");
 
     const approved = await reviewDailySheet(tx, manager, { sheetId: submitted.sheetId, rowVersion: submitted.rowVersion, decision: "APPROVE" }, now);
     assert.equal(approved.status, "APPROVED");
-    const serviceItem = await tx.monthlyKpiItem.findFirstOrThrow({ where: { monthlyKpiId: staffKpi.id, codeSnapshot: "LAYANAN" } });
-    assert.equal(serviceItem.actual?.toFixed(2), "5.00");
+    const complaintItem = await tx.monthlyKpiItem.findFirstOrThrow({ where: { monthlyKpiId: staffKpi.id, codeSnapshot: "CS-05" } });
+    assert.equal(complaintItem.actual?.toFixed(2), "1.00");
 
     const corrected = await reviewDailySheet(tx, manager, {
       sheetId: approved.sheetId,
       rowVersion: approved.rowVersion,
       decision: "CORRECT",
       workStatus: "WORKED",
-      values: staffValues.map((value) => value.itemId === serviceItem.id ? { ...value, value: 6 } : value),
-      reason: "Jumlah layanan disesuaikan dengan rekap tutup toko.",
+      values: staffValues.map((value) => value.itemId === complaintItem.id ? { ...value, value: 2 } : value),
+      reason: "Jumlah komplain disesuaikan dengan rekap tutup toko.",
     }, now);
     assert.equal(corrected.status, "APPROVED");
-    const correctedValue = await tx.dailyValue.findUniqueOrThrow({ where: { dailySheetId_monthlyKpiItemId: { dailySheetId: corrected.sheetId, monthlyKpiItemId: serviceItem.id } } });
-    assert.equal(correctedValue.enteredValue?.toNumber(), 5);
-    assert.equal(correctedValue.managerValue?.toNumber(), 6);
-    assert.equal(correctedValue.effectiveValue?.toNumber(), 6);
+    const correctedValue = await tx.dailyValue.findUniqueOrThrow({ where: { dailySheetId_monthlyKpiItemId: { dailySheetId: corrected.sheetId, monthlyKpiItemId: complaintItem.id } } });
+    assert.equal(correctedValue.enteredValue?.toNumber(), 1);
+    assert.equal(correctedValue.managerValue?.toNumber(), 2);
+    assert.equal(correctedValue.effectiveValue?.toNumber(), 2);
 
     const supervisorKpi = await tx.monthlyKpi.findFirstOrThrow({
       where: { periodId: period.id, positionCodeSnapshot: "SPV" },
@@ -68,7 +68,7 @@ try {
       sheetId: supervisorKpi.dailySheets[0].id,
       rowVersion: supervisorKpi.dailySheets[0].rowVersion,
       workStatus: "WORKED",
-      values: supervisorKpi.items.map((item) => ({ itemId: item.id, value: item.kindSnapshot === "RATING" ? 4 : 1 })),
+      values: supervisorKpi.items.map((item) => ({ itemId: item.id, value: item.unitSnapshot === "%" ? 90 : 1 })),
       submit: true,
       note: "Kontrol dan coaching terlaksana.",
     }, now);

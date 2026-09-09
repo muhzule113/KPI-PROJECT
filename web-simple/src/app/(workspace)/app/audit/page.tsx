@@ -31,6 +31,7 @@ const actionLabels: Record<string, string> = {
   create_template_draft: "Membuat revisi template",
   discard_template_draft: "Membatalkan revisi template",
   activate_template_version: "Mengaktifkan versi template",
+  sync_master_kpi_template: "Menyelaraskan master KPI",
   create_rating_draft: "Membuat revisi predikat",
   update_rating_draft: "Memperbarui revisi predikat",
   discard_rating_draft: "Membatalkan revisi predikat",
@@ -39,6 +40,6 @@ const actionLabels: Record<string, string> = {
 
 export default async function AuditPage() {
   await requireRole("ADMIN");
-  const events = await prisma.auditEvent.findMany({ orderBy: { createdAt: "desc" }, take: 200, include: { actor: { select: { name: true, email: true } } } });
-  return <><PageHeader eyebrow="Kontrol" title="Riwayat perubahan" description="Catatan 200 tindakan terbaru. Kata sandi dan isi file tidak pernah disimpan di audit." />{!events.length ? <EmptyState icon={ShieldCheckIcon} title="Belum ada perubahan" description="Tindakan penting akan tercatat otomatis di sini." /> : <section className="panel"><div className="table-wrap"><table className="data-table"><thead><tr><th>Waktu</th><th>Pelaku</th><th>Tindakan</th><th>Objek</th><th>Alasan</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{formatDate(event.createdAt, { dateStyle: undefined, timeStyle: "medium" } as Intl.DateTimeFormatOptions)}</td><td>{event.actor?.name ?? "Sistem"}<span className="cell-subtitle">{event.actor?.email ?? "Tidak tersedia"}</span></td><td>{actionLabels[event.action] ?? event.action}</td><td>{event.subjectType}<span className="cell-subtitle">{event.subjectId}</span></td><td>{event.reason || "Tidak ada alasan"}</td></tr>)}</tbody></table></div></section>}</>;
+  const events = await prisma.auditEvent.findMany({ orderBy: { createdAt: "desc" }, take: 200, include: { actor: { select: { name: true, username: true } } } });
+  return <><PageHeader eyebrow="Kontrol" title="Riwayat perubahan" description="Catatan 200 tindakan terbaru. Kata sandi dan isi file tidak pernah disimpan di audit." />{!events.length ? <EmptyState icon={ShieldCheckIcon} title="Belum ada perubahan" description="Tindakan penting akan tercatat otomatis di sini." /> : <section className="panel"><div className="table-wrap"><table className="data-table"><thead><tr><th>Waktu</th><th>Pelaku</th><th>Tindakan</th><th>Objek</th><th>Alasan</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{formatDate(event.createdAt, { dateStyle: undefined, timeStyle: "medium" } as Intl.DateTimeFormatOptions)}</td><td>{event.actor?.name ?? "Sistem"}<span className="cell-subtitle">{event.actor?.username ?? "Tidak tersedia"}</span></td><td>{actionLabels[event.action] ?? event.action}</td><td>{event.subjectType}<span className="cell-subtitle">{event.subjectId}</span></td><td>{event.reason || "Tidak ada alasan"}</td></tr>)}</tbody></table></div></section>}</>;
 }

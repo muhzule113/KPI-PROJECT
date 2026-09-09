@@ -79,6 +79,7 @@ enum VersionStatus {
 model User {
   id            String   @id @default(cuid())
   name          String
+  username      String   @unique
   email         String   @unique
   emailVerified Boolean  @default(false)
   image         String?
@@ -185,7 +186,6 @@ model Employee {
   userId         String         @unique
   employeeNumber String         @unique
   name           String
-  email          String         @unique
   branchId       String
   positionId     String
   supervisorId   String?

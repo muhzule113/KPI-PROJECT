@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { username } from "better-auth/plugins";
 import { prisma } from "@/lib/prisma";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { isValidUsername, normalizeUsername, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH } from "@/lib/username";
 
 if (process.env.NODE_ENV === "production" && !process.env.APP_URL && !process.env.BETTER_AUTH_URL) {
   throw new Error("APP_URL atau BETTER_AUTH_URL wajib dikonfigurasi di production.");
@@ -20,19 +21,20 @@ export const auth = betterAuth({
   baseURL: appUrl,
   trustedOrigins,
   database: prismaAdapter(prisma, { provider: "postgresql" }),
+  disabledPaths: ["/sign-in/email", "/request-password-reset", "/reset-password", "/is-username-available"],
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,
     minPasswordLength: 10,
     maxPasswordLength: 128,
-    resetPasswordTokenExpiresIn: 60 * 60,
-    revokeSessionsOnPasswordReset: true,
-    sendResetPassword: async ({ user, url }) => {
-      void sendPasswordResetEmail({ to: user.email, name: user.name, url }).catch((error) => {
-        console.error("Gagal mengirim email reset kata sandi", error);
-      });
-    },
   },
+  plugins: [username({
+    displayUsername: false,
+    minUsernameLength: USERNAME_MIN_LENGTH,
+    maxUsernameLength: USERNAME_MAX_LENGTH,
+    usernameNormalization: normalizeUsername,
+    usernameValidator: isValidUsername,
+  })],
   user: {
     additionalFields: {
       isActive: { type: "boolean", required: true, defaultValue: true, input: false },
@@ -50,9 +52,7 @@ export const auth = betterAuth({
     window: 60,
     max: 100,
     customRules: {
-      "/sign-in/email": { window: 60, max: 10 },
-      "/request-password-reset": { window: 300, max: 5 },
-      "/reset-password": { window: 300, max: 5 },
+      "/sign-in/username": { window: 60, max: 10 },
     },
   },
   databaseHooks: {

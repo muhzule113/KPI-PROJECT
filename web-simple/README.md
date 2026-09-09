@@ -31,15 +31,16 @@ Buka `http://localhost:3002` persis seperti nilai `APP_URL`. Jika port atau doma
 
 Semua akun memakai nilai `SEED_DEMO_PASSWORD` dari `.env`:
 
-| Role | Email |
+| Role | Username |
 |---|---|
-| Super Admin | `admin@kpi-simple.local` |
-| Manager | `manager@kpi-simple.local` |
-| Supervisor | `supervisor@kpi-simple.local` |
-| Pegawai/Pelayan | `pegawai@kpi-simple.local` |
-| Pegawai/Teknisi | `teknisi@kpi-simple.local` |
+| Super Admin utama | `admin` |
+| Super Admin cadangan | `admin.cadangan` |
+| Manager | `manager` |
+| Supervisor | `supervisor` |
+| Pegawai/Pelayan | `pegawai` |
+| Pegawai/Teknisi | `teknisi` |
 
-Ubah kata sandi demo sebelum memakai sistem dengan data nyata.
+Ubah kata sandi kedua Super Admin dan seluruh akun demo sebelum memakai sistem dengan data nyata. Pengguna yang lupa kata sandi meminta Super Admin meresetnya dari menu Pengguna; sistem mempertahankan minimal dua Super Admin aktif.
 
 ## Alur kerja
 
@@ -54,22 +55,31 @@ Ubah kata sandi demo sebelum memakai sistem dengan data nyata.
 
 Evidence bersifat opsional, maksimal 3 file per lembar dan 10 MB per file. File disimpan privat, diverifikasi tipe/hash, dan wajib lolos Windows Defender atau scanner yang ditentukan lewat `MALWARE_SCANNER_PATH`.
 
+Enam jabatan utama memakai katalog baku 39 indikator dari referensi WhatsApp. Instalasi baru mendapat katalog tersebut dari seed. Untuk database yang sudah berjalan, buat backup lalu jalankan `npm run db:sync:kpi`; perintah ini idempoten dan hanya mengubah versi aktif untuk periode berikutnya. Draft target yang telah diedit pengguna akan menghentikan seluruh transaksi.
+
 ## Pemeriksaan
 
 ```powershell
 npm run check
+npm run verify:auth
+npm run verify:migration
 npm run verify:workflow
 npm run verify:configuration
 npm run verify:seed
+npm run verify:kpi
+npm run verify:august
 npm audit
 ```
 
 `verify:workflow` menjalankan alur Supervisor → Manager → koreksi → agregasi terhadap PostgreSQL dan melakukan rollback seluruh data uji.
 
+`verify:kpi` menguji sinkronisasi dua kali, konflik draft, serta fingerprint histori dan template di luar katalog, lalu melakukan rollback seluruh data uji.
+
 ## Catatan produksi
 
 - Gunakan secret acak minimal 32 karakter dan kredensial PostgreSQL khusus.
-- Konfigurasikan SMTP agar pemulihan kata sandi mengirim email.
+- Backup database sebelum deploy migrasi username, jalankan seed idempoten untuk memastikan akun `admin.cadangan` tersedia, lalu ganti kedua kata sandi Admin.
+- Sebelum `npm run db:sync:kpi`, backup database dan simpan fingerprint snapshot periode. Jalankan perintah dua kali untuk memastikan eksekusi kedua melewati keenam template tanpa membuat versi tambahan.
 - Pasang storage `storage/evidence/` pada volume privat yang persisten dan ikut backup.
 - Jalankan satu instance aplikasi untuk rate limit in-memory. Gunakan penyimpanan rate limit bersama jika nanti menjalankan beberapa instance.
 - Aplikasi ini web responsif, bukan PWA dan tidak mempunyai mode offline.
@@ -82,7 +92,7 @@ Docker produksi menjalankan satu instance aplikasi dan PostgreSQL dengan batas t
 cd web-simple
 cp .env.production.example .env.production
 chmod 600 .env.production
-# Isi domain, secret acak, password database, dan SMTP.
+# Isi domain, secret acak, dan password database.
 docker compose --env-file .env.production -f compose.prod.yaml up -d --build
 docker compose --env-file .env.production -f compose.prod.yaml --profile seed run --rm seed
 curl --fail http://127.0.0.1:3002/api/health

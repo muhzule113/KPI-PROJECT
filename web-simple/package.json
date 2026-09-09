@@ -19,10 +19,14 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx prisma/seed.ts",
     "db:seed:august": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/seed-august-2026.ts",
+    "db:sync:kpi": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/sync-master-kpi.ts",
     "verify:workflow": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-workflow.ts",
     "verify:configuration": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-configuration.ts",
+    "verify:auth": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-auth.ts",
+    "verify:migration": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-username-migration.ts",
     "verify:seed": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-seed-idempotency.ts",
     "verify:august": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-august-2026-fixture.ts",
+    "verify:kpi": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-master-kpi-sync.ts",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
@@ -39,7 +43,6 @@
     "decimal.js": "^10.6.0",
     "dotenv": "^17.2.3",
     "next": "16.3.4",
-    "nodemailer": "^10.0.1",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -51,7 +54,6 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",

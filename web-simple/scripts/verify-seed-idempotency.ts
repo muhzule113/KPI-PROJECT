@@ -13,7 +13,7 @@ async function fingerprint() {
   return JSON.stringify(await Promise.all([
     prisma.branch.findMany({ orderBy: { id: "asc" } }),
     prisma.position.findMany({ orderBy: { id: "asc" } }),
-    prisma.user.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true, email: true, role: true, isActive: true, updatedAt: true } }),
+    prisma.user.findMany({ orderBy: { id: "asc" }, select: { id: true, name: true, username: true, role: true, isActive: true, updatedAt: true } }),
     prisma.employee.findMany({ orderBy: { id: "asc" } }),
     prisma.kpiPeriod.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] }),
     prisma.kpiTemplate.findMany({ orderBy: { id: "asc" }, include: { versions: { orderBy: { versionNumber: "asc" }, include: { indicators: { orderBy: { id: "asc" } } } } } }),

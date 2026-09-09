@@ -1,0 +1,1328 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  super_admin
+  kpi_admin
+  auditor
+  owner_manager
+  supervisor
+  employee
+}
+
+enum EmployeeStatus {
+  ACTIVE   @map("active")
+  INACTIVE @map("inactive")
+  RESIGNED @map("resigned")
+  LEAVE    @map("leave")
+}
+
+enum TemplateVersionStatus {
+  DRAFT   @map("draft")
+  ACTIVE  @map("active")
+  RETIRED @map("retired")
+}
+
+enum PeriodStatus {
+  DRAFT
+  READY
+  OPEN
+  SUBMISSION_CLOSED
+  IN_REVIEW
+  WAITING_APPROVAL
+  PUBLISHED
+  LOCKED
+  CANCELLED
+}
+
+enum EmployeeKpiStatus {
+  DRAFT             @map("draft")
+  SUBMITTED         @map("submitted")
+  UNDER_REVIEW      @map("under_review")
+  REVISION_REQUIRED @map("revision_required")
+  VERIFIED          @map("verified")
+  PENDING_APPROVAL  @map("pending_approval")
+  APPROVED          @map("approved")
+  LOCKED            @map("locked")
+}
+
+enum KpiItemStatus {
+  NOT_STARTED       @map("not_started")
+  DRAFT             @map("draft")
+  SUBMITTED         @map("submitted")
+  UNDER_REVIEW      @map("under_review")
+  REVISION_REQUIRED @map("revision_required")
+  VERIFIED          @map("verified")
+  ASSESSED          @map("assessed")
+  LOCKED            @map("locked")
+}
+
+enum CalculationStatus {
+  PENDING    @map("pending")
+  CALCULATED @map("calculated")
+  UNSCORABLE @map("unscorable")
+}
+
+enum DailyReviewStatus {
+  PENDING           @map("pending")
+  APPROVED          @map("approved")
+  REVISION_REQUIRED @map("revision_required")
+}
+
+enum ReviewStatus {
+  IN_PROGRESS        @map("in_progress")
+  VERIFIED           @map("verified")
+  REVISION_REQUESTED @map("revision_requested")
+}
+
+enum CorrectionStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  APPLIED  @map("applied")
+}
+
+enum ImportBatchStatus {
+  UPLOADED                @map("uploaded")
+  SCANNING                @map("scanning")
+  QUEUED                  @map("queued")
+  PARSING                 @map("parsing")
+  NORMALIZING             @map("normalizing")
+  VALIDATING              @map("validating")
+  READY_FOR_PREVIEW       @map("ready_for_preview")
+  NEEDS_MAPPING           @map("needs_mapping")
+  NEEDS_REVIEW            @map("needs_review")
+  CONFIRMED               @map("confirmed")
+  COMMITTING              @map("committing")
+  COMPLETED               @map("completed")
+  COMPLETED_WITH_WARNINGS @map("completed_with_warnings")
+  FAILED                  @map("failed")
+  CANCELLED               @map("cancelled")
+  SUPERSEDED              @map("superseded")
+}
+
+enum TicketStatus {
+  INTAKE                 @map("intake")
+  DIAGNOSING             @map("diagnosing")
+  WAITING_CONSENT        @map("waiting_consent")
+  WAITING_SPAREPART      @map("waiting_sparepart")
+  IN_PROGRESS            @map("in_progress")
+  QC_READY               @map("qc_ready")
+  COMPLETED              @map("completed")
+  CANCELLED_UNREPAIRABLE @map("cancelled_unrepairable")
+  CANCELLED              @map("cancelled")
+  DELIVERED              @map("delivered")
+}
+
+enum PaymentStatus {
+  UNPAID  @map("unpaid")
+  PARTIAL @map("partial")
+  PAID    @map("paid")
+  WAIVED  @map("waived")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  isActive      Boolean  @default(true)
+  role          UserRole @default(employee)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions                  Session[]
+  accounts                  Account[]
+  employee                  Employee?
+  createdPeriods            KpiPeriod[]            @relation("PeriodCreator")
+  activatedTemplateVersions KpiTemplateVersion[]   @relation("TemplateActivator")
+  actualEntries             KpiActualEntry[]       @relation("ActualInput")
+  evidences                 KpiEvidence[]          @relation("EvidenceUploader")
+  reviews                   KpiReview[]            @relation("Reviewer")
+  assessments               KpiAssessment[]        @relation("Assessor")
+  approvals                 KpiApproval[]          @relation("Approver")
+  correctionRequests        KpiCorrectionRequest[] @relation("CorrectionRequester")
+  correctionApprovals       KpiCorrectionRequest[] @relation("CorrectionApprover")
+  calculationRuns           KpiCalculationRun[]    @relation("Calculator")
+  managerDecisions          EmployeeKpiItem[]      @relation("ManagerDecision")
+  dailyEmployeeEntries      KpiDailyEntry[]        @relation("DailyEmployeeActor")
+  dailySupervisorEntries    KpiDailyEntry[]        @relation("DailySupervisorActor")
+  dailyManagerEntries       KpiDailyEntry[]        @relation("DailyManagerActor")
+  uploadedImports           ImportBatch[]          @relation("ImportUploader")
+  confirmedImports          ImportBatch[]          @relation("ImportConfirmer")
+  recordedAttendance        Attendance[]           @relation("AttendanceRecorder")
+  recordedWorkLogs          AdminWorkLog[]         @relation("WorkLogRecorder")
+  recordedComplaints        Complaint[]            @relation("ComplaintRecorder")
+  recordedCoaching          CoachingLog[]          @relation("CoachingRecorder")
+  createdStockOpnames       StockOpname[]          @relation("StockOpnameCreator")
+  stockMovements            StockMovement[]        @relation("StockMovementActor")
+  paymentExceptions         ServiceTicket[]        @relation("PaymentExceptionApprover")
+  warrantyReviews           ServiceTicket[]        @relation("WarrantyReviewer")
+  assignedFollowUps         FeedbackFollowUp[]     @relation("FollowUpAssigner")
+  completedFollowUps        FeedbackFollowUp[]     @relation("FollowUpCompleter")
+  notifications             SystemNotification[]
+  auditEvents               AuditEvent[]           @relation("AuditActor")
+  reportSubmissions         ReportSubmission[]     @relation("ReportSubmitter")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model Branch {
+  id            String              @id @default(cuid())
+  code          String              @unique
+  name          String
+  address       String?
+  phone         String?
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  employees     Employee[]
+  placements    EmployeePlacement[]
+  periodLinks   KpiPeriodBranch[]
+  employeeKpis  EmployeeKpi[]       @relation("KpiBranchSnapshot")
+  spareparts    Sparepart[]
+  tickets       ServiceTicket[]
+  attendances   Attendance[]
+  stockOpnames  StockOpname[]
+  importBatches ImportBatch[]
+
+  @@map("branches")
+}
+
+model Position {
+  id           String              @id @default(cuid())
+  code         String              @unique
+  name         String
+  department   String              @default("Operasional")
+  description  String?
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  employees    Employee[]
+  placements   EmployeePlacement[]
+  templates    KpiTemplate[]
+  employeeKpis EmployeeKpi[]       @relation("KpiPositionSnapshot")
+
+  @@map("positions")
+}
+
+model Employee {
+  id                   String               @id @default(cuid())
+  userId               String?              @unique
+  employeeNumber       String               @unique
+  name                 String
+  email                String               @unique
+  phone                String?
+  positionId           String
+  branchId             String
+  supervisorId         String?
+  joinedAt             DateTime             @db.Date
+  endedAt              DateTime?            @db.Date
+  status               EmployeeStatus       @default(ACTIVE)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  user                 User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  position             Position             @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  branch               Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  supervisor           Employee?            @relation("CurrentSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  teamMembers          Employee[]           @relation("CurrentSupervisor")
+  placements           EmployeePlacement[]  @relation("PlacementEmployee")
+  supervisedPlacements EmployeePlacement[]  @relation("PlacementSupervisor")
+  kpis                 EmployeeKpi[]        @relation("KpiSubject")
+  supervisedKpis       EmployeeKpi[]        @relation("KpiSupervisor")
+  managedKpis          EmployeeKpi[]        @relation("KpiManager")
+  intakeTickets        ServiceTicket[]      @relation("TicketIntake")
+  cashierTickets       ServiceTicket[]      @relation("TicketCashier")
+  technicianTickets    ServiceTicket[]      @relation("TicketTechnician")
+  consentTickets       ServiceTicket[]      @relation("TicketConsent")
+  paymentTickets       ServiceTicket[]      @relation("TicketPayment")
+  deliveredTickets     ServiceTicket[]      @relation("TicketDelivery")
+  requestedParts       SparepartRequest[]   @relation("PartRequester")
+  fulfilledParts       SparepartRequest[]   @relation("PartFulfiller")
+  confirmedParts       SparepartRequest[]   @relation("PartConfirmer")
+  attendances          Attendance[]
+  workLogs             AdminWorkLog[]
+  complaints           Complaint[]
+  coachingReceived     CoachingLog[]        @relation("CoachingEmployee")
+  coachingGiven        CoachingLog[]        @relation("CoachingSupervisor")
+  csFeedback           CustomerFeedback[]   @relation("FeedbackCs")
+  technicianFeedback   CustomerFeedback[]   @relation("FeedbackTechnician")
+  assignedFollowUps    FeedbackFollowUp[]   @relation("FollowUpAssignee")
+  cashierTransactions  CashierTransaction[]
+  reportSubmissions    ReportSubmission[]
+
+  @@index([positionId, branchId, status])
+  @@map("employees")
+}
+
+model EmployeePlacement {
+  id             String        @id @default(cuid())
+  employeeId     String
+  positionId     String
+  branchId       String
+  supervisorId   String?
+  effectiveFrom  DateTime      @db.Date
+  effectiveUntil DateTime?     @db.Date
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  employee       Employee      @relation("PlacementEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  position       Position      @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  branch         Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  supervisor     Employee?     @relation("PlacementSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  kpiSnapshots   EmployeeKpi[]
+
+  @@index([employeeId, effectiveFrom, effectiveUntil])
+  @@map("employee_placements")
+}
+
+model KpiDefinition {
+  id             String            @id @default(cuid())
+  code           String            @unique
+  name           String
+  metricType     String            @default("percentage")
+  unit           String            @default("%")
+  direction      String            @default("higher")
+  defaultFormula String            @default("higher_is_better")
+  sourceType     String            @default("system")
+  description    String?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  templateItems  KpiTemplateItem[]
+  employeeItems  EmployeeKpiItem[]
+
+  @@map("kpi_definitions")
+}
+
+model KpiRatingScheme {
+  id          String               @id @default(cuid())
+  name        String
+  version     Int                  @default(1)
+  scoreCap    Decimal              @default(100) @db.Decimal(9, 6)
+  description String?
+  isDefault   Boolean              @default(false)
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  bands       KpiRatingBand[]
+  versions    KpiTemplateVersion[]
+
+  @@unique([name, version])
+  @@map("kpi_rating_schemes")
+}
+
+model KpiRatingBand {
+  id             String          @id @default(cuid())
+  ratingSchemeId String
+  code           String
+  label          String
+  minScore       Decimal         @db.Decimal(8, 2)
+  maxScore       Decimal         @db.Decimal(8, 2)
+  manualScore    Decimal?        @db.Decimal(8, 2)
+  color          String          @default("#047857")
+  badgeIcon      String?
+  sortOrder      Int             @default(1)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  ratingScheme   KpiRatingScheme @relation(fields: [ratingSchemeId], references: [id], onDelete: Cascade)
+
+  @@unique([ratingSchemeId, code])
+  @@map("kpi_rating_bands")
+}
+
+model KpiTemplate {
+  id         String               @id @default(cuid())
+  code       String               @unique
+  name       String
+  positionId String
+  isActive   Boolean              @default(true)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  position   Position             @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  versions   KpiTemplateVersion[]
+
+  @@map("kpi_templates")
+}
+
+model KpiTemplateVersion {
+  id             String                @id @default(cuid())
+  kpiTemplateId  String
+  versionNumber  Int                   @default(1)
+  status         TemplateVersionStatus @default(DRAFT)
+  totalWeight    Decimal               @default(0) @db.Decimal(8, 2)
+  ratingSchemeId String?
+  checksum       String?
+  effectiveFrom  DateTime?             @db.Date
+  effectiveUntil DateTime?             @db.Date
+  activatedById  String?
+  activatedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  template       KpiTemplate           @relation(fields: [kpiTemplateId], references: [id], onDelete: Cascade)
+  ratingScheme   KpiRatingScheme?      @relation(fields: [ratingSchemeId], references: [id], onDelete: SetNull)
+  activatedBy    User?                 @relation("TemplateActivator", fields: [activatedById], references: [id], onDelete: SetNull)
+  items          KpiTemplateItem[]
+  employeeKpis   EmployeeKpi[]
+
+  @@unique([kpiTemplateId, versionNumber])
+  @@map("kpi_template_versions")
+}
+
+model KpiTemplateItem {
+  id                String             @id @default(cuid())
+  templateVersionId String
+  kpiDefinitionId   String
+  weight            Decimal            @db.Decimal(5, 2)
+  targetValue       Decimal?           @db.Decimal(12, 2)
+  targetUnit        String             @default("%")
+  targetJson        Json?
+  formulaKey        String             @default("higher_is_better")
+  formulaParams     Json?
+  sourceType        String             @default("system")
+  evidenceRequired  Boolean            @default(false)
+  isMandatory       Boolean            @default(true)
+  sortOrder         Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  templateVersion   KpiTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+  definition        KpiDefinition      @relation(fields: [kpiDefinitionId], references: [id], onDelete: Restrict)
+  rubric            KpiRubric?
+
+  @@map("kpi_template_items")
+}
+
+model KpiRubric {
+  id             String               @id @default(cuid())
+  templateItemId String               @unique
+  name           String
+  description    String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  templateItem   KpiTemplateItem      @relation(fields: [templateItemId], references: [id], onDelete: Cascade)
+  criteria       KpiRubricCriterion[]
+
+  @@map("kpi_rubrics")
+}
+
+model KpiRubricCriterion {
+  id            String    @id @default(cuid())
+  rubricId      String
+  criterionText String
+  points        Decimal   @default(1) @db.Decimal(5, 2)
+  isMandatory   Boolean   @default(true)
+  sortOrder     Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  rubric        KpiRubric @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+
+  @@map("kpi_rubric_criteria")
+}
+
+model KpiPeriod {
+  id                     String               @id @default(cuid())
+  name                   String
+  year                   Int
+  month                  Int
+  startDate              DateTime             @db.Date
+  endDate                DateTime             @db.Date
+  submissionDeadline     DateTime
+  reviewDeadline         DateTime
+  approvalDeadline       DateTime
+  status                 PeriodStatus         @default(DRAFT)
+  totalEligibleEmployees Int                  @default(0)
+  createdById            String?
+  openedAt               DateTime?
+  closedAt               DateTime?
+  publishedAt            DateTime?
+  lockedAt               DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  createdBy              User?                @relation("PeriodCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  branches               KpiPeriodBranch[]
+  employeeKpis           EmployeeKpi[]
+  importBatches          ImportBatch[]
+  cashierTransactions    CashierTransaction[]
+  tickets                ServiceTicket[]
+  stockOpnames           StockOpname[]
+  workLogs               AdminWorkLog[]
+  coachingLogs           CoachingLog[]
+  reportSubmissions      ReportSubmission[]
+
+  @@unique([year, month])
+  @@index([status])
+  @@map("kpi_periods")
+}
+
+model KpiPeriodBranch {
+  id        String    @id @default(cuid())
+  periodId  String
+  branchId  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  period    KpiPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, branchId])
+  @@map("kpi_period_branches")
+}
+
+model EmployeeKpi {
+  id                     String                 @id @default(cuid())
+  periodId               String
+  employeeId             String
+  employeeNumberSnapshot String
+  employeeNameSnapshot   String
+  templateVersionId      String
+  supervisorIdSnapshot   String?
+  managerIdSnapshot      String?
+  branchIdSnapshot       String
+  positionIdSnapshot     String
+  placementIdSnapshot    String?
+  positionCodeSnapshot   String
+  eligibility            String                 @default("full")
+  scoreCapSnapshot       Decimal                @default(100) @db.Decimal(9, 6)
+  ratingBandsSnapshot    Json?
+  status                 EmployeeKpiStatus      @default(DRAFT)
+  progressPercentage     Decimal                @default(0) @db.Decimal(5, 2)
+  finalScore             Decimal?               @db.Decimal(8, 2)
+  ratingCode             String?
+  ratingLabel            String?
+  revisionNumber         Int                    @default(0)
+  rowVersion             Int                    @default(1)
+  submittedAt            DateTime?
+  verifiedAt             DateTime?
+  approvedAt             DateTime?
+  lockedAt               DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  period                 KpiPeriod              @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  employee               Employee               @relation("KpiSubject", fields: [employeeId], references: [id], onDelete: Restrict)
+  templateVersion        KpiTemplateVersion     @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  supervisor             Employee?              @relation("KpiSupervisor", fields: [supervisorIdSnapshot], references: [id], onDelete: SetNull)
+  manager                Employee?              @relation("KpiManager", fields: [managerIdSnapshot], references: [id], onDelete: SetNull)
+  branch                 Branch                 @relation("KpiBranchSnapshot", fields: [branchIdSnapshot], references: [id], onDelete: Restrict)
+  position               Position               @relation("KpiPositionSnapshot", fields: [positionIdSnapshot], references: [id], onDelete: Restrict)
+  placement              EmployeePlacement?     @relation(fields: [placementIdSnapshot], references: [id], onDelete: SetNull)
+  items                  EmployeeKpiItem[]
+  reviews                KpiReview[]
+  approvals              KpiApproval[]
+  corrections            KpiCorrectionRequest[]
+  calculationRuns        KpiCalculationRun[]
+
+  @@unique([periodId, employeeId])
+  @@index([periodId, status])
+  @@index([supervisorIdSnapshot, status])
+  @@index([managerIdSnapshot, status])
+  @@map("employee_kpis")
+}
+
+model EmployeeKpiItem {
+  id                       String            @id @default(cuid())
+  employeeKpiId            String
+  kpiDefinitionId          String?
+  definitionCodeSnapshot   String
+  nameSnapshot             String
+  weightSnapshot           Decimal           @db.Decimal(5, 2)
+  targetValueSnapshot      Decimal?          @db.Decimal(12, 2)
+  targetUnitSnapshot       String            @default("%")
+  targetJsonSnapshot       Json?
+  formulaKeySnapshot       String
+  formulaParamsSnapshot    Json?
+  sourceTypeSnapshot       String
+  evidenceRequiredSnapshot Boolean           @default(false)
+  rubricSnapshot           Json?
+  status                   KpiItemStatus     @default(NOT_STARTED)
+  actualDecimal            Decimal?          @db.Decimal(18, 6)
+  actualJson               Json?
+  achievementPercentage    Decimal?          @db.Decimal(12, 6)
+  weightedScore            Decimal?          @db.Decimal(12, 6)
+  calculationStatus        CalculationStatus @default(PENDING)
+  calculationNote          String?
+  managerDecision          String?
+  managerNote              String?
+  managerEvidenceJson      Json?
+  managerDecidedById       String?
+  managerDecidedAt         DateTime?
+  rowVersion               Int               @default(1)
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  employeeKpi              EmployeeKpi       @relation(fields: [employeeKpiId], references: [id], onDelete: Cascade)
+  definition               KpiDefinition?    @relation(fields: [kpiDefinitionId], references: [id], onDelete: SetNull)
+  managerDecidedBy         User?             @relation("ManagerDecision", fields: [managerDecidedById], references: [id], onDelete: SetNull)
+  actualEntries            KpiActualEntry[]
+  evidences                KpiEvidence[]
+  reviewItems              KpiReviewItem[]
+  assessments              KpiAssessment[]
+  dailyEntries             KpiDailyEntry[]
+
+  @@index([employeeKpiId, status])
+  @@index([employeeKpiId, managerDecision])
+  @@map("employee_kpi_items")
+}
+
+model KpiDailyEntry {
+  id                        String            @id @default(cuid())
+  employeeKpiItemId         String
+  entryDate                 DateTime          @db.Date
+  employeeActualDecimal     Decimal?          @db.Decimal(12, 2)
+  employeeActualJson        Json?
+  employeeNote              String?
+  employeeEnteredById       String?
+  entryStatus               String            @default("submitted")
+  employeeSubmittedAt       DateTime?
+  systemActualDecimal       Decimal?          @db.Decimal(12, 6)
+  systemActualJson          Json?
+  supervisorActualDecimal   Decimal?          @db.Decimal(12, 2)
+  supervisorActualJson      Json?
+  supervisorAnswersJson     Json?
+  supervisorScorePercentage Decimal?          @db.Decimal(8, 2)
+  supervisorNote            String?
+  supervisorAssessedById    String?
+  supervisorStatus          DailyReviewStatus @default(PENDING)
+  supervisorAssessedAt      DateTime?
+  managerActualDecimal      Decimal?          @db.Decimal(12, 2)
+  managerActualJson         Json?
+  managerAnswersJson        Json?
+  managerScorePercentage    Decimal?          @db.Decimal(8, 2)
+  managerNote               String?
+  managerAssessedById       String?
+  managerStatus             DailyReviewStatus @default(PENDING)
+  managerAssessedAt         DateTime?
+  rowVersion                Int               @default(1)
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+  item                      EmployeeKpiItem   @relation(fields: [employeeKpiItemId], references: [id], onDelete: Cascade)
+  employeeEnteredBy         User?             @relation("DailyEmployeeActor", fields: [employeeEnteredById], references: [id], onDelete: SetNull)
+  supervisorAssessedBy      User?             @relation("DailySupervisorActor", fields: [supervisorAssessedById], references: [id], onDelete: SetNull)
+  managerAssessedBy         User?             @relation("DailyManagerActor", fields: [managerAssessedById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeKpiItemId, entryDate])
+  @@index([entryDate, supervisorStatus])
+  @@index([entryDate, managerStatus])
+  @@map("kpi_daily_entries")
+}
+
+model KpiActualEntry {
+  id                String          @id @default(cuid())
+  employeeKpiItemId String
+  inputById         String
+  actualValue       Decimal?        @db.Decimal(12, 2)
+  actualJson        Json?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  item              EmployeeKpiItem @relation(fields: [employeeKpiItemId], references: [id], onDelete: Cascade)
+  inputBy           User            @relation("ActualInput", fields: [inputById], references: [id], onDelete: Restrict)
+
+  @@map("kpi_actual_entries")
+}
+
+model KpiEvidence {
+  id                String          @id @default(cuid())
+  employeeKpiItemId String
+  filePath          String
+  fileName          String
+  fileSize          BigInt
+  mimeType          String
+  sha256Hash        String
+  scanStatus        String          @default("pending")
+  scannedAt         DateTime?
+  scanNote          String?
+  uploadedById      String
+  description       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  item              EmployeeKpiItem @relation(fields: [employeeKpiItemId], references: [id], onDelete: Cascade)
+  uploadedBy        User            @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@map("kpi_evidences")
+}
+
+model KpiReview {
+  id            String          @id @default(cuid())
+  employeeKpiId String
+  reviewerId    String
+  status        ReviewStatus    @default(IN_PROGRESS)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  employeeKpi   EmployeeKpi     @relation(fields: [employeeKpiId], references: [id], onDelete: Cascade)
+  reviewer      User            @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  items         KpiReviewItem[]
+  assessments   KpiAssessment[]
+
+  @@index([employeeKpiId, status])
+  @@map("kpi_reviews")
+}
+
+model KpiReviewItem {
+  id                String          @id @default(cuid())
+  kpiReviewId       String
+  employeeKpiItemId String
+  decision          String
+  supervisorNote    String?
+  reason            String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  review            KpiReview       @relation(fields: [kpiReviewId], references: [id], onDelete: Cascade)
+  item              EmployeeKpiItem @relation(fields: [employeeKpiItemId], references: [id], onDelete: Cascade)
+
+  @@unique([kpiReviewId, employeeKpiItemId])
+  @@map("kpi_review_items")
+}
+
+model KpiAssessment {
+  id                    String                @id @default(cuid())
+  employeeKpiItemId     String
+  kpiReviewId           String?
+  assessedById          String
+  scorePoints           Decimal               @default(0) @db.Decimal(6, 2)
+  totalPoints           Decimal               @default(0) @db.Decimal(6, 2)
+  calculatedAchievement Decimal               @default(0) @db.Decimal(8, 2)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  item                  EmployeeKpiItem       @relation(fields: [employeeKpiItemId], references: [id], onDelete: Cascade)
+  review                KpiReview?            @relation(fields: [kpiReviewId], references: [id], onDelete: Cascade)
+  assessedBy            User                  @relation("Assessor", fields: [assessedById], references: [id], onDelete: Restrict)
+  answers               KpiAssessmentAnswer[]
+
+  @@index([employeeKpiItemId])
+  @@map("kpi_assessments")
+}
+
+model KpiAssessmentAnswer {
+  id              String        @id @default(cuid())
+  kpiAssessmentId String
+  criterionId     String?
+  criterionText   String
+  isFulfilled     Boolean       @default(false)
+  pointsEarned    Decimal       @default(0) @db.Decimal(5, 2)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  assessment      KpiAssessment @relation(fields: [kpiAssessmentId], references: [id], onDelete: Cascade)
+
+  @@map("kpi_assessment_answers")
+}
+
+model KpiApproval {
+  id                 String      @id @default(cuid())
+  employeeKpiId      String
+  approverId         String
+  action             String
+  reason             String?
+  rowVersionSnapshot Int
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  employeeKpi        EmployeeKpi @relation(fields: [employeeKpiId], references: [id], onDelete: Cascade)
+  approver           User        @relation("Approver", fields: [approverId], references: [id], onDelete: Restrict)
+
+  @@index([employeeKpiId, createdAt])
+  @@map("kpi_approvals")
+}
+
+model KpiCorrectionRequest {
+  id                 String           @id @default(cuid())
+  employeeKpiId      String
+  requestedById      String
+  approvedById       String?
+  reason             String
+  beforeJson         Json
+  afterJson          Json
+  status             CorrectionStatus @default(PENDING)
+  rejectionReason    String?
+  rowVersionSnapshot Int?
+  pendingUniqueKey   String?          @unique
+  appliedAt          DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  employeeKpi        EmployeeKpi      @relation(fields: [employeeKpiId], references: [id], onDelete: Cascade)
+  requestedBy        User             @relation("CorrectionRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy         User?            @relation("CorrectionApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeKpiId, status])
+  @@map("kpi_correction_requests")
+}
+
+model KpiCalculationRun {
+  id             String      @id @default(cuid())
+  employeeKpiId  String
+  runType        String      @default("recalculation")
+  inputSnapshot  Json
+  outputSnapshot Json
+  totalScore     Decimal?    @db.Decimal(8, 2)
+  ratingCode     String?
+  calculatedById String?
+  calculatedAt   DateTime
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  employeeKpi    EmployeeKpi @relation(fields: [employeeKpiId], references: [id], onDelete: Cascade)
+  calculatedBy   User?       @relation("Calculator", fields: [calculatedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeKpiId, calculatedAt])
+  @@map("kpi_calculation_runs")
+}
+
+model Sparepart {
+  id               String             @id @default(cuid())
+  branchId         String?
+  code             String             @unique
+  productType      String             @default("sparepart")
+  name             String
+  category         String
+  compatibleModels String?
+  stockQuantity    Int                @default(0)
+  minStockAlert    Int                @default(5)
+  purchasePrice    Decimal            @default(0) @db.Decimal(15, 2)
+  sellingPrice     Decimal            @default(0) @db.Decimal(15, 2)
+  isCritical       Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  branch           Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  requests         SparepartRequest[]
+  movements        StockMovement[]
+  opnameItems      StockOpnameItem[]
+
+  @@index([branchId, isCritical])
+  @@map("spareparts")
+}
+
+model ServiceTicket {
+  id                               String             @id @default(cuid())
+  ticketNumber                     String             @unique
+  customerName                     String
+  customerPhone                    String
+  customerAddress                  String?
+  deviceBrand                      String
+  deviceModel                      String
+  imeiOrSerial                     String?
+  passcodeCiphertext               String?
+  physicalCondition                String?
+  initialComplaint                 String
+  customerNeeds                    String?
+  estimatedCost                    Decimal            @default(0) @db.Decimal(15, 2)
+  finalCost                        Decimal            @default(0) @db.Decimal(15, 2)
+  estimatedCompletionAt            DateTime?
+  branchId                         String
+  periodId                         String?
+  intakeByEmployeeId               String?
+  cashierEmployeeId                String?
+  technicianEmployeeId             String?
+  customerConsentByEmployeeId      String?
+  paymentRecordedByEmployeeId      String?
+  deliveredByEmployeeId            String?
+  status                           TicketStatus       @default(INTAKE)
+  rowVersion                       Int                @default(1)
+  resultStatus                     String             @default("pending")
+  diagnosisNotes                   String?
+  actionNotes                      String?
+  qcChecklistJson                  Json?
+  isWarrantyReturn                 Boolean            @default(false)
+  warrantyReturnedFromTicketId     String?
+  customerConsentStatus            String             @default("pending")
+  customerConsentAt                DateTime?
+  customerConsentNotes             String?
+  paymentStatus                    PaymentStatus      @default(UNPAID)
+  paidAmount                       Decimal            @default(0) @db.Decimal(15, 2)
+  paymentRecordedAt                DateTime?
+  paymentExceptionType             String?
+  paymentExceptionReason           String?
+  paymentExceptionApprovedByUserId String?
+  paymentExceptionApprovedAt       DateTime?
+  deliveryRecipientType            String?
+  deliveryRecipientName            String?
+  deliveryNotes                    String?
+  unrepairableReason               String?
+  customerDeclinedReason           String?
+  cancellationReason               String?
+  technicalEvidenceJson            Json?
+  serviceCategory                  String             @default("general")
+  serviceComplexity                String             @default("light")
+  slaVersion                       String             @default("v1")
+  slaBaselineDueAt                 DateTime?
+  slaDueAt                         DateTime?
+  slaBreachedAt                    DateTime?
+  sparepartWaitMinutes             Int                @default(0)
+  slaSnapshotJson                  Json?
+  warrantyExpiresAt                DateTime?
+  warrantyReviewStatus             String             @default("not_applicable")
+  warrantyReviewReason             String?
+  warrantyReviewedByUserId         String?
+  warrantyReviewedAt               DateTime?
+  startedAt                        DateTime?
+  completedAt                      DateTime?
+  deliveredAt                      DateTime?
+  cancelledAt                      DateTime?
+  createdAt                        DateTime           @default(now())
+  updatedAt                        DateTime           @updatedAt
+  branch                           Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  period                           KpiPeriod?         @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  intakeBy                         Employee?          @relation("TicketIntake", fields: [intakeByEmployeeId], references: [id], onDelete: SetNull)
+  cashier                          Employee?          @relation("TicketCashier", fields: [cashierEmployeeId], references: [id], onDelete: SetNull)
+  technician                       Employee?          @relation("TicketTechnician", fields: [technicianEmployeeId], references: [id], onDelete: SetNull)
+  consentBy                        Employee?          @relation("TicketConsent", fields: [customerConsentByEmployeeId], references: [id], onDelete: SetNull)
+  paymentRecordedBy                Employee?          @relation("TicketPayment", fields: [paymentRecordedByEmployeeId], references: [id], onDelete: SetNull)
+  deliveredBy                      Employee?          @relation("TicketDelivery", fields: [deliveredByEmployeeId], references: [id], onDelete: SetNull)
+  paymentExceptionApprovedBy       User?              @relation("PaymentExceptionApprover", fields: [paymentExceptionApprovedByUserId], references: [id], onDelete: SetNull)
+  warrantyReviewedBy               User?              @relation("WarrantyReviewer", fields: [warrantyReviewedByUserId], references: [id], onDelete: SetNull)
+  warrantyReturnedFrom             ServiceTicket?     @relation("WarrantyReturn", fields: [warrantyReturnedFromTicketId], references: [id], onDelete: SetNull)
+  warrantyReturns                  ServiceTicket[]    @relation("WarrantyReturn")
+  sparepartRequests                SparepartRequest[]
+  feedback                         CustomerFeedback?
+  complaints                       Complaint[]
+  followUps                        FeedbackFollowUp[]
+
+  @@index([branchId, status])
+  @@index([technicianEmployeeId, status, periodId])
+  @@index([slaDueAt, status])
+  @@map("service_tickets")
+}
+
+model SparepartRequest {
+  id                    String        @id @default(cuid())
+  serviceTicketId       String
+  sparepartId           String
+  technicianEmployeeId  String?
+  warehouseEmployeeId   String?
+  confirmedByEmployeeId String?
+  quantity              Int           @default(1)
+  status                String        @default("pending")
+  requestedAt           DateTime
+  fulfilledAt           DateTime?
+  confirmedAt           DateTime?
+  availabilityNote      String?
+  slaDeadlineAt         DateTime?
+  notes                 String?
+  pendingUniqueKey      String?       @unique
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  ticket                ServiceTicket @relation(fields: [serviceTicketId], references: [id], onDelete: Cascade)
+  sparepart             Sparepart     @relation(fields: [sparepartId], references: [id], onDelete: Restrict)
+  technician            Employee?     @relation("PartRequester", fields: [technicianEmployeeId], references: [id], onDelete: SetNull)
+  warehouse             Employee?     @relation("PartFulfiller", fields: [warehouseEmployeeId], references: [id], onDelete: SetNull)
+  confirmedBy           Employee?     @relation("PartConfirmer", fields: [confirmedByEmployeeId], references: [id], onDelete: SetNull)
+
+  @@index([serviceTicketId, status])
+  @@map("sparepart_requests")
+}
+
+model StockMovement {
+  id            String    @id @default(cuid())
+  sparepartId   String
+  movementType  String
+  quantity      Int
+  stockBefore   Int?
+  stockAfter    Int?
+  referenceType String?
+  referenceId   String?
+  note          String?
+  userId        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sparepart     Sparepart @relation(fields: [sparepartId], references: [id], onDelete: Cascade)
+  user          User?     @relation("StockMovementActor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sparepartId, movementType])
+  @@map("stock_movements")
+}
+
+model StockOpname {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  periodId    String?
+  branchId    String
+  status      String            @default("draft")
+  deadline    DateTime?         @db.Date
+  completedAt DateTime?
+  createdById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  period      KpiPeriod?        @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  branch      Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy   User?             @relation("StockOpnameCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  items       StockOpnameItem[]
+
+  @@index([branchId, status])
+  @@map("stock_opnames")
+}
+
+model StockOpnameItem {
+  id            String      @id @default(cuid())
+  stockOpnameId String
+  sparepartId   String
+  systemStock   Int         @default(0)
+  physicalStock Int?
+  difference    Int         @default(0)
+  isCounted     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  stockOpname   StockOpname @relation(fields: [stockOpnameId], references: [id], onDelete: Cascade)
+  sparepart     Sparepart   @relation(fields: [sparepartId], references: [id], onDelete: Restrict)
+
+  @@unique([stockOpnameId, sparepartId])
+  @@map("stock_opname_items")
+}
+
+model Attendance {
+  id             String    @id @default(cuid())
+  employeeId     String
+  branchId       String
+  attendanceDate DateTime  @db.Date
+  status         String
+  checkInTime    DateTime? @db.Time(0)
+  checkOutTime   DateTime? @db.Time(0)
+  note           String?
+  recordedById   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  branch         Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  recordedBy     User?     @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, attendanceDate])
+  @@index([attendanceDate, status])
+  @@map("attendances")
+}
+
+model AdminWorkLog {
+  id                     String     @id @default(cuid())
+  employeeId             String
+  periodId               String?
+  workDate               DateTime   @db.Date
+  recordsInput           Int        @default(0)
+  recordsCorrected       Int        @default(0)
+  documentsEligible      Int        @default(0)
+  documentsComplete      Int        @default(0)
+  reconciliationsTotal   Int        @default(0)
+  reconciliationsSuccess Int        @default(0)
+  notes                  String?
+  evidencePath           String?
+  recordedById           String?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  employee               Employee   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  period                 KpiPeriod? @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  recordedBy             User?      @relation("WorkLogRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, workDate])
+  @@map("admin_work_logs")
+}
+
+model Complaint {
+  id              String         @id @default(cuid())
+  code            String         @unique
+  complaintDate   DateTime       @db.Date
+  employeeId      String?
+  serviceTicketId String?
+  channel         String
+  category        String?
+  severity        String         @default("medium")
+  status          String         @default("open")
+  description     String
+  slaDeadline     DateTime?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  recordedById    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  employee        Employee?      @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  ticket          ServiceTicket? @relation(fields: [serviceTicketId], references: [id], onDelete: SetNull)
+  recordedBy      User?          @relation("ComplaintRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, status, complaintDate])
+  @@map("complaints")
+}
+
+model CoachingLog {
+  id           String     @id @default(cuid())
+  supervisorId String
+  employeeId   String
+  coachingDate DateTime   @db.Date
+  topic        String
+  notes        String?
+  targetMet    Boolean?
+  followUpDate DateTime?  @db.Date
+  periodId     String?
+  recordedById String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  supervisor   Employee   @relation("CoachingSupervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+  employee     Employee   @relation("CoachingEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  period       KpiPeriod? @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  recordedBy   User?      @relation("CoachingRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([supervisorId, coachingDate])
+  @@map("coaching_logs")
+}
+
+model CustomerFeedback {
+  id                   String            @id @default(cuid())
+  serviceTicketId      String            @unique
+  csEmployeeId         String?
+  technicianEmployeeId String?
+  customerName         String
+  rating               Int               @default(5)
+  technicianRating     Int?
+  comments             String?
+  followUpOntime       Boolean           @default(true)
+  feedbackChannel      String            @default("in_store")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  ticket               ServiceTicket     @relation(fields: [serviceTicketId], references: [id], onDelete: Cascade)
+  csEmployee           Employee?         @relation("FeedbackCs", fields: [csEmployeeId], references: [id], onDelete: SetNull)
+  technicianEmployee   Employee?         @relation("FeedbackTechnician", fields: [technicianEmployeeId], references: [id], onDelete: SetNull)
+  followUp             FeedbackFollowUp?
+
+  @@index([csEmployeeId, rating])
+  @@map("customer_feedbacks")
+}
+
+model FeedbackFollowUp {
+  id                 String           @id @default(cuid())
+  customerFeedbackId String           @unique
+  serviceTicketId    String
+  assignedEmployeeId String?
+  assignedByUserId   String?
+  status             String           @default("pending")
+  dueAt              DateTime?
+  firstContactedAt   DateTime?
+  completedAt        DateTime?
+  contactChannel     String?
+  outcome            String?
+  responseSummary    String?
+  evidenceJson       Json?
+  completedByUserId  String?
+  rowVersion         Int              @default(1)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  feedback           CustomerFeedback @relation(fields: [customerFeedbackId], references: [id], onDelete: Cascade)
+  ticket             ServiceTicket    @relation(fields: [serviceTicketId], references: [id], onDelete: Cascade)
+  assignedEmployee   Employee?        @relation("FollowUpAssignee", fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  assignedBy         User?            @relation("FollowUpAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  completedBy        User?            @relation("FollowUpCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([assignedEmployeeId, status, dueAt])
+  @@map("feedback_follow_ups")
+}
+
+model ImportMappingTemplate {
+  id                String                 @id @default(cuid())
+  name              String
+  sourceApplication String                 @default("POS_SYSTEM")
+  description       String?
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  versions          ImportMappingVersion[]
+
+  @@map("import_mapping_templates")
+}
+
+model ImportMappingVersion {
+  id                String                @id @default(cuid())
+  mappingTemplateId String
+  versionNumber     Int                   @default(1)
+  mappingsJson      Json
+  isActive          Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  template          ImportMappingTemplate @relation(fields: [mappingTemplateId], references: [id], onDelete: Cascade)
+  batches           ImportBatch[]
+
+  @@unique([mappingTemplateId, versionNumber])
+  @@map("import_mapping_versions")
+}
+
+model ImportBatch {
+  id                     String                @id @default(cuid())
+  fileName               String
+  filePath               String
+  fileHashSha256         String?
+  sourceApplication      String                @default("POS_SYSTEM")
+  mappingVersionId       String?
+  periodId               String
+  branchId               String
+  currency               String                @default("IDR") @db.Char(3)
+  uploaderId             String
+  status                 ImportBatchStatus     @default(UPLOADED)
+  scanStatus             String                @default("quarantine")
+  scannedAt              DateTime?
+  scanNote               String?
+  supersededById         String?
+  totalRows              Int                   @default(0)
+  validRows              Int                   @default(0)
+  warningRows            Int                   @default(0)
+  errorRows              Int                   @default(0)
+  duplicateRows          Int                   @default(0)
+  summaryJson            Json?
+  issuesJson             Json?
+  confirmedAt            DateTime?
+  confirmedById          String?
+  warningsAcknowledgedAt DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  mappingVersion         ImportMappingVersion? @relation(fields: [mappingVersionId], references: [id], onDelete: SetNull)
+  period                 KpiPeriod             @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  branch                 Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  uploader               User                  @relation("ImportUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
+  confirmedBy            User?                 @relation("ImportConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  supersededBy           ImportBatch?          @relation("ImportSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededBatches      ImportBatch[]         @relation("ImportSupersession")
+  transactions           CashierTransaction[]
+
+  @@unique([sourceApplication, fileHashSha256])
+  @@index([periodId, status])
+  @@map("import_batches")
+}
+
+model CashierTransaction {
+  id                String      @id @default(cuid())
+  importBatchId     String
+  periodId          String
+  sourceApplication String      @default("POS_SYSTEM")
+  cashierEmployeeId String?
+  cashierNameRaw    String?
+  transactionNumber String
+  businessKey       String
+  transactionDate   DateTime
+  transactionAmount Decimal     @default(0) @db.Decimal(14, 2)
+  systemCashAmount  Decimal     @default(0) @db.Decimal(14, 2)
+  actualCashAmount  Decimal     @default(0) @db.Decimal(14, 2)
+  cashDifference    Decimal     @default(0) @db.Decimal(14, 2)
+  durationSeconds   Int?
+  status            String      @default("SUCCESS")
+  isDuplicate       Boolean     @default(false)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  batch             ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  period            KpiPeriod   @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  cashier           Employee?   @relation(fields: [cashierEmployeeId], references: [id], onDelete: SetNull)
+
+  @@unique([periodId, sourceApplication, businessKey])
+  @@index([periodId, cashierEmployeeId])
+  @@map("cashier_transactions")
+}
+
+model SystemNotification {
+  id         String    @id @default(cuid())
+  userId     String
+  title      String
+  body       String
+  type       String    @default("info")
+  entityType String?
+  entityId   String?
+  actionUrl  String?
+  dedupeKey  String?   @unique
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("system_notifications")
+}
+
+model AuditEvent {
+  id            String   @id @default(cuid())
+  occurredAt    DateTime @default(now())
+  actorType     String   @default("user")
+  actorId       String?
+  action        String
+  subjectType   String
+  subjectId     String
+  beforeJson    Json?
+  afterJson     Json?
+  reason        String?
+  ipAddress     String?
+  userAgent     String?
+  requestId     String?
+  correlationId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  actor         User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([subjectType, subjectId, occurredAt])
+  @@index([actorId, occurredAt])
+  @@map("audit_events")
+}
+
+model ReportSubmission {
+  id              String    @id @default(cuid())
+  periodId        String
+  employeeId      String
+  reportType      String
+  reportDate      DateTime  @db.Date
+  deadlineAt      DateTime
+  submittedAt     DateTime?
+  isOnTime        Boolean?
+  status          String    @default("scheduled")
+  source          String    @default("system")
+  contentSnapshot Json?
+  submittedById   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  period          KpiPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  submittedBy     User?     @relation("ReportSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+
+  @@unique([periodId, employeeId, reportType, reportDate])
+  @@index([periodId, status, deadlineAt])
+  @@map("report_submissions")
+}

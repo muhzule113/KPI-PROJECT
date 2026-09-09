@@ -3,11 +3,11 @@
 
 | Metadata | Nilai |
 |---|---|
-| Versi | 1.1 |
+| Versi | 1.2 |
 | Status | Workflow dan pembagian akses disepakati |
-| Tanggal | 7 September 2026 |
-| Platform | Web (Laravel + Inertia React) + Mobile (Flutter) |
-| Database | MySQL |
+| Tanggal | 9 September 2026 |
+| Platform | Web responsif (Next.js + TypeScript), desktop dan ponsel |
+| Database | PostgreSQL melalui Prisma ORM |
 | Periode evaluasi | Bulanan (dengan input dan review harian) |
 | Bahasa produk | Indonesia |
 
@@ -168,7 +168,7 @@ Sistem KPI Management yang:
 - Ranking, trend, rekap, dan export laporan.
 - Notifikasi in-app dan push notification.
 - Audit trail dan histori perubahan.
-- Web app (Laravel + Inertia React) dan mobile app (Flutter, Android & iOS).
+- Satu web app responsif untuk desktop dan ponsel; tidak ada aplikasi Flutter terpisah.
 
 ### 4.2 Out of Scope (MVP)
 
@@ -200,18 +200,18 @@ Owner / Manager
 
 | Pengguna | Platform | Tanggung jawab |
 |---|---|---|
-| Teknisi (`employee`, `POS-TEK`) | Mobile | Ambil tiket, diagnosis, progres, sparepart, QC, KPI sendiri |
-| Pelayan (`employee`, `POS-CS`) | Mobile | Penerimaan, persetujuan pelanggan, penyerahan, feedback, komplain |
-| Gudang (`employee`, `POS-GUD`) | Mobile | Sparepart, stok, opname, KPI sendiri |
-| Kasir (`employee`, `POS-KSR`) | Mobile dan web | Biaya, pembayaran, laporan kasir, KPI sendiri |
-| Admin Operasional (`employee`, `POS-ADM`) | Mobile dan web | Work-log, dokumen, rekonsiliasi, KPI sendiri |
-| Supervisor (`supervisor`) | Mobile dan web | Absensi dan penilaian harian tim, rekap, coaching, verifikasi sumber |
-| Manager/Owner (`owner_manager`) | Mobile dan web | Approval staf, penilaian dan finalisasi KPI Supervisor, laporan sesuai assignment |
-| Admin KPI (`kpi_admin`) | Web | Periode, assignment penilai, mapping import, monitoring, publikasi |
-| Super Admin (`super_admin`) | Web | Skala predikat, indikator, template, target, bobot, rubrik, serta seluruh tindakan web lintas role dan cabang |
-| Auditor (`auditor`) | Web | Laporan, histori, dan audit lintas cabang; hanya baca |
+| Teknisi (`employee`, `POS-TEK`) | Web responsif | Ambil tiket, diagnosis, progres, sparepart, QC, KPI sendiri |
+| Pelayan (`employee`, `POS-CS`) | Web responsif | Penerimaan, persetujuan pelanggan, penyerahan, feedback, komplain |
+| Gudang (`employee`, `POS-GUD`) | Web responsif | Sparepart, stok, opname, KPI sendiri |
+| Kasir (`employee`, `POS-KSR`) | Web responsif | Biaya, pembayaran, laporan kasir, KPI sendiri |
+| Admin Operasional (`employee`, `POS-ADM`) | Web responsif | Work-log, dokumen, rekonsiliasi, KPI sendiri |
+| Supervisor (`supervisor`) | Web responsif | Absensi dan penilaian harian tim, rekap, coaching, verifikasi sumber |
+| Manager/Owner (`owner_manager`) | Web responsif | Approval staf, penilaian dan finalisasi KPI Supervisor, laporan sesuai assignment |
+| Admin KPI (`kpi_admin`) | Web responsif | Periode, assignment penilai, mapping import, monitoring, publikasi |
+| Super Admin (`super_admin`) | Web responsif | Skala predikat, indikator, template, target, bobot, rubrik, serta seluruh tindakan lintas role dan cabang |
+| Auditor (`auditor`) | Web responsif | Laporan, histori, dan audit lintas cabang; hanya baca |
 
-Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. Kombinasi administratif/auditor dengan role operasional ditolak. Super Admin menjadi pengecualian yang memiliki seluruh kewenangan web tanpa akses mobile; Admin KPI dan Auditor tidak memperoleh hak transaksi atau penilaian. CapabilityMatrix menjadi kontrak bersama untuk login, sesi, menu, resource, dan controller. Sesi lama diperiksa ulang pada setiap request; API mobile menggunakan token yang diterbitkan server untuk kanal mobile. Akun nonaktif dan profil operasional tidak lengkap ditolak.
+Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. Kombinasi administratif/auditor dengan role operasional ditolak. Super Admin menjadi pengecualian yang memiliki seluruh kewenangan lintas cabang; Admin KPI dan Auditor tidak memperoleh hak transaksi atau penilaian. Capability matrix menjadi kontrak bersama untuk login, sesi, menu, halaman, dan server action. Kewenangan tidak berubah saat ukuran layar berubah, sesi lama diperiksa ulang pada setiap request, dan akun nonaktif serta profil operasional tidak lengkap ditolak.
 
 ### 5.3 Prinsip Pemisahan Tugas
 
@@ -226,13 +226,17 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 
 ## 6. Master KPI per Jabatan
 
+Enam template pada bagian ini adalah katalog baku 39 indikator berdasarkan tujuh gambar referensi WhatsApp. Semua indikator memakai nilai `NUMERIC`; indikator bersatuan `%` diisi langsung pada rentang 0–100. Persentase dan rasio memakai agregasi `AVERAGE`, sedangkan jumlah unit, komplain, dan selisih kas memakai `SUM`.
+
+Pada aplikasi web saat ini, nilai tetap masuk melalui alur penilaian harian Supervisor dan koreksi Manager. Kolom sumber data di bawah adalah konteks bisnis, bukan integrasi otomatis dalam lingkup penyelarasan ini. Perubahan master selalu menjadi versi baru untuk periode berikutnya; snapshot periode Agustus dan September 2026 tidak dibangun ulang.
+
 ### 6.1 Teknisi
 
 | Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
 |---|---|---:|---|---|---|---|
-| TEK-01 | Jumlah servis selesai | 25% | ≥ [N] unit/bulan | Higher | Tiket servis | Sistem otomatis |
+| TEK-01 | Jumlah servis selesai | 25% | ≥ 80 unit/bulan | Higher | Tiket servis | Sistem otomatis |
 | TEK-02 | Tingkat keberhasilan servis | 25% | ≥ 95% | Higher | Tiket servis | Sistem otomatis |
-| TEK-03 | Tingkat retur/komplain | 15% | ≤ 3% | Lower | Record retur dari Pelayan/Admin | Cross-role (Pelayan/Admin) |
+| TEK-03 | Tingkat retur | 15% | ≤ 3%; gagal 6% | Lower | Record retur dari Pelayan/Admin | Cross-role (Pelayan/Admin) |
 | TEK-04 | Ketepatan waktu pengerjaan | 15% | ≥ 95% | Higher | Timestamp mulai & selesai | Sistem otomatis |
 | TEK-05 | Kepatuhan SOP | 10% | ≥ 95% | Higher | Checklist observasi | Supervisor |
 | TEK-06 | Kerapian & kebersihan | 5% | ≥ 90% | Higher | Checklist observasi | Supervisor |
@@ -253,7 +257,7 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 | CS-02 | Kecepatan melayani | 20% | ≥ 95% sesuai standar | Higher | Observasi dengan panduan rubrik | Supervisor memilih predikat |
 | CS-03 | Akurasi input order | 20% | ≥ 98% | Higher | Order valid vs error | Sistem otomatis |
 | CS-04 | Follow-up pelanggan | 15% | ≥ 95% | Higher | Record follow-up | Sistem otomatis |
-| CS-05 | Jumlah komplain | 10% | ≤ [N] komplain/bulan | Lower | Record komplain kanal resmi | Cross-role / sistem |
+| CS-05 | Jumlah komplain | 10% | ≤ 3 komplain/bulan; gagal 5 | Lower | Record komplain kanal resmi | Cross-role / sistem |
 | CS-06 | Kehadiran & disiplin | 10% | ≥ 95% | Higher | Data absensi | Sistem / Supervisor |
 | | **Total** | **100%** | | | | |
 
@@ -280,7 +284,7 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 | Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
 |---|---|---:|---|---|---|---|
 | KSR-01 | Akurasi transaksi | 30% | ≥ 99% | Higher | Import laporan kasir | Import otomatis |
-| KSR-02 | Selisih kas | 25% | 0 / minimal | Lower | Import: kas sistem vs kas aktual | Import otomatis |
+| KSR-02 | Selisih kas | 25% | Harus Rp0 | Zero tolerance | Import: kas sistem vs kas aktual | Import otomatis |
 | KSR-03 | Ketepatan laporan kas | 20% | 100% tepat waktu | Higher | Timestamp upload vs deadline | Sistem otomatis |
 | KSR-04 | Kecepatan transaksi | 10% | ≥ 95% | Higher | Durasi transaksi dari laporan | Import otomatis |
 | KSR-05 | Pelayanan | 10% | ≥ 90% | Higher | Checklist observasi | Supervisor |
@@ -292,7 +296,7 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 | Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
 |---|---|---:|---|---|---|---|
 | GUD-01 | Akurasi stok | 30% | ≥ 98% | Higher | Stok sistem vs hasil opname | Gudang input; sistem hitung; Supervisor verifikasi |
-| GUD-02 | Selisih stok | 20% | ≤ 2% | Lower | Difference record | Sistem; lower is better |
+| GUD-02 | Selisih stok | 20% | ≤ 2%; gagal 5% | Lower | Difference record | Sistem; lower is better |
 | GUD-03 | Kecepatan penyediaan sparepart | 15% | ≥ 95% | Higher | Request time vs fulfilled time | Sistem / log / evidence |
 | GUD-04 | Kelengkapan stok | 15% | ≥ 95% | Higher | Availability item wajib | Sistem / checklist |
 | GUD-05 | Stock opname | 10% | 100% | Higher | Completion dan deadline | Sistem + Supervisor |
@@ -304,20 +308,20 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 
 | Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
 |---|---|---:|---|---|---|---|
-| SUP-01 | Pencapaian target tim | 30% | **[Harus diputuskan]** | Higher | Agregasi KPI anggota tim | Sistem otomatis |
-| SUP-02 | Kualitas kerja tim | 20% | **[Harus diputuskan]** | Higher | Agregasi kualitas/retur/error tim | Sistem + Manager |
-| SUP-03 | Kedisiplinan tim | 15% | **[Harus diputuskan]** | Higher | Agregasi kehadiran tim | Sistem + Manager |
-| SUP-04 | Penyelesaian komplain | 10% | **[Harus diputuskan]** | Higher | Complaint SLA record | Sistem / Manager |
-| SUP-05 | Coaching & evaluasi karyawan | 10% | **[Harus diputuskan]** | Higher | Coaching record vs target | Supervisor input; Manager verifikasi |
-| SUP-06 | Kepatuhan SOP | 10% | **[Harus diputuskan]** | Higher | Rubric/checklist Manager | Manager assessment |
-| SUP-07 | Ketepatan laporan | 5% | **[Harus diputuskan]** | Higher | Timestamp submission | Sistem otomatis |
+| SUP-01 | Pencapaian target tim | 30% | ≥ 90% | Higher | Agregasi KPI anggota tim | Sistem otomatis |
+| SUP-02 | Kualitas kerja tim | 20% | ≥ 95% | Higher | Agregasi kualitas/retur/error tim | Sistem + Manager |
+| SUP-03 | Kedisiplinan tim | 15% | ≥ 95% | Higher | Agregasi kehadiran tim | Sistem + Manager |
+| SUP-04 | Penyelesaian komplain | 10% | ≥ 90% | Higher | Complaint SLA record | Sistem / Manager |
+| SUP-05 | Coaching & evaluasi karyawan | 10% | 100% | Higher | Coaching record vs target | Supervisor input; Manager verifikasi |
+| SUP-06 | Kepatuhan SOP | 10% | ≥ 95% | Higher | Rubric/checklist Manager | Manager assessment |
+| SUP-07 | Ketepatan laporan | 5% | 100% | Higher | Timestamp submission | Sistem otomatis |
 | | **Total** | **100%** | | | | |
 
-> **Catatan:** Target Supervisor belum ditentukan. Wajib dilengkapi sebelum periode pertama dibuka.
+> **Keputusan:** Target Supervisor telah dikunci sesuai katalog baku dan dinilai langsung oleh Manager melalui alur harian yang ada.
 
 ### 6.7 Owner / Manager
 
-Daftar KPI, bobot, dan target Owner/Manager **belum tersedia**. Sistem menyediakan template yang dapat dikonfigurasi, tetapi tidak boleh membuat indikator fiktif. Harus ditentukan sebelum go-live.
+Owner/Manager tidak menjadi subjek KPI dalam katalog baku ini. Sistem tidak membuat template atau indikator fiktif untuk jabatan tersebut.
 
 ---
 
@@ -325,7 +329,7 @@ Daftar KPI, bobot, dan target Owner/Manager **belum tersedia**. Sistem menyediak
 
 ### 7.0 Alur Servis
 
-Pelayan menerima perangkat dan membuat tiket melalui mobile. Teknisi mengambil tiket atau ditugaskan oleh Supervisor/Manager, lalu mengerjakan diagnosis dan progres. Kasir mencatat estimasi; Pelayan mencatat persetujuan pelanggan sesuai aturan tiket. Teknisi meminta sparepart, Gudang memenuhi, dan Teknisi menerima. Teknisi melakukan QC beserta bukti teknis. Kasir menyelesaikan biaya/pembayaran, kemudian Pelayan menyerahkan perangkat dan menyediakan tautan feedback pelanggan. Pengecualian pembayaran memerlukan Manager yang berwenang. Setiap tindakan memeriksa cabang, pemilik tugas, status, dan versi baris.
+Pelayan menerima perangkat dan membuat tiket melalui web responsif dari ponsel atau komputer. Teknisi mengambil tiket atau ditugaskan oleh Supervisor/Manager, lalu mengerjakan diagnosis dan progres. Kasir mencatat estimasi; Pelayan mencatat persetujuan pelanggan sesuai aturan tiket. Teknisi meminta sparepart, Gudang memenuhi, dan Teknisi menerima. Teknisi melakukan QC beserta bukti teknis. Kasir menyelesaikan biaya/pembayaran, kemudian Pelayan menyerahkan perangkat dan menyediakan tautan feedback pelanggan. Pengecualian pembayaran memerlukan Manager yang berwenang. Setiap tindakan memeriksa cabang, pemilik tugas, status, dan versi baris.
 
 ### 7.1 Alur KPI
 
@@ -376,19 +380,19 @@ Not Started → Draft → Submitted → Under Review → Revision Required → [
 
 ### 8.0 Pelayan
 
-Masuk melalui mobile, menerima perangkat, membuat tiket, mencatat persetujuan pelanggan, menyerahkan perangkat setelah QC dan pembayaran, serta menangani feedback dan komplain. Pelayan tidak melakukan diagnosis, progres teknis, atau QC.
+Masuk melalui web responsif, menerima perangkat, membuat tiket, mencatat persetujuan pelanggan, menyerahkan perangkat setelah QC dan pembayaran, serta menangani feedback dan komplain. Pelayan tidak melakukan diagnosis, progres teknis, atau QC.
 
 ### 8.1 Teknisi
 
-Masuk melalui mobile, mengambil tiket atau menerima penugasan, lalu melakukan diagnosis, progres, permintaan/penerimaan sparepart, evidence teknis dan QC tiket miliknya. Fakta tiket menghasilkan KPI otomatis. Teknisi melihat status dan fakta; skor/predikat menunggu publikasi.
+Masuk melalui web responsif, mengambil tiket atau menerima penugasan, lalu melakukan diagnosis, progres, permintaan/penerimaan sparepart, evidence teknis dan QC tiket miliknya. Fakta tiket menghasilkan KPI otomatis. Teknisi melihat status dan fakta; skor/predikat menunggu publikasi.
 
 ### 8.2 Admin Operasional dan Gudang
 
-Admin Operasional mencatat work-log, kelengkapan dokumen dan rekonsiliasi melalui mobile/web. Gudang memakai mobile untuk pemenuhan sparepart, stok dan opname. Keduanya melihat KPI sendiri tanpa kewajiban submit.
+Admin Operasional mencatat work-log, kelengkapan dokumen dan rekonsiliasi melalui web responsif. Gudang memakai tampilan ponsel pada web yang sama untuk pemenuhan sparepart, stok dan opname. Keduanya melihat KPI sendiri tanpa kewajiban submit.
 
 ### 8.3 Kasir
 
-Kasir menggunakan mobile/web untuk estimasi, biaya final, pembayaran, dan upload laporan kasir. File diproses menjadi preview; validasi serta verifikasi sumber mengikuti workflow import. Tidak ada input skor KPI oleh Kasir.
+Kasir menggunakan web responsif untuk estimasi, biaya final, pembayaran, dan upload laporan kasir. File diproses menjadi preview; validasi serta verifikasi sumber mengikuti workflow import. Tidak ada input skor KPI oleh Kasir.
 
 ### 8.4 Supervisor
 
@@ -418,9 +422,9 @@ achievement = MIN(raw_achievement, cap)  ← default cap = 100
 weighted_score = achievement × (weight / 100)
 ```
 
-Contoh TEK-01: target 100 servis, aktual 110.
+Contoh TEK-01: target 80 servis, aktual 88.
 ```
-raw = (110 / 100) × 100 = 110%
+raw = (88 / 80) × 100 = 110%
 achievement = MIN(110, 100) = 100%  [capped]
 weighted_score = 100 × (25/100) = 25.00
 ```
@@ -452,26 +456,15 @@ weighted_score = 100 × (15/100) = 15.00
 Dipakai untuk: KSR-02 (selisih kas — idealnya nol).
 
 ```
-if actual <= full_score_limit : achievement = 100
-if actual >= failure_limit : achievement = 0
-otherwise : achievement = ((failure_limit - actual) / (failure_limit - full_score_limit)) × 100
+if actual == 0 : achievement = 100
+if actual != 0 : achievement = 0
 ```
 
-> Nilai `full_score_limit` dan `failure_limit` dalam rupiah atau persentase — **wajib dikonfigurasi sebelum periode pertama.**
+> KSR-02 memakai kebijakan ketat: target harus Rp0 dan setiap selisih menghasilkan achievement 0%.
 
-#### Predikat dengan Panduan Rubrik
+#### Persentase Observasi
 
-Dipakai untuk penilaian Supervisor pada TEK-05, TEK-06, CS-02, ADM-06, KSR-05, dan GUD-06. Kriteria rubrik ditampilkan sebagai panduan; Supervisor memilih satu predikat untuk keseluruhan KPI dan wajib menulis catatan jika nilainya di bawah target.
-
-| Kode internal | Label default | Nilai default |
-|---|---|---:|
-| POOR | Perlu Perbaikan | 60% |
-| FAIR | Cukup | 75% |
-| GOOD | Baik | 85% |
-| VERY_GOOD | Sangat Baik | 95% |
-| STAR | Istimewa | 100% |
-
-Nilai subjektif bulanan adalah rata-rata nilai predikat harian yang disetujui. Penilaian Manager terhadap KPI Supervisor (`SUP-*`) tidak berubah.
+Dipakai untuk indikator observasi seperti TEK-05, TEK-06, CS-02, ADM-06, KSR-05, dan GUD-06. Penilai memasukkan persentase langsung 0–100; nilai bulanan adalah rata-rata nilai harian yang disetujui. Predikat POOR sampai STAR hanya mengelompokkan skor akhir dan tidak dipakai sebagai input indikator.
 
 Contoh rubric SOP Teknisi:
 
@@ -541,23 +534,24 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 ### 10.1 Modul Autentikasi
 
 **Fitur:**
-- Login dengan email dan password.
+- Login dengan username dan password.
 - Logout dan logout semua sesi.
-- Lupa password dengan reset link (single-use, time-limited).
+- Lupa password ditangani Super Admin melalui reset akun; seluruh sesi pengguna dicabut setelah reset.
 - Manajemen sesi: lihat sesi aktif di perangkat apa, cabut sesi lain.
 - Rate limiting pada endpoint login.
-- Token Sanctum untuk mobile (scoped, named per device, revocable).
-- Session + CSRF untuk web Filament.
+- Better Auth untuk sesi berbasis cookie HTTP-only, rotasi, dan pencabutan sesi.
+- Validasi origin dan perlindungan CSRF untuk mutation web.
 
 **Keamanan:**
-- Password di-hash dengan bcrypt.
-- Token mobile tersimpan di platform secure storage.
-- Nonaktifkan akun → semua token dan sesi langsung dicabut.
+- Password baru di-hash oleh Better Auth; hash bcrypt Laravel lama hanya didukung selama masa migrasi akun.
+- Cookie sesi tidak dapat dibaca JavaScript, memakai SameSite, dan wajib Secure di produksi HTTPS.
+- Nonaktifkan akun → semua sesi langsung dicabut atau ditolak pada pemeriksaan berikutnya.
+- Minimal dua Super Admin harus tetap aktif agar pemulihan akses Admin dapat dilakukan tanpa email.
 
 ### 10.2 Modul Manajemen Karyawan & Organisasi
 
 **Fitur:**
-- CRUD karyawan: nama, nomor karyawan, jabatan, email, tanggal bergabung.
+- CRUD karyawan: nama, nomor karyawan, jabatan, username akun, tanggal bergabung.
 - Histori penempatan (cabang, jabatan, Supervisor) dengan effective date.
 - Karyawan nonaktif tetap ada di histori — tidak dihapus.
 - Pengelolaan Supervisor per tim.
@@ -837,7 +831,6 @@ Fokus pada antrean kerja:
 - Deduplicate: event + entity + penerima yang sama tidak dikirim dua kali.
 - Deep link: menuju screen yang sesuai dan authorized.
 - Konten notifikasi tidak menampilkan data sensitif di lock screen.
-- Email reminder (opsional MVP) dikirim via queue, tidak sinkron.
 
 ---
 
@@ -846,43 +839,38 @@ Fokus pada antrean kerja:
 ### 14.1 Gambaran Umum
 
 ```
-[Flutter Mobile App] ──── REST API /api/v1 ────┐
-                                                 │
-[Web Browser] ──── Laravel + Inertia React ───────────┤
-                                                 │
-[Aplikasi Kasir] ── XLSX/CSV/PDF ──── Import ───┘
-                                                 │
-                                         [Laravel Backend]
-                                                 │
-                              ┌──────────────────┼──────────────────┐
-                              │                  │                  │
-                          [MySQL]          [Object Storage]    [Queue/Cache]
-                                                                     │
-                                                              [Push Notification]
+[Browser desktop / ponsel]
+            │ HTTPS
+            ▼
+[Next.js App Router + TypeScript]
+  ├── Server Components, Server Actions, Route Handlers
+  ├── Better Auth
+  └── Modul akses, KPI, servis, stok, impor, dan audit
+            │ Prisma ORM
+            ▼
+      [PostgreSQL]
+
+[Aplikasi Kasir] ── XLSX/CSV/PDF ──► [Penyimpanan private] ──► [Modul Import]
 ```
 
 ### 14.2 Stack Teknologi
 
 | Komponen | Teknologi |
 |---|---|
-| Backend | Laravel 11 |
-| Web Admin | Filament 3 |
-| Mobile | Flutter (Android & iOS, 1 codebase) |
-| Database | MySQL 8 |
-| Cache & Queue | Redis |
-| File Storage | Private Object Storage (S3-compatible) |
-| Authentication Web | Session + CSRF (Laravel) |
-| Authentication Mobile | Laravel Sanctum Token |
-| Job Processing | Laravel Queue Worker |
-| Scheduling | Laravel Scheduler |
+| Website dan proses server | Next.js 16 App Router + TypeScript |
+| Database | PostgreSQL 17 |
+| Akses database | Prisma ORM 7 |
+| Tampilan | Tailwind CSS 4 + komponen shadcn/ui |
+| Login dan sesi | Better Auth |
+| File import | Penyimpanan private; object storage S3-compatible saat deployment terdistribusi |
 
 ### 14.3 Arsitektur Modular Monolith
 
-Backend dibagi menjadi modul dengan batas yang jelas:
+Aplikasi Next.js dibagi menjadi modul dengan batas yang jelas:
 
 | Modul | Tanggung Jawab |
 |---|---|
-| Identity & Access | Login, token, session, role, permission |
+| Identity & Access | Login, session, role, capability, dan scope data |
 | Organization | Employee, jabatan, departemen, tim, penempatan |
 | KPI Catalog | Definisi, template, versi, rubric, rating |
 | Period | Siklus periode, deadline, generate KPI |
@@ -892,60 +880,32 @@ Backend dibagi menjadi modul dengan batas yang jelas:
 | Approval | Manager approve/return, locking, correction |
 | Import | Upload, parsing, mapping, staging, validate, confirm |
 | Reporting | Dashboard, ranking, trend, export |
-| Notification | In-app, push, email, preferences |
+| Notification | In-app |
 | Audit & Compliance | Activity log, before/after, security event |
 
 **Aturan antar modul:**
-- Modul berkomunikasi melalui application service atau domain event.
-- Controller dan Filament Resource tidak menulis langsung ke banyak agregat.
+- Modul berkomunikasi melalui fungsi layanan yang eksplisit.
+- Halaman, route handler, dan server action tidak menggandakan aturan bisnis lintas agregat.
 - Semua kalkulasi dilakukan oleh Calculation module.
-- Audit ditulis dalam transaksi yang sama atau via outbox.
+- Audit perubahan kritis ditulis dalam transaksi yang sama.
 
-### 14.4 Struktur Folder Backend
-
-```
-app/
-├── Modules/
-│   ├── Assessment/
-│   │   ├── Application/Commands/
-│   │   ├── Application/Queries/
-│   │   ├── Domain/Entities/
-│   │   ├── Domain/Events/
-│   │   └── Infrastructure/Models/
-│   ├── Calculation/
-│   ├── Import/
-│   ├── Organization/
-│   └── ...
-├── Filament/
-│   ├── Resources/
-│   ├── Pages/
-│   └── Widgets/
-└── Http/Api/V1/
-    ├── Controllers/
-    └── Resources/
-```
-
-### 14.5 Struktur Folder Mobile (Flutter)
+### 14.4 Struktur Folder Aplikasi
 
 ```
-lib/
-├── app/
-│   ├── router/
-│   └── theme/
-├── core/
-│   ├── api/
-│   ├── auth/
-│   ├── errors/
-│   └── storage/
-└── features/
-    ├── dashboard/
-    ├── my_kpi/
-    ├── review/
-    ├── approval/
-    ├── imports/
-    ├── notifications/
-    └── profile/
+web/
+├── src/app/                 # halaman, layout, route handler, server action
+├── src/components/          # komponen UI responsif dan primitives shadcn/ui
+├── src/modules/access/      # role, capability, session, dan scope data
+├── src/modules/kpi/         # formula, workflow, kalkulasi, sinkronisasi
+├── src/modules/tickets/     # workflow servis dan feedback
+├── prisma/schema.prisma     # model PostgreSQL
+├── prisma/migrations/       # migrasi skema yang dapat di-deploy
+└── scripts/                 # migrasi dan verifikasi data legacy
 ```
+
+### 14.5 Satu Aplikasi untuk Desktop dan Ponsel
+
+Aplikasi aktif di `web/` tidak memiliki source tree Flutter. Folder `mobile/` hanya disimpan sementara sebagai referensi verifikasi migrasi. Route, aturan akses, sesi, dan data yang sama dipakai pada desktop maupun ponsel. Layout beradaptasi melalui breakpoint responsif, tabel menyediakan tampilan yang tetap terbaca pada layar sempit, dan navigasi utama berubah menjadi navigasi bawah pada ponsel.
 
 ---
 
@@ -1118,7 +1078,7 @@ EMPLOYEE_KPIS ||--o{ AUDIT_EVENTS : tercatat
 
 | Risiko | Contoh | Kontrol Preventif | Kontrol Detektif |
 |---|---|---|---|
-| Karyawan ketik skor tinggi | Kirim `weighted_score=25` dari mobile | API allow-list DTO; kalkulasi server | Security event untuk over-posting |
+| Karyawan ketik skor tinggi | Kirim `weighted_score=25` dari browser | Server action hanya menerima field yang diizinkan; kalkulasi server | Security event untuk over-posting |
 | Edit setelah submit | Request update pada data terkunci | State guard + optimistic lock | Audit failed transition |
 | Supervisor ubah aktual | Ganti nilai 90 → 105 | API review hanya terima decision/note/rubric | Before/after log |
 | Self-approval | Manager approve KPI sendiri | Policy subject/actor separation | Approval audit report |
@@ -1139,7 +1099,7 @@ EMPLOYEE_KPIS ||--o{ AUDIT_EVENTS : tercatat
 
 ### 16.4 API Security
 
-- Semua endpoint butuh autentikasi.
+- Semua endpoint internal butuh autentikasi; endpoint login username dan feedback publik dibatasi rate limit serta validasi khusus.
 - Permission diperiksa di backend — menyembunyikan tombol di UI bukan kontrol keamanan.
 - Query selalu di-scope per actor — tidak fetch semua data lalu filter di client.
 - Rate limiting pada mutation/upload/export.
@@ -1154,8 +1114,8 @@ EMPLOYEE_KPIS ||--o{ AUDIT_EVENTS : tercatat
 ### 17.1 Prinsip Umum
 
 ```
-Web   = Control Center (konfigurasi, review massal, laporan, analytics)
-Mobile = Daily Actions (input cepat, submit, review, approval)
+Layar lebar  = Control Center (konfigurasi, review massal, laporan, analytics)
+Layar ponsel = Daily Actions (input cepat, review, approval) pada aplikasi dan URL yang sama
 ```
 
 Hierarki informasi KPI:
@@ -1191,13 +1151,13 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 
 > Warna **tidak boleh** menjadi satu-satunya pembeda. Selalu sertakan teks label dan ikon.
 
-### 17.4 Layar Prioritas Mobile (Flutter)
+### 17.4 Layar Prioritas Web pada Ponsel
 
 1. Login dan manajemen sesi
 2. Home Employee (periode aktif, progress, action items)
 3. KPI Saya — daftar indikator
 4. Detail item KPI
-5. Input aktual + upload evidence
+5. Fakta aktual dan evidence dari aktivitas operasional
 6. Submit confirmation bottom sheet
 7. Revision required — perbaiki item
 8. Riwayat KPI + timeline
@@ -1213,7 +1173,7 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 ### 17.5 Aksesibilitas
 
 - Kontras teks minimum WCAG 2.2 AA.
-- Touch target mobile minimum 44×44px.
+- Touch target pada ponsel minimum 44×44px.
 - Semua aksi dapat dilakukan dengan keyboard (web).
 - Status tidak hanya dibedakan warna — selalu ada label dan ikon.
 - Semua chart punya ringkasan teks atau tabel alternatif.
@@ -1271,10 +1231,10 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 ### Phase 0 — Discovery & Keputusan Bisnis (2–3 minggu)
 
 **Output:**
-- Target numerik semua KPI Supervisor dikunci.
+- Target numerik semua KPI Supervisor dikunci: 90/95/95/90/100/95/100%.
 - KPI, bobot, dan target Owner/Manager ditentukan.
-- Nilai konkret untuk placeholder `≥ target unit/bulan`, `failure_limit` setiap KPI lower.
-- Keputusan: threshold selisih kas (rupiah atau persentase).
+- Target Teknisi TEK-01 dikunci pada 80 unit/bulan; failure limit TEK-03, CS-05, dan GUD-02 dikunci pada 6%, 5 komplain, dan 5%.
+- Selisih kas KSR-02 dikunci sebagai `SUM/ZERO_TOLERANCE` dengan target Rp0.
 - Keputusan: apakah skor bisa melebihi 100 (bonus), atau cap 100.
 - Ambang predikat final dikonfirmasi.
 - Sumber data setiap KPI dikonfirmasi (manual, import, sistem).
@@ -1286,10 +1246,10 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 
 ### Phase 1 — Fondasi Backend (2–3 minggu)
 
-- Setup Laravel, Filament, MySQL, Redis, CI/CD.
-- Autentikasi: login, token, session, password reset.
+- Setup Next.js, TypeScript, PostgreSQL, Prisma, Tailwind CSS, dan CI/CD.
+- Autentikasi Better Auth: login username, session, logout, dan reset password oleh Super Admin.
 - Manajemen user, employee, histori penempatan.
-- Role & permission (Spatie).
+- Role, capability, dan scope data pada server.
 - Jabatan dan struktur organisasi dasar.
 - Seeder: roles, jabatan, KPI definitions.
 
@@ -1319,8 +1279,8 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 
 ### Phase 4 — Alur Karyawan & Supervisor (3–4 minggu)
 
-- API dan mobile: KPI Saya, detail item, input aktual, upload evidence, submit.
-- API dan web: review Supervisor, verifikasi, checklist rubric, request revisi.
+- Web responsif: KPI Saya, detail item, fakta aktual, evidence operasional, dan status pekerjaan.
+- Web responsif: review Supervisor, verifikasi, checklist rubric, request revisi.
 - KPI Engine: kalkulasi achievement, weighted score, total, rating.
 - Audit trail dan workflow events.
 - Notifikasi core: submit, revisi, verify.
@@ -1333,7 +1293,7 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 - Final locking atomik.
 - Correction flow dengan dual authorization.
 - Notifikasi approval dan final.
-- Filament web untuk Manager: dashboard, antrean approval, detail breakdown.
+- Halaman Manager: dashboard, antrean approval, detail breakdown.
 
 **Exit gate:** E2E lengkap sampai locked, test self-approval ditolak.
 
@@ -1350,15 +1310,15 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 
 **Exit gate:** Sample laporan kasir direkonsiliasi dan duplicate import terbukti ditolak.
 
-### Phase 7 — Dashboard, Laporan, & Flutter (3–4 minggu)
+### Phase 7 — Dashboard, Laporan, & Web Responsif (3–4 minggu)
 
 - Dashboard lengkap Manager, Supervisor, Karyawan.
 - Ranking, trend, dan semua laporan.
 - Export XLSX dan PDF.
-- Flutter mobile: semua layar prioritas MVP.
-- Offline read cache.
+- Tampilan ponsel: semua layar prioritas MVP pada aplikasi Next.js yang sama.
+- Web app manifest dan perilaku instalasi ke layar utama.
 
-**Exit gate:** Semua layar mobile usable di perangkat target, laporan bisa diekspor.
+**Exit gate:** Semua layar web usable pada perangkat desktop dan ponsel target, laporan bisa diekspor.
 
 ### Phase 8 — Hardening & Go-Live (2–3 minggu)
 
@@ -1384,8 +1344,8 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 - Konfirmasi otomatis Supervisor berada di halaman fokus dan hanya tersedia jika seluruh indikator `system`, `import`, dan `cross_role` yang relevan sudah lengkap. Operasi tetap atomik serta tidak mengubah kehadiran, rubrik, indikator manual, atau sumber resmi.
 - Setelah tindakan terakhir selesai, halaman fokus menampilkan konfirmasi dan tautan kembali ke **Penilaian Tim**. Akses tanpa `kpi_id` mempertahankan antrean lama untuk kompatibilitas.
 - Tinjauan harian staf oleh Manager tersedia sebagai **Tinjauan Opsional** dan tidak memengaruhi tab maupun jumlah pekerjaan wajib. **Hasil KPI**, **Coaching**, dan **Riwayat** tersedia sebagai menu terpisah sesuai hak akses.
-- Mobile membuka KPI yang dipilih langsung untuk penilaian harian, tinjauan bulanan, atau pengesahan tanpa melewati antrean kedua.
-- Layar dan endpoint lama tetap tersedia untuk detail, notifikasi, laporan, riwayat, dan kompatibilitas tautan lama.
+- Tampilan ponsel membuka KPI yang dipilih langsung untuk penilaian harian, tinjauan bulanan, atau pengesahan tanpa melewati antrean kedua.
+- Detail, notifikasi, laporan, dan riwayat tetap dapat dibuka langsung melalui URL web yang stabil.
 
 ## 20. Acceptance Criteria
 
@@ -1455,17 +1415,17 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 
 ---
 
-## 21. Keputusan Bisnis yang Wajib Dikunci
+## 21. Status Keputusan Bisnis
 
-Implementasi tidak bisa dimulai sebelum keputusan berikut dikunci. Setiap keputusan dicatat dalam ADR/PDR.
+Setiap keputusan dicatat dalam ADR/PDR. Keputusan nomor 1, 3, 4, dan 5 telah dikunci melalui ADR katalog KPI; keputusan lain tetap mengikuti proses persetujuan produk.
 
 | # | Keputusan | Baseline Rekomendasi | PIC |
 |---|---|---|---|
-| 1 | Target numerik setiap KPI Supervisor (SUP-01 s/d SUP-07) | Tentukan berdasarkan data historis tim | Manager/HR |
+| 1 | Target numerik setiap KPI Supervisor (SUP-01 s/d SUP-07) | **Dikunci:** 90/95/95/90/100/95/100% | Manager/HR |
 | 2 | KPI, bobot, dan target Owner/Manager | Tentukan berdasarkan fokus bisnis | Owner |
-| 3 | Nilai konkret untuk `≥ target unit/bulan` Teknisi (TEK-01) | Contoh: 80 unit/bulan per Teknisi | Manager |
-| 4 | Threshold selisih kas (KSR-02): full_score_limit dan failure_limit | Contoh: toleransi Rp 50.000, gagal di Rp 200.000 | Finance/Owner |
-| 5 | Failure limit untuk KPI lower is better (TEK-03 retur, GUD-02 selisih stok) | Contoh: retur gagal di 6%, stok gagal di 5% | Manager |
+| 3 | Nilai konkret untuk `≥ target unit/bulan` Teknisi (TEK-01) | **Dikunci:** 80 unit/bulan per Teknisi | Manager |
+| 4 | Threshold selisih kas (KSR-02) | **Dikunci:** harus Rp0; setiap selisih mendapat achievement 0% | Finance/Owner |
+| 5 | Failure limit KPI lower | **Dikunci:** TEK-03 6%, CS-05 5 komplain, GUD-02 5% | Manager |
 | 6 | Apakah skor bisa melebihi 100 (overachievement bonus)? | Default: cap 100 | Owner |
 | 7 | Ambang predikat final | Rekomendasi: 95/90/80/70 | Manager/HR |
 | 8 | Sumber data setiap KPI: manual, import, atau integrasi sistem lain | Tentukan per indikator | Manager/IT |
@@ -1477,7 +1437,7 @@ Implementasi tidak bisa dimulai sebelum keputusan berikut dikunci. Setiap keputu
 | 14 | Siapa yang boleh melihat ranking individu lengkap? | Manager + Supervisor (scope tim) | Manager/HR |
 | 15 | Nama dan logo aplikasi | — | Owner |
 
-> **Aktivasi periode produksi pertama diblokir** jika keputusan nomor 1–11 belum dikunci.
+> Aktivasi periode tetap mengikuti readiness. Keputusan katalog master nomor 1, 3, 4, dan 5 tidak lagi menjadi keputusan terbuka.
 
 ---
 

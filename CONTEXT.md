@@ -74,13 +74,11 @@ Penyerahan perangkat oleh Pelayan setelah pekerjaan teknis dan syarat pembayaran
 
 ## Platform dan tanggung jawab
 
-- Teknisi, Pelayan, dan Gudang menggunakan mobile.
-- Kasir, Admin Operasional, Supervisor, serta Manager/Owner menggunakan mobile dan web.
-- Admin KPI, Super Admin, dan Auditor menggunakan web.
+- Semua role menggunakan aplikasi web responsif yang sama dari ponsel atau komputer; tidak ada runtime Flutter.
 - Super Admin mengelola skala, indikator, template, dan rubrik; Admin KPI mengelola periode, assignment penilai, konfigurasi import, monitoring, dan publikasi.
-- Super Admin memiliki seluruh akses web lintas role dan cabang, tetapi tidak dapat masuk melalui mobile.
+- Super Admin memiliki seluruh akses lintas role dan cabang.
 - Admin KPI dan Auditor tidak memperoleh hak operasional atau penilaian.
-- Server memeriksa platform, status akun, profil, capability, kepemilikan, assignment, cabang, dan status data pada setiap request.
+- Server memeriksa status akun, profil, capability, kepemilikan, assignment, cabang, dan status data pada setiap request, tanpa mempercayai ukuran layar atau perangkat.
 
 ## Absensi
 

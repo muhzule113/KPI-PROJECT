@@ -240,8 +240,7 @@ dd {
 }
 
 .auth-card > p,
-.auth-card header p:not(.auth-kicker),
-.auth-result > p {
+.auth-card header p:not(.auth-kicker) {
   margin-top: 14px;
   color: var(--muted);
   font-size: 1rem;
@@ -433,17 +432,10 @@ dd {
   gap: 12px;
 }
 
-.field-heading a {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  color: var(--accent);
+.field-heading span {
+  color: var(--muted);
   font-size: 0.78rem;
-  font-weight: 720;
-  text-decoration: underline;
-  text-decoration-color: rgb(216 255 63 / 42%);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  text-align: right;
 }
 
 .control {
@@ -574,21 +566,6 @@ textarea.control {
 .form-message.success {
   background: var(--success-soft);
   color: var(--success);
-}
-
-.auth-result {
-  display: grid;
-  justify-items: start;
-  gap: 10px;
-}
-
-.auth-result-icon {
-  margin-bottom: 10px;
-  color: var(--success);
-}
-
-.auth-result-icon.error {
-  color: var(--danger);
 }
 
 .auth-result-action {

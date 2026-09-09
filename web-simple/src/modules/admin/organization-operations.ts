@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { Prisma, type UserRole } from "@/generated/prisma/client";
+import { isValidUsername, normalizeUsername } from "@/lib/username";
 import type { AccessProfile } from "@/modules/access/policy";
 
 function assertAdmin(actor: AccessProfile) {
@@ -43,7 +45,7 @@ export async function savePosition(tx: Prisma.TransactionClient, actor: AccessPr
 
 export async function createAccount(tx: Prisma.TransactionClient, actor: AccessProfile, input: {
   name: string;
-  email: string;
+  username: string;
   password: string;
   role: UserRole;
   employeeNumber?: string;
@@ -55,13 +57,13 @@ export async function createAccount(tx: Prisma.TransactionClient, actor: AccessP
 }) {
   assertAdmin(actor);
   const name = input.name.trim();
-  const email = input.email.trim().toLowerCase();
-  if (!name || !email) throw new Error("Nama dan email wajib diisi.");
+  const username = normalizeUsername(input.username);
+  if (!name || !isValidUsername(username)) throw new Error("Nama dan username wajib valid.");
   if (input.password.length < 10 || input.password.length > 128) throw new Error("Kata sandi harus 10 sampai 128 karakter.");
 
   let organization: Awaited<ReturnType<typeof organizationForRole>> | null = null;
   if (input.role !== "ADMIN") organization = await organizationForRole(tx, input);
-  const user = await tx.user.create({ data: { name, email, emailVerified: true, role: input.role, isActive: true } });
+  const user = await tx.user.create({ data: { name, username, email: `${randomUUID()}@users.kpi.invalid`, emailVerified: true, role: input.role, isActive: true } });
   await tx.account.create({
     data: { userId: user.id, providerId: "credential", accountId: user.id, password: await hashPassword(input.password) },
   });
@@ -71,7 +73,6 @@ export async function createAccount(tx: Prisma.TransactionClient, actor: AccessP
         userId: user.id,
         employeeNumber: input.employeeNumber!.trim().toUpperCase(),
         name,
-        email,
         branchId: input.branchId!,
         positionId: input.positionId!,
         supervisorId: input.role === "EMPLOYEE" ? input.supervisorId : null,
@@ -81,7 +82,7 @@ export async function createAccount(tx: Prisma.TransactionClient, actor: AccessP
     });
   }
   await tx.auditEvent.create({
-    data: { actorId: actor.userId, action: "create_account", subjectType: "User", subjectId: user.id, afterJson: { name, email, role: input.role, branchId: input.branchId ?? null, positionId: input.positionId ?? null } },
+    data: { actorId: actor.userId, action: "create_account", subjectType: "User", subjectId: user.id, afterJson: { name, username, role: input.role, branchId: input.branchId ?? null, positionId: input.positionId ?? null } },
   });
   return user;
 }
@@ -122,7 +123,7 @@ async function organizationForRole(tx: Prisma.TransactionClient, input: {
 export async function updateAccount(tx: Prisma.TransactionClient, actor: AccessProfile, input: {
   userId: string;
   name: string;
-  email: string;
+  username: string;
   isActive: boolean;
   password?: string;
 }) {
@@ -131,11 +132,15 @@ export async function updateAccount(tx: Prisma.TransactionClient, actor: AccessP
   if (!existing) throw new Error("Akun tidak ditemukan.");
   if (existing.id === actor.userId && !input.isActive) throw new Error("Super Admin tidak dapat menonaktifkan akun yang sedang dipakai.");
   const name = input.name.trim();
-  const email = input.email.trim().toLowerCase();
-  if (!name || !email) throw new Error("Nama dan email wajib diisi.");
+  const username = normalizeUsername(input.username);
+  if (!name || !isValidUsername(username)) throw new Error("Nama dan username wajib valid.");
   if (input.password && (input.password.length < 10 || input.password.length > 128)) throw new Error("Kata sandi harus 10 sampai 128 karakter.");
-  await tx.user.update({ where: { id: existing.id }, data: { name, email, isActive: input.isActive } });
-  if (existing.employee) await tx.employee.update({ where: { id: existing.employee.id }, data: { name, email, status: input.isActive ? "ACTIVE" : "INACTIVE" } });
+  if (existing.role === "ADMIN" && existing.isActive && !input.isActive) {
+    const activeAdmins = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "users" WHERE "role" = 'ADMIN' AND "isActive" = true FOR UPDATE`;
+    if (activeAdmins.length <= 2) throw new Error("Minimal dua Super Admin harus tetap aktif.");
+  }
+  await tx.user.update({ where: { id: existing.id }, data: { name, username, isActive: input.isActive } });
+  if (existing.employee) await tx.employee.update({ where: { id: existing.employee.id }, data: { name, status: input.isActive ? "ACTIVE" : "INACTIVE" } });
   if (!input.isActive || input.password) await tx.session.deleteMany({ where: { userId: existing.id } });
   if (input.password) await tx.account.update({ where: { providerId_accountId: { providerId: "credential", accountId: existing.id } }, data: { password: await hashPassword(input.password) } });
   await tx.auditEvent.create({
@@ -144,8 +149,8 @@ export async function updateAccount(tx: Prisma.TransactionClient, actor: AccessP
       action: "update_account",
       subjectType: "User",
       subjectId: existing.id,
-      beforeJson: { name: existing.name, email: existing.email, isActive: existing.isActive },
-      afterJson: { name, email, isActive: input.isActive, passwordChanged: Boolean(input.password) },
+      beforeJson: { name: existing.name, username: existing.username, isActive: existing.isActive },
+      afterJson: { name, username, isActive: input.isActive, passwordChanged: Boolean(input.password) },
     },
   });
 }

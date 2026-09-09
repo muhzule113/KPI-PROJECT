@@ -6,14 +6,20 @@ Sistem Manajemen KPI untuk Toko & Servis HP. PRD lengkap: `PRD_Sistem_KPI_Toko_S
 
 | Bagian | Teknologi | Lokasi |
 |---|---|---|
-| Backend (Web admin) | Laravel + Inertia React | `backend/` |
-| Database | MySQL (`kpi_management_db`) | — |
-| Mobile | Flutter (`kpi_mobile`) | `mobile/` |
+| Aplikasi utama | Next.js + TypeScript | `web/` |
+| Database dan ORM | PostgreSQL + Prisma | `web/prisma/` |
+| UI responsif | Tailwind CSS + shadcn/ui | `web/src/` |
+| Login dan sesi | Better Auth | `web/src/lib/auth.ts` |
+| Referensi legacy | Laravel + Flutter | `backend/`, `mobile/` |
 | Bahasa produk | Indonesia | — |
 
 ## Struktur
 
 ```
+web/                      # Aplikasi aktif untuk desktop dan mobile web
+  src/app/                # App Router, halaman, route handler, server action
+  src/modules/            # Aturan bisnis dan kontrol akses
+  prisma/                 # Skema PostgreSQL dan seed
 backend/                  # Laravel backend + React/Inertia admin di /app
   app/Models/             # Eloquent models
   app/Modules/            # Approval, Assessment, Calculation, Import, Period, Review
@@ -28,7 +34,7 @@ backend/                  # Laravel backend + React/Inertia admin di /app
   app/Support/             # Registry resource admin dan aturan akses
   resources/js/            # Halaman React/Inertia, layout, dan komponen UI
   routes/                 # web.php / api.php
-mobile/                   # Flutter — clean architecture
+mobile/                   # Flutter legacy, hanya referensi saat migrasi
   lib/app/                # app-level setup
   lib/core/               # api, auth (shared infra)
   lib/features/           # approval, auth, dashboard, imports, my_kpi,
@@ -38,20 +44,18 @@ mobile/                   # Flutter — clean architecture
 ## Command yang sering dipakai
 
 ```bash
-# Backend
-cd backend && php artisan serve          # jalankan dev server
-php artisan migrate                      # migrasi DB
-php artisan route:list --path=app       # cek route admin
-npm run build                            # build React/Inertia
-
-# Mobile
-cd mobile && flutter run                 # jalankan app
-flutter test                             # tes
+# Aplikasi aktif
+cd web
+docker compose up -d
+npm run db:deploy
+npm run db:seed
+npm run dev
+npm run check
 ```
 
 ## Konvensi
 
-- **Mobile:** fitur baru masuk ke `lib/features/<nama>/`, jangan campur di `app/` atau `core/`. Infra bersama (API client, auth) di `lib/core/`.
-- **Backend:** logika bisnis per domain di `app/Modules/<Domain>/`, jangan numpuk di controller. Admin UI lewat Inertia React di `/app`.
-- **Git:** jangan commit `vendor/`, `.env`, `build/`, `.dart_tool/` (sudah di-cover .gitignore masing-masing).
+- **Aplikasi aktif:** fitur baru masuk ke `web/src/app/`; aturan bisnis yang dipakai lintas halaman masuk ke `web/src/modules/`.
+- **Legacy:** `backend/` dan `mobile/` tidak lagi menjadi target pengembangan; gunakan hanya untuk verifikasi parity selama migrasi.
+- **Git:** jangan commit `.env`, `.next/`, `node_modules/`, `vendor/`, `build/`, atau `.dart_tool/`.
 - **Komunikasi:** bahasa Indonesia (produk & chat).

@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 import { PrismaClient, type Prisma } from "../src/generated/prisma/client.ts";
@@ -26,10 +27,7 @@ const completedAt = new Date("2026-09-09T08:00:00.000Z");
 
 const POSITION_NAMES = {
   CREW: "Crew",
-  KASIR: "Kasir",
   KURIR: "Kurir",
-  ADMIN_OPS: "Admin Operasional",
-  GUDANG: "Gudang / Sparepart",
 } as const;
 
 try {
@@ -44,9 +42,9 @@ try {
     }
 
     const branch = await tx.branch.findUniqueOrThrow({ where: { code: "PUSAT" } });
-    const adminUser = await tx.user.findUniqueOrThrow({ where: { email: "admin@kpi-simple.local" } });
-    const managerUser = await tx.user.findUniqueOrThrow({ where: { email: "manager@kpi-simple.local" }, include: { employee: true } });
-    const supervisorUser = await tx.user.findUniqueOrThrow({ where: { email: "supervisor@kpi-simple.local" }, include: { employee: true } });
+    const adminUser = await tx.user.findUniqueOrThrow({ where: { username: "admin" } });
+    const managerUser = await tx.user.findUniqueOrThrow({ where: { username: "manager" }, include: { employee: true } });
+    const supervisorUser = await tx.user.findUniqueOrThrow({ where: { username: "supervisor" }, include: { employee: true } });
     assert.ok(managerUser.employee && supervisorUser.employee, "Jalankan npm run db:seed sebelum seeder Agustus.");
 
     const positions = new Map((await tx.position.findMany()).map((position) => [position.code, position]));
@@ -59,20 +57,19 @@ try {
       positions.set(code, position);
       await ensureTemplate(tx, position.id, `KPI ${name}`, FIXTURE_TEMPLATES[code as keyof typeof FIXTURE_TEMPLATES]);
     }
-    for (const required of ["PELAYAN", "TEKNISI"]) {
+    for (const required of ["TEKNISI", "PELAYAN", "ADMIN_OPS", "KASIR", "GUDANG", "SPV"]) {
       if (!positions.get(required)) throw new Error(`Jabatan ${required} belum tersedia. Jalankan npm run db:seed terlebih dahulu.`);
     }
 
     for (const employee of AUGUST_2026_ROSTER) {
       const position = positions.get(employee.positionCode);
       if (!position) throw new Error(`Jabatan ${employee.positionCode} belum tersedia.`);
-      const user = await credentialUser(tx, employee.email, employee.name, passwordHash);
+      const user = await credentialUser(tx, employee.username, employee.name, passwordHash);
       await tx.employee.upsert({
         where: { userId: user.id },
         update: {
           employeeNumber: employee.employeeNumber,
           name: employee.name,
-          email: employee.email,
           branchId: branch.id,
           positionId: position.id,
           supervisorId: supervisorUser.employee.id,
@@ -85,7 +82,6 @@ try {
           userId: user.id,
           employeeNumber: employee.employeeNumber,
           name: employee.name,
-          email: employee.email,
           branchId: branch.id,
           positionId: position.id,
           supervisorId: supervisorUser.employee.id,
@@ -112,7 +108,7 @@ try {
       include: { employee: { include: { user: true } }, items: { orderBy: { sortOrderSnapshot: "asc" } }, dailySheets: { orderBy: { entryDate: "asc" } } },
     });
     for (const [fallbackIndex, monthlyKpi] of monthlyKpis.entries()) {
-      const rosterIndex = AUGUST_2026_ROSTER.findIndex((employee) => employee.email === monthlyKpi.employee.user.email);
+      const rosterIndex = AUGUST_2026_ROSTER.findIndex((employee) => employee.username === monthlyKpi.employee.user.username);
       const profileIndex = rosterIndex >= 0 ? rosterIndex : AUGUST_2026_ROSTER.length + fallbackIndex;
       const workedSheets = monthlyKpi.dailySheets.slice(0, AUGUST_WORKED_DAYS);
       const offSheets = monthlyKpi.dailySheets.slice(AUGUST_WORKED_DAYS);
@@ -182,11 +178,11 @@ try {
   await prisma.$disconnect();
 }
 
-async function credentialUser(tx: Prisma.TransactionClient, email: string, name: string, password: string) {
+async function credentialUser(tx: Prisma.TransactionClient, username: string, name: string, password: string) {
   const user = await tx.user.upsert({
-    where: { email },
+    where: { username },
     update: { name, role: "EMPLOYEE", isActive: true, emailVerified: true },
-    create: { email, name, role: "EMPLOYEE", isActive: true, emailVerified: true },
+    create: { username, email: `${randomUUID()}@users.kpi.invalid`, name, role: "EMPLOYEE", isActive: true, emailVerified: true },
   });
   await tx.account.upsert({
     where: { providerId_accountId: { providerId: "credential", accountId: user.id } },

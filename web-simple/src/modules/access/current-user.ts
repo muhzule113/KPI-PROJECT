@@ -8,7 +8,7 @@ import type { AccessProfile, UserRole } from "@/modules/access/policy";
 
 export type CurrentUser = AccessProfile & {
   name: string;
-  email: string;
+  username: string;
   employee: null | {
     id: string;
     name: string;
@@ -30,7 +30,7 @@ export async function currentUser(): Promise<CurrentUser | null> {
   return {
     userId: user.id,
     name: user.name,
-    email: user.email,
+    username: user.username,
     role: user.role as UserRole,
     active: user.isActive,
     employeeId: user.employee?.id ?? null,

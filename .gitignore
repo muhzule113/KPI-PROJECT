@@ -13,6 +13,8 @@
 **/dist/
 **/coverage/
 **/.dart_tool/
+web/backups/
+web-simple/backups/
 **/.pub-cache/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies

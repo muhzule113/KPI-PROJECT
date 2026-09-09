@@ -1,39 +1,57 @@
 # Panduan Konfigurasi Predikat KPI
 
-Dokumen ini melengkapi panduan pengguna utama untuk konfigurasi KPI berbasis versi. Jika ada perbedaan kewenangan dengan panduan lama, ketentuan di dokumen ini yang berlaku.
+Panduan ini ditujukan untuk **Super Admin** yang ingin mengubah nama, nilai, rentang, warna, atau urutan predikat KPI. Perubahan selalu dibuat sebagai draft agar periode yang sudah disiapkan dan histori tetap aman.
 
-## Kewenangan
+## Cara mengubah predikat
 
-- **Super Admin** mengelola skema rating, band predikat, indikator, template, dan rubrik.
-- **Admin KPI** tetap mengelola periode, assignment penilai, konfigurasi import, monitoring, dan publikasi.
-- **Supervisor** mengonfirmasi nilai KPI objektif, menilai KPI subjektif dengan satu predikat per KPI per hari, dan mengisi status kehadiran.
+1. Buka **Administrasi KPI > Pusat Administrasi KPI**.
+2. Pilih **Ubah predikat**.
+3. Pilih **Lanjutkan draft** jika draft sudah ada. Jika belum, pilih **Buat draft dari skema aktif**.
+4. Ubah data lima predikat, lalu pilih **Simpan dan lanjut**.
+5. Periksa pesan kesalahan dan pilih template jabatan yang akan memakai predikat baru.
+6. Pilih **Aktifkan untuk periode berikutnya**.
 
-## Mengubah konfigurasi
+Jika template jabatan yang dipilih masih memiliki draft lain, selesaikan atau hapus draft tersebut sebelum aktivasi.
 
-Perubahan hanya boleh diterapkan melalui versi baru agar periode berjalan dan histori tidak berubah.
+## Arti setiap kolom
 
-1. Buka konfigurasi yang aktif, lalu pilih **Salin versi aktif**.
-2. Edit versi draft: label, nilai, rentang, warna, urutan, atau kriteria predikat.
-3. Jalankan validasi dan perbaiki semua pesan kesalahan.
-4. Aktifkan versi draft. Versi tersebut digunakan mulai periode berikutnya.
+| Kolom | Kegunaan |
+|---|---|
+| **Label** | Nama predikat yang terlihat oleh pengguna. |
+| **Nilai pilihan** | Nilai harian saat Supervisor memilih predikat untuk KPI subjektif. |
+| **Rentang awal dan akhir** | Rentang skor akhir KPI yang menghasilkan predikat tersebut. |
+| **Warna** | Warna penanda predikat pada tampilan. |
+| **Urutan** | Posisi predikat saat ditampilkan, dari 1 sampai 5. |
 
-Skema penilaian Supervisor harus memiliki tepat lima kode internal berikut. Kode tidak dapat diganti atau dihapus setelah digunakan.
+**Nilai pilihan berbeda dari rentang skor.** Contohnya, Supervisor memilih **Sangat Baik** sehingga nilai hariannya 95. Sementara itu, skor akhir 92 mendapat predikat **Sangat Baik** karena berada pada rentang 90–94,99.
 
-| Kode | Label default | Nilai default |
-|---|---|---:|
-| `POOR` | Perlu Perbaikan | 60% |
-| `FAIR` | Cukup | 75% |
-| `GOOD` | Baik | 85% |
-| `VERY_GOOD` | Sangat Baik | 95% |
-| `STAR` | Istimewa | 100% |
+## Nilai bawaan
 
-Aktivasi ditolak jika rentang memiliki gap atau overlap, nilai berada di luar 0–100, kode duplikat, atau salah satu dari lima pilihan manual belum lengkap.
+Lima kode internal berikut bersifat tetap. Kode tidak dapat diubah, ditambah, atau dihapus melalui wizard.
 
-## Penilaian harian Supervisor
+| Urutan | Kode | Label | Nilai pilihan | Rentang skor akhir |
+|---:|---|---|---:|---:|
+| 1 | `STAR` | Istimewa | 100 | 95–100 |
+| 2 | `VERY_GOOD` | Sangat Baik | 95 | 90–94,99 |
+| 3 | `GOOD` | Baik | 85 | 80–89,99 |
+| 4 | `FAIR` | Cukup | 75 | 70–79,99 |
+| 5 | `POOR` | Perlu Perbaikan | 60 | 0–69,99 |
 
-- KPI objektif menampilkan nilai resmi dari servis, feedback pelanggan, komplain, work-log, stok, atau import. Nilainya tidak dapat diubah; pilih konfirmasi atau minta koreksi sumber.
-- KPI subjektif menampilkan kriteria rubrik sebagai panduan. Pilih satu predikat untuk keseluruhan KPI.
-- Catatan wajib diisi jika nilai predikat berada di bawah target indikator.
-- KPI kehadiran tetap menggunakan status absensi.
+## Syarat agar dapat diaktifkan
 
-KPI subjektif standar adalah `TEK-05`, `TEK-06`, `CS-02`, `ADM-06`, `KSR-05`, dan `GUD-06`. Nilai bulanan dihitung dari rata-rata penilaian harian. `CS-01` tetap berasal dari rating Pelayan pada feedback pelanggan; rating Teknisi tidak masuk ke KPI tersebut.
+- Semua nilai dan rentang harus berada pada 0–100.
+- Nilai pilihan dan nomor urutan harus berbeda untuk setiap predikat.
+- Rentang harus menutup seluruh skor 0–100 tanpa celah atau tumpang tindih.
+- Minimal satu template jabatan staf harus dipilih.
+- Template yang dipilih tidak boleh memiliki draft lain.
+
+Template Supervisor tidak tersedia di wizard ini dan hanya dapat diatur melalui **Mode Lanjutan**.
+
+## Dampak aktivasi
+
+- Sistem membuat versi baru untuk setiap template jabatan yang dipilih.
+- Predikat baru dipakai pada periode yang disiapkan setelah aktivasi.
+- Periode berstatus **READY** atau **OPEN** serta histori tetap memakai snapshot lama.
+- Template jabatan yang tidak dipilih tetap memakai skema sebelumnya.
+
+Untuk mengubah kriteria panduan penilaian subjektif, gunakan **Pusat Administrasi KPI > Atur KPI jabatan**. Kriteria rubrik bukan bagian dari konfigurasi predikat.

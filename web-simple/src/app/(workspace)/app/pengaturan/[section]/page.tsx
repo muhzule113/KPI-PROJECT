@@ -33,6 +33,7 @@ import type { KpiIndicator } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { requireRole } from "@/modules/access/current-user";
+import { formatKpiTarget } from "@/modules/kpi/target-label";
 
 const sections = new Set(["cabang", "jabatan", "pengguna", "indikator", "predikat", "periode"]);
 
@@ -131,7 +132,7 @@ async function UsersSection({ accountId }: { accountId?: string }) {
   const supervisorOptions = supervisors.map(toOption);
   const createDialog = <AccountDialog action={createAccountAction} branches={branchOptions} positions={positionOptions} managers={managerOptions} supervisors={supervisorOptions} trigger={<Button><PlusIcon aria-hidden="true" />Buat akun</Button>} />;
   return <><PageHeader eyebrow="Super Admin" title="Pengguna" description="Buat akun, atur status, serta kelola penempatan dan penilai untuk periode berikutnya." actions={createDialog} />
-    {users.length ? <section className="panel"><div className="panel-header"><div><h2>Daftar akun</h2><p>{users.length} akun terdaftar</p></div></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Nama</th><th>Role</th><th>Status</th><th>Nomor pegawai</th><th></th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td><span className="cell-title">{user.name}</span><span className="cell-subtitle">{user.email}</span></td><td>{roleLabel(user.role)}</td><td><StatusBadge status={user.isActive ? "ACTIVE" : "INACTIVE"} /></td><td>{user.employee?.employeeNumber ?? "Tidak ada"}</td><td><Button asChild variant="secondary" size="small"><Link href={`/app/pengaturan/pengguna?accountId=${user.id}`}><PencilSimpleIcon aria-hidden="true" />Edit</Link></Button></td></tr>)}</tbody></table></div></section> : <EmptyState icon={UsersIcon} title="Belum ada akun" description="Buat akun pertama agar tim dapat mulai memakai KPI Harian." action={createDialog} />}
+    {users.length ? <section className="panel"><div className="panel-header"><div><h2>Daftar akun</h2><p>{users.length} akun terdaftar</p></div></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Nama</th><th>Role</th><th>Status</th><th>Nomor pegawai</th><th></th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td><span className="cell-title">{user.name}</span><span className="cell-subtitle">{user.username}</span></td><td>{roleLabel(user.role)}</td><td><StatusBadge status={user.isActive ? "ACTIVE" : "INACTIVE"} /></td><td>{user.employee?.employeeNumber ?? "Tidak ada"}</td><td><Button asChild variant="secondary" size="small"><Link href={`/app/pengaturan/pengguna?accountId=${user.id}`}><PencilSimpleIcon aria-hidden="true" />Edit</Link></Button></td></tr>)}</tbody></table></div></section> : <EmptyState icon={UsersIcon} title="Belum ada akun" description="Buat akun pertama agar tim dapat mulai memakai KPI Harian." action={createDialog} />}
     {selectedUser ? <AccountDialog
       action={updateAccountProfileAction}
       branches={branchOptions}
@@ -142,7 +143,7 @@ async function UsersSection({ accountId }: { accountId?: string }) {
       account={{
         id: selectedUser.id,
         name: selectedUser.name,
-        email: selectedUser.email,
+        username: selectedUser.username,
         role: selectedUser.role,
         isActive: selectedUser.isActive,
         employee: selectedUser.employee ? {
@@ -178,7 +179,7 @@ async function IndicatorsSection({ positionId }: { positionId?: string }) {
     {draft ? <section className="panel stack-top"><div className="panel-header"><div><h2>Draft v{draft.versionNumber}</h2><p>{draft.indicators.length} indikator · total bobot {formatNumber(total)}%</p></div><div className="table-actions"><StatusBadge status={total === 100 ? "READY" : "DRAFT"} /><IndicatorDialog versionId={draft.id} trigger={<Button><PlusIcon aria-hidden="true" />Tambah indikator</Button>} /></div></div>
       {draft.indicators.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Indikator</th><th>Perhitungan</th><th>Bobot</th><th></th></tr></thead><tbody>{draft.indicators.map((indicator) => <tr key={indicator.id}>
         <td><span className="cell-title">{indicator.sortOrder}. {indicator.name}</span><span className="cell-subtitle">{indicator.code} · {indicator.kind === "RATING" ? "Rating 1–5" : indicator.unit}</span></td>
-        <td>{indicator.aggregation === "SUM" ? "Jumlah" : "Rata-rata"}<span className="cell-subtitle">Target {indicator.target.toString()} {indicator.unit}</span></td>
+        <td>{indicator.aggregation === "SUM" ? "Jumlah" : "Rata-rata"}<span className="cell-subtitle">Target {formatKpiTarget(indicator)}</span></td>
         <td><strong>{indicator.weight.toString()}%</strong></td>
         <td><div className="table-actions"><IndicatorDialog versionId={draft.id} indicator={indicator} trigger={<Button variant="secondary" size="small"><PencilSimpleIcon aria-hidden="true" />Edit</Button>} /><ConfirmAction trigger={<Button variant="danger" size="small" aria-label={`Hapus ${indicator.name}`}><TrashIcon aria-hidden="true" /></Button>} action={removeIndicatorAction} title="Hapus indikator?" description={`${indicator.name} akan dihapus dari draft. Versi aktif tidak berubah.`} fields={{ indicatorId: indicator.id }} confirmLabel="Hapus indikator" variant="danger" /></div></td>
       </tr>)}</tbody></table></div> : <EmptyState icon={SlidersHorizontalIcon} title="Draft belum memiliki indikator" description="Tambahkan indikator pertama melalui alur dua langkah." action={<IndicatorDialog versionId={draft.id} trigger={<Button>Tambah indikator</Button>} />} />}
@@ -219,7 +220,7 @@ function IndicatorDialog({ versionId, indicator, trigger }: { versionId: string;
 }
 
 function VersionSummary({ title, status, indicators }: { title: string; status: string; indicators: KpiIndicator[] }) {
-  return <div className="table-wrap"><table className="data-table"><thead><tr><th>{title}</th><th>Jenis</th><th>Target</th><th>Bobot</th><th>Status</th></tr></thead><tbody>{indicators.map((indicator) => <tr key={indicator.id}><td><span className="cell-title">{indicator.name}</span><span className="cell-subtitle">{indicator.code}</span></td><td>{indicator.kind === "RATING" ? "Rating 1–5" : indicator.aggregation === "SUM" ? "Jumlah" : "Rata-rata"}</td><td>{indicator.target.toString()} {indicator.unit}</td><td>{indicator.weight.toString()}%</td><td><StatusBadge status={status} /></td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr><th>{title}</th><th>Jenis</th><th>Target</th><th>Bobot</th><th>Status</th></tr></thead><tbody>{indicators.map((indicator) => <tr key={indicator.id}><td><span className="cell-title">{indicator.name}</span><span className="cell-subtitle">{indicator.code}</span></td><td>{indicator.kind === "RATING" ? "Rating 1–5" : indicator.aggregation === "SUM" ? "Jumlah" : "Rata-rata"}</td><td>{formatKpiTarget(indicator)}</td><td>{indicator.weight.toString()}%</td><td><StatusBadge status={status} /></td></tr>)}</tbody></table></div>;
 }
 
 const indicatorKindOptions: SelectOption[] = [{ value: "NUMERIC", label: "Angka" }, { value: "RATING", label: "Rating 1–5" }];

@@ -4,12 +4,13 @@ import type { AccessProfile } from "@/modules/access/policy";
 import { canEnterDailySheet, canReviewDailySheet } from "@/modules/access/policy";
 import { notifyUsers } from "@/modules/notifications";
 import { kpiSubjectFromSnapshot, lockMonthlyKpi, recalculateMonthlyKpi } from "@/modules/kpi/monthly-operations";
+import { validateDailyIndicatorValue } from "@/modules/kpi/value-validation";
 import { reviewDailySheet as decideDailyReview, submitDailySheet } from "@/modules/kpi/workflow";
 
 export type DailyValueInput = { itemId: string; value: number };
 
 function validatedValues(
-  items: Array<{ id: string; nameSnapshot: string; kindSnapshot: "NUMERIC" | "RATING"; targetSnapshot: { toNumber(): number } }>,
+  items: Array<{ id: string; nameSnapshot: string; kindSnapshot: "NUMERIC" | "RATING"; unitSnapshot: string; targetSnapshot: { toNumber(): number } }>,
   workStatus: WorkStatus,
   values: DailyValueInput[],
   note?: string,
@@ -24,8 +25,7 @@ function validatedValues(
   }
   for (const item of items) {
     const value = valueMap.get(item.id)!;
-    if (!Number.isFinite(value) || value < 0 || value > 1_000_000_000) throw new Error(`Nilai ${item.nameSnapshot} tidak valid.`);
-    if (item.kindSnapshot === "RATING" && (!Number.isInteger(value) || value < 1 || value > 5)) throw new Error(`Rating ${item.nameSnapshot} harus berupa bilangan bulat 1 sampai 5.`);
+    validateDailyIndicatorValue({ name: item.nameSnapshot, kind: item.kindSnapshot, unit: item.unitSnapshot }, value);
     if (item.kindSnapshot === "RATING" && value < item.targetSnapshot.toNumber() && !note?.trim()) throw new Error("Catatan wajib diisi jika rating berada di bawah target.");
   }
   return valueMap;

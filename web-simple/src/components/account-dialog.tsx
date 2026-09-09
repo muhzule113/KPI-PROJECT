@@ -5,12 +5,13 @@ import type { FormAction } from "@/components/action-form";
 import { CheckboxField, DatePickerField, SelectField, type SelectOption } from "@/components/ui/form-controls";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { WizardActionForm } from "@/components/wizard-action-form";
+import { USERNAME_INPUT_PATTERN } from "@/lib/username";
 
 type Role = "ADMIN" | "MANAGER" | "SUPERVISOR" | "EMPLOYEE";
 type Account = {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: Role;
   isActive: boolean;
   employee?: {
@@ -47,8 +48,8 @@ export function AccountDialog({ trigger, action, branches, positions, managers, 
   const accountFields = <div className="form-grid">
     {account ? <input type="hidden" name="userId" value={account.id} /> : null}
     <TextField label="Nama" name="name" defaultValue={account?.name} required />
-    <TextField label="Email" name="email" type="email" defaultValue={account?.email} required />
-    <TextField label={editing ? "Kata sandi baru (opsional)" : "Kata sandi awal"} name="password" type="password" minLength={10} maxLength={128} required={!editing} />
+    <TextField label="Username" name="username" defaultValue={account?.username} minLength={3} maxLength={50} pattern={USERNAME_INPUT_PATTERN} title="Gunakan 3–50 karakter: huruf, angka, titik, garis bawah, atau tanda hubung." autoCapitalize="none" spellCheck={false} required />
+    <TextField label={editing ? "Reset kata sandi (opsional)" : "Kata sandi awal"} name="password" type="password" minLength={10} maxLength={128} required={!editing} />
     {!editing ? <SelectField label="Role" name="role" options={roles} value={role} onValueChange={(value) => setRole(value as Role)} required /> : null}
     {editing ? <CheckboxField className="form-grid-wide" name="isActive" defaultChecked={account?.isActive} label="Akun aktif" description="Akun nonaktif tidak dapat masuk dan semua sesinya dihentikan." /> : null}
   </div>;

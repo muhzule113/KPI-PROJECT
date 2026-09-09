@@ -10,7 +10,7 @@ import { calculateFinalScore, calculateMonthlyIndicator } from "../src/modules/k
 
 test("roster Agustus memuat 35 user unik sesuai jabatan", () => {
   assert.equal(AUGUST_2026_ROSTER.length, 35);
-  assert.equal(new Set(AUGUST_2026_ROSTER.map((employee) => employee.email)).size, 35);
+  assert.equal(new Set(AUGUST_2026_ROSTER.map((employee) => employee.username)).size, 35);
   assert.equal(new Set(AUGUST_2026_ROSTER.map((employee) => employee.employeeNumber)).size, 35);
   assert.deepEqual(
     Object.fromEntries(Object.entries(Object.groupBy(AUGUST_2026_ROSTER, (employee) => employee.positionCode)).map(([code, employees]) => [code, employees?.length])),
@@ -31,7 +31,7 @@ test("fixture membuat tepat 30 nilai harian yang valid untuk setiap indikator ba
 
 test("contoh Crew dan Kasir menghasilkan skor bulanan literal", () => {
   assert.equal(scoreFor("CREW", 0), "77.80");
-  assert.equal(scoreFor("KASIR", 1), "68.50");
+  assert.equal(scoreFor("KASIR", 1), "67.50");
 });
 
 function scoreFor(positionCode: keyof typeof FIXTURE_TEMPLATES, profileIndex: number) {

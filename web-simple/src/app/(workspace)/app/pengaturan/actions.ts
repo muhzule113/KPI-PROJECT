@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { actionError } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
+import { isValidUsername, normalizeUsername } from "@/lib/username";
 import { requireRole } from "@/modules/access/current-user";
 import { createAccount, saveBranch, savePosition, updateAccount, updateEmployeeProfile } from "@/modules/admin/organization-operations";
 import {
@@ -22,6 +23,7 @@ import { createPeriod, openPeriod } from "@/modules/kpi/period-operations";
 
 export type SettingsState = { error?: string; success?: string };
 const text = z.string().trim().min(1).max(120);
+const username = z.string().transform(normalizeUsername).refine(isValidUsername);
 const errorMessage = (error: unknown) => actionError(error, "Pengaturan tidak dapat disimpan. Periksa data unik lalu coba lagi.");
 const refreshSettings = () => revalidatePath("/app/pengaturan", "layout");
 
@@ -49,7 +51,7 @@ export async function createAccountAction(_: SettingsState, formData: FormData):
   const user = await requireRole("ADMIN");
   const parsed = z.object({
     name: text,
-    email: z.email().max(190),
+    username,
     password: z.string().min(10).max(128),
     role: z.enum(["ADMIN", "MANAGER", "SUPERVISOR", "EMPLOYEE"]),
     employeeNumber: z.string().trim().max(50).optional(),
@@ -59,7 +61,7 @@ export async function createAccountAction(_: SettingsState, formData: FormData):
     managerId: z.string().optional(),
     joinedAt: z.string().optional(),
   }).safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Periksa nama, email, kata sandi, role, dan profil pegawai." };
+  if (!parsed.success) return { error: "Periksa nama, username, kata sandi, role, dan profil pegawai." };
   try {
     await prisma.$transaction((tx) => createAccount(tx, user, {
       ...parsed.data,
@@ -72,7 +74,7 @@ export async function createAccountAction(_: SettingsState, formData: FormData):
 
 export async function updateAccountAction(_: SettingsState, formData: FormData): Promise<SettingsState> {
   const user = await requireRole("ADMIN");
-  const parsed = z.object({ userId: z.string().min(1), name: text, email: z.email().max(190), password: z.string().max(128).optional() }).safeParse(Object.fromEntries(formData));
+  const parsed = z.object({ userId: z.string().min(1), name: text, username, password: z.string().max(128).optional() }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Data akun tidak valid." };
   try { await prisma.$transaction((tx) => updateAccount(tx, user, { ...parsed.data, password: parsed.data.password || undefined, isActive: formData.get("isActive") === "on" })); }
   catch (error) { return { error: errorMessage(error) }; }
@@ -111,7 +113,7 @@ export async function updateAccountProfileAction(_: SettingsState, formData: For
   const account = z.object({
     userId: z.string().min(1),
     name: text,
-    email: z.email().max(190),
+    username,
     password: z.string().max(128).optional(),
   }).safeParse(Object.fromEntries(formData));
   if (!account.success) return { error: "Data akun tidak valid." };

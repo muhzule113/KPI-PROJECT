@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.ts";
 import type { AccessProfile } from "../src/modules/access/policy.ts";
-import { savePosition } from "../src/modules/admin/organization-operations.ts";
+import { savePosition, updateAccount } from "../src/modules/admin/organization-operations.ts";
 import {
   activateRatingDraft,
   activateTemplate,
@@ -25,8 +25,26 @@ const rollback = new Error("ROLLBACK_CONFIGURATION_VERIFICATION");
 
 try {
   await prisma.$transaction(async (tx) => {
-    const adminUser = await tx.user.findUniqueOrThrow({ where: { email: "admin@kpi-simple.local" } });
+    const adminUser = await tx.user.findUniqueOrThrow({ where: { username: "admin" } });
+    const backupAdmin = await tx.user.findUniqueOrThrow({ where: { username: "admin.cadangan" } });
     const admin: AccessProfile = { userId: adminUser.id, role: "ADMIN", employeeId: null, branchId: null, active: true };
+
+    await assert.rejects(updateAccount(tx, admin, {
+      userId: backupAdmin.id,
+      name: backupAdmin.name,
+      username: backupAdmin.username,
+      isActive: false,
+    }), /minimal dua Super Admin/i);
+    await tx.session.create({ data: { userId: backupAdmin.id, token: `verify-admin-session-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000) } });
+    await updateAccount(tx, admin, {
+      userId: backupAdmin.id,
+      name: backupAdmin.name,
+      username: "ADMIN.CADANGAN",
+      password: "verifikasi-admin-2026",
+      isActive: true,
+    });
+    assert.equal(await tx.session.count({ where: { userId: backupAdmin.id } }), 0);
+    assert.equal((await tx.user.findUniqueOrThrow({ where: { id: backupAdmin.id } })).username, "admin.cadangan");
 
     const position = await savePosition(tx, admin, { code: "VERIFY-CONFIG", name: "Jabatan Verifikasi", isKpiSubject: true, isActive: true });
     const initial = await tx.position.findUniqueOrThrow({ where: { id: position.id }, include: { template: { include: { versions: true } } } });
@@ -76,7 +94,7 @@ try {
     await activateTemplate(tx, admin, pelayanDraft.id);
 
     const activeRating = await tx.kpiRatingScheme.findFirstOrThrow({ where: { status: "ACTIVE" } });
-    const ratingDraft = await startRatingDraft(tx, admin);
+    const ratingDraft = await tx.kpiRatingScheme.findFirst({ where: { status: "DRAFT" } }) ?? await startRatingDraft(tx, admin);
     const ratingBands = await tx.kpiRatingBand.findMany({ where: { ratingSchemeId: ratingDraft.id }, orderBy: { sortOrder: "asc" } });
     await saveRatingDraft(tx, admin, ratingDraft.id, ratingBands.map((band) => ({ code: band.code, label: band.code === "STAR" ? "Istimewa Verifikasi" : band.label, minScore: band.minScore.toString(), sortOrder: band.sortOrder })));
     await activateRatingDraft(tx, admin, ratingDraft.id);
