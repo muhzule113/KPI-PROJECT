@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SUPERVISOR
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  RESIGNED
+}
+
+enum PeriodStatus {
+  DRAFT
+  OPEN
+  COMPLETED
+}
+
+enum MonthlyKpiStatus {
+  IN_PROGRESS
+  READY
+  FINALIZED
+  REOPENED
+}
+
+enum DailySheetStatus {
+  PENDING
+  DRAFT
+  SUBMITTED
+  REVISION_REQUIRED
+  APPROVED
+}
+
+enum WorkStatus {
+  WORKED
+  OFF
+  PERMIT
+  SICK
+}
+
+enum ValueKind {
+  NUMERIC
+  RATING
+}
+
+enum AggregationType {
+  SUM
+  AVERAGE
+}
+
+enum KpiDirection {
+  HIGHER
+  LOWER
+  ZERO_TOLERANCE
+}
+
+enum CalculationStatus {
+  PENDING
+  CALCULATED
+  UNSCORABLE
+}
+
+enum VersionStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  isActive      Boolean  @default(true)
+  role          UserRole @default(EMPLOYEE)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions          Session[]
+  accounts          Account[]
+  employee          Employee?
+  createdPeriods    KpiPeriod[]       @relation("PeriodCreator")
+  enteredSheets     DailySheet[]      @relation("SheetEnteredBy")
+  reviewedSheets    DailySheet[]      @relation("SheetReviewedBy")
+  uploadedEvidence  Evidence[]        @relation("EvidenceUploader")
+  finalizedKpis     MonthlyKpi[]      @relation("KpiFinalizedBy")
+  reopenedKpis      MonthlyKpi[]      @relation("KpiReopenedBy")
+  notifications     Notification[]
+  auditEvents       AuditEvent[]      @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees   Employee[]
+  monthlyKpis MonthlyKpi[] @relation("KpiBranchSnapshot")
+
+  @@map("branches")
+}
+
+model Position {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  isKpiSubject Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employees   Employee[]
+  template    KpiTemplate?
+  monthlyKpis MonthlyKpi[] @relation("KpiPositionSnapshot")
+
+  @@map("positions")
+}
+
+model Employee {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  employeeNumber String         @unique
+  name           String
+  email          String         @unique
+  branchId       String
+  positionId     String
+  supervisorId   String?
+  managerId      String?
+  joinedAt       DateTime       @db.Date
+  endedAt        DateTime?      @db.Date
+  status         EmployeeStatus @default(ACTIVE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  branch         Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  position       Position   @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  supervisor     Employee?  @relation("SupervisorTeam", fields: [supervisorId], references: [id], onDelete: SetNull)
+  teamMembers    Employee[] @relation("SupervisorTeam")
+  manager        Employee?  @relation("ManagerTeam", fields: [managerId], references: [id], onDelete: SetNull)
+  managedMembers Employee[] @relation("ManagerTeam")
+
+  monthlyKpis    MonthlyKpi[] @relation("KpiSubject")
+  supervisedKpis MonthlyKpi[] @relation("KpiSupervisor")
+  managedKpis    MonthlyKpi[] @relation("KpiManager")
+
+  @@index([branchId, positionId, status])
+  @@index([supervisorId, status])
+  @@index([managerId, status])
+  @@map("employees")
+}
+
+model KpiTemplate {
+  id         String   @id @default(cuid())
+  positionId String  @unique
+  name       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  position Position             @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  versions KpiTemplateVersion[]
+
+  @@map("kpi_templates")
+}
+
+model KpiTemplateVersion {
+  id            String        @id @default(cuid())
+  templateId    String
+  versionNumber Int
+  status        VersionStatus @default(DRAFT)
+  activatedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  template  KpiTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  indicators KpiIndicator[]
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId, status])
+  @@map("kpi_template_versions")
+}
+
+model KpiIndicator {
+  id                String          @id @default(cuid())
+  templateVersionId String
+  code              String
+  name              String
+  description       String?
+  kind              ValueKind
+  unit              String
+  aggregation       AggregationType
+  direction         KpiDirection
+  target            Decimal         @db.Decimal(18, 4)
+  failureLimit      Decimal?        @db.Decimal(18, 4)
+  weight            Decimal         @db.Decimal(5, 2)
+  sortOrder         Int             @default(1)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  templateVersion KpiTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateVersionId, code])
+  @@index([templateVersionId, sortOrder])
+  @@map("kpi_indicators")
+}
+
+model KpiRatingScheme {
+  id          String        @id @default(cuid())
+  version     Int           @unique
+  status      VersionStatus @default(DRAFT)
+  activatedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  bands KpiRatingBand[]
+
+  @@index([status])
+  @@map("kpi_rating_schemes")
+}
+
+model KpiRatingBand {
+  id             String   @id @default(cuid())
+  ratingSchemeId String
+  code           String
+  label          String
+  minScore       Decimal  @db.Decimal(5, 2)
+  sortOrder      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ratingScheme KpiRatingScheme @relation(fields: [ratingSchemeId], references: [id], onDelete: Cascade)
+
+  @@unique([ratingSchemeId, code])
+  @@unique([ratingSchemeId, sortOrder])
+  @@map("kpi_rating_bands")
+}
+
+model KpiPeriod {
+  id          String       @id @default(cuid())
+  name        String
+  year        Int
+  month       Int
+  startDate   DateTime     @db.Date
+  endDate     DateTime     @db.Date
+  status      PeriodStatus @default(DRAFT)
+  createdById String
+  openedAt    DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  createdBy   User         @relation("PeriodCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  monthlyKpis MonthlyKpi[]
+
+  @@unique([year, month])
+  @@index([status])
+  @@map("kpi_periods")
+}
+
+model MonthlyKpi {
+  id                     String           @id @default(cuid())
+  periodId               String
+  employeeId             String
+  employeeNumberSnapshot String
+  employeeNameSnapshot   String
+  subjectRoleSnapshot    UserRole
+  branchIdSnapshot       String
+  branchNameSnapshot     String
+  positionIdSnapshot     String
+  positionCodeSnapshot   String
+  positionNameSnapshot   String
+  supervisorIdSnapshot   String?
+  managerIdSnapshot      String
+  ratingBandsSnapshot    Json
+  status                 MonthlyKpiStatus @default(IN_PROGRESS)
+  finalScore             Decimal?         @db.Decimal(8, 2)
+  ratingCode             String?
+  ratingLabel            String?
+  noScoreReason          String?
+  revisionNumber         Int              @default(0)
+  rowVersion             Int              @default(1)
+  finalizedById          String?
+  finalizedAt            DateTime?
+  reopenedById           String?
+  reopenedAt             DateTime?
+  reopenReason           String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  period      KpiPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  employee    Employee  @relation("KpiSubject", fields: [employeeId], references: [id], onDelete: Restrict)
+  branch      Branch    @relation("KpiBranchSnapshot", fields: [branchIdSnapshot], references: [id], onDelete: Restrict)
+  position    Position  @relation("KpiPositionSnapshot", fields: [positionIdSnapshot], references: [id], onDelete: Restrict)
+  supervisor  Employee? @relation("KpiSupervisor", fields: [supervisorIdSnapshot], references: [id], onDelete: SetNull)
+  manager     Employee  @relation("KpiManager", fields: [managerIdSnapshot], references: [id], onDelete: Restrict)
+  finalizedBy User?     @relation("KpiFinalizedBy", fields: [finalizedById], references: [id], onDelete: SetNull)
+  reopenedBy  User?     @relation("KpiReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+  items       MonthlyKpiItem[]
+  dailySheets DailySheet[]
+
+  @@unique([periodId, employeeId])
+  @@index([managerIdSnapshot, status])
+  @@index([supervisorIdSnapshot, status])
+  @@map("monthly_kpis")
+}
+
+model MonthlyKpiItem {
+  id                     String            @id @default(cuid())
+  monthlyKpiId           String
+  codeSnapshot           String
+  nameSnapshot           String
+  descriptionSnapshot    String?
+  kindSnapshot           ValueKind
+  unitSnapshot           String
+  aggregationSnapshot    AggregationType
+  directionSnapshot      KpiDirection
+  targetSnapshot         Decimal           @db.Decimal(18, 4)
+  failureLimitSnapshot   Decimal?          @db.Decimal(18, 4)
+  weightSnapshot         Decimal           @db.Decimal(5, 2)
+  sortOrderSnapshot      Int
+  actual                 Decimal?          @db.Decimal(18, 2)
+  achievementPercentage  Decimal?          @db.Decimal(8, 2)
+  weightedScore          Decimal?          @db.Decimal(8, 2)
+  calculationStatus      CalculationStatus @default(PENDING)
+  calculationNote        String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  monthlyKpi  MonthlyKpi  @relation(fields: [monthlyKpiId], references: [id], onDelete: Cascade)
+  dailyValues DailyValue[]
+
+  @@unique([monthlyKpiId, codeSnapshot])
+  @@index([monthlyKpiId, sortOrderSnapshot])
+  @@map("monthly_kpi_items")
+}
+
+model DailySheet {
+  id                  String           @id @default(cuid())
+  monthlyKpiId        String
+  entryDate           DateTime         @db.Date
+  workStatus          WorkStatus?
+  managerWorkStatus   WorkStatus?
+  effectiveWorkStatus WorkStatus?
+  status              DailySheetStatus @default(PENDING)
+  note                String?
+  enteredById         String?
+  submittedAt         DateTime?
+  managerReviewedById String?
+  managerReviewedAt   DateTime?
+  managerReason       String?
+  rowVersion          Int              @default(1)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  monthlyKpi       MonthlyKpi  @relation(fields: [monthlyKpiId], references: [id], onDelete: Cascade)
+  enteredBy        User?       @relation("SheetEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  managerReviewedBy User?      @relation("SheetReviewedBy", fields: [managerReviewedById], references: [id], onDelete: SetNull)
+  values           DailyValue[]
+  evidence         Evidence[]
+
+  @@unique([monthlyKpiId, entryDate])
+  @@index([entryDate, status])
+  @@map("daily_sheets")
+}
+
+model DailyValue {
+  id               String   @id @default(cuid())
+  dailySheetId     String
+  monthlyKpiItemId String
+  enteredValue     Decimal? @db.Decimal(18, 4)
+  managerValue     Decimal? @db.Decimal(18, 4)
+  effectiveValue   Decimal? @db.Decimal(18, 4)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  dailySheet DailySheet     @relation(fields: [dailySheetId], references: [id], onDelete: Cascade)
+  item       MonthlyKpiItem @relation(fields: [monthlyKpiItemId], references: [id], onDelete: Cascade)
+
+  @@unique([dailySheetId, monthlyKpiItemId])
+  @@index([monthlyKpiItemId])
+  @@map("daily_values")
+}
+
+model Evidence {
+  id           String   @id @default(cuid())
+  dailySheetId String
+  fileName     String
+  storagePath  String   @unique
+  mimeType     String
+  fileSize     BigInt
+  sha256Hash   String
+  scanStatus   String   @default("pending")
+  scanNote     String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  dailySheet DailySheet @relation(fields: [dailySheetId], references: [id], onDelete: Cascade)
+  uploadedBy User       @relation("EvidenceUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([dailySheetId])
+  @@map("evidence")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  actionUrl String?
+  readAt    DateTime?
+  dedupeKey String    @unique
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  actorId     String?
+  action      String
+  subjectType String
+  subjectId   String
+  beforeJson  Json?
+  afterJson   Json?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([subjectType, subjectId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_events")
+}

@@ -1,0 +1,17 @@
+*
+!.dockerignore
+!Dockerfile
+!package.json
+!package-lock.json
+!next-env.d.ts
+!next.config.ts
+!postcss.config.mjs
+!prisma.config.ts
+!tsconfig.json
+!prisma/
+!prisma/**
+!scripts/
+!scripts/**
+!src/
+!src/**
+src/generated/

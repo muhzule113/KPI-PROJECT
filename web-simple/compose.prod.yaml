@@ -1,0 +1,109 @@
+name: kpi-simple
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  APP_URL: "${APP_URL:?set APP_URL in .env.production}"
+  BETTER_AUTH_URL: "${BETTER_AUTH_URL:?set BETTER_AUTH_URL in .env.production}"
+  BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env.production}"
+  DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env.production}"
+  SEED_DEMO_PASSWORD: "${SEED_DEMO_PASSWORD:-}"
+  SMTP_HOST: "${SMTP_HOST:-}"
+  SMTP_PORT: "${SMTP_PORT:-587}"
+  SMTP_SECURE: "${SMTP_SECURE:-false}"
+  SMTP_USER: "${SMTP_USER:-}"
+  SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+  SMTP_FROM: "${SMTP_FROM:-}"
+  MALWARE_SCANNER_PATH: "${MALWARE_SCANNER_PATH:-}"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:?set POSTGRES_DB in .env.production}"
+      POSTGRES_USER: "${POSTGRES_USER:?set POSTGRES_USER in .env.production}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}"
+    command:
+      - postgres
+      - -c
+      - max_connections=40
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - work_mem=4MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 512m
+    mem_reservation: 256m
+    shm_size: 128m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    image: kpi-simple-tooling:latest
+    build:
+      context: .
+      target: tooling
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npm", "run", "db:deploy"]
+    restart: "no"
+    mem_limit: 384m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    image: kpi-simple-app:latest
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    init: true
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3002:3002"
+    volumes:
+      - evidence_data:/app/storage/evidence
+    mem_limit: 640m
+    mem_reservation: 256m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+
+  seed:
+    profiles: ["seed"]
+    image: kpi-simple-tooling:latest
+    build:
+      context: .
+      target: tooling
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["npm", "run", "db:seed"]
+    restart: "no"
+    mem_limit: 384m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  evidence_data:

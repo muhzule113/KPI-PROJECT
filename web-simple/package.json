@@ -1,0 +1,69 @@
+{
+  "name": "kpi-simple",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.3.0"
+  },
+  "scripts": {
+    "dev": "next dev --webpack -p 3002",
+    "build": "next build --webpack",
+    "start": "next start -p 3002",
+    "postinstall": "prisma generate",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx prisma/seed.ts",
+    "db:seed:august": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/seed-august-2026.ts",
+    "verify:workflow": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-workflow.ts",
+    "verify:configuration": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-configuration.ts",
+    "verify:seed": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-seed-idempotency.ts",
+    "verify:august": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-august-2026-fixture.ts",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@daypicker/react": "^10.0.1",
+    "@phosphor-icons/react": "^2.1.10",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "better-auth": "^1.7.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^17.2.3",
+    "next": "16.3.4",
+    "nodemailer": "^10.0.1",
+    "pg": "^8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.4",
+    "prisma": "^7.10.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.1",
+    "mysql2": "^3.24.4"
+  }
+}
