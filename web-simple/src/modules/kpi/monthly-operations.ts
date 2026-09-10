@@ -148,7 +148,7 @@ export async function finalizeMonthlyKpi(
   });
   await notifyUsers(tx, [kpi.employee.userId], {
     title: "KPI bulanan telah final",
-    body: `Hasil ${kpi.period.name} sudah dapat Anda lihat.`,
+    body: `Nilai sementara ${kpi.period.name} telah ditetapkan sebagai hasil resmi.`,
     type: "monthly_finalized",
     actionUrl: `/app/kpi-saya/${kpi.id}`,
     dedupeKey: `monthly-finalized:${kpi.id}:${kpi.rowVersion + 1}`,

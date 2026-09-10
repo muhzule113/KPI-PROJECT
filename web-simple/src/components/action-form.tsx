@@ -41,8 +41,8 @@ export function ActionForm({ action, children, className, closeOnSuccess = false
 
   return (
     <form ref={formRef} action={formAction} className={className} onSubmit={() => { wasPending.current = true; }}>
-      {children}
       {state.error ? <p ref={errorRef} className="form-message error" role="alert" tabIndex={-1}>{state.error}</p> : null}
+      {children}
     </form>
   );
 }

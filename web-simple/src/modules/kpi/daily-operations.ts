@@ -53,6 +53,7 @@ export async function saveDailySheet(
         include: {
           period: true,
           items: { orderBy: { sortOrderSnapshot: "asc" } },
+          employee: { include: { user: true } },
           manager: { include: { user: true } },
         },
       },
@@ -132,6 +133,13 @@ export async function saveDailySheet(
       actionUrl: `/app/review?date=${isoDate(sheet.entryDate)}`,
       dedupeKey: `daily-submitted:${sheet.id}:${sheet.rowVersion + 1}`,
     });
+    await notifyUsers(tx, [sheet.monthlyKpi.employee.userId], {
+      title: "Penilaian harian sedang direview",
+      body: `Penilaian Anda untuk ${isoDate(sheet.entryDate)} telah dikirim Supervisor dan menunggu review Manager.`,
+      type: "own_daily_submitted",
+      actionUrl: `/app/kpi-saya/${sheet.monthlyKpi.id}?sheet=${sheet.id}`,
+      dedupeKey: `daily-submitted-owner:${sheet.id}:${sheet.rowVersion + 1}`,
+    });
   }
   if (approved) await recalculateMonthlyKpi(tx, sheet.monthlyKpiId, now);
   return { sheetId: sheet.id, status: nextStatus, rowVersion: sheet.rowVersion + 1 };
@@ -157,7 +165,7 @@ export async function reviewDailySheet(
       monthlyKpi: {
         include: {
           items: { orderBy: { sortOrderSnapshot: "asc" } },
-          employee: { include: { supervisor: { include: { user: true } } } },
+          employee: { include: { user: true, supervisor: { include: { user: true } } } },
         },
       },
     },
@@ -231,6 +239,14 @@ export async function reviewDailySheet(
     type: input.decision === "RETURN" ? "daily_returned" : "daily_approved",
     actionUrl: `/app/harian?date=${isoDate(sheet.entryDate)}`,
     dedupeKey: `daily-reviewed:${sheet.id}:${sheet.rowVersion + 1}`,
+  });
+  const ownerOutcome = input.decision === "RETURN" ? "dikembalikan untuk diperbaiki" : input.decision === "CORRECT" ? "disetujui dengan koreksi Manager" : "disetujui Manager";
+  await notifyUsers(tx, [sheet.monthlyKpi.employee.userId], {
+    title: input.decision === "RETURN" ? "Penilaian harian dikembalikan" : input.decision === "CORRECT" ? "Penilaian harian dikoreksi" : "Penilaian harian disetujui",
+    body: `Penilaian Anda untuk ${isoDate(sheet.entryDate)} ${ownerOutcome}.`,
+    type: input.decision === "RETURN" ? "own_daily_returned" : input.decision === "CORRECT" ? "own_daily_corrected" : "own_daily_approved",
+    actionUrl: `/app/kpi-saya/${sheet.monthlyKpi.id}?sheet=${sheet.id}`,
+    dedupeKey: `daily-reviewed-owner:${sheet.id}:${sheet.rowVersion + 1}`,
   });
   await recalculateMonthlyKpi(tx, sheet.monthlyKpiId, now);
   return { sheetId: sheet.id, status: nextStatus, rowVersion: sheet.rowVersion + 1 };

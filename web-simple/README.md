@@ -50,7 +50,7 @@ Ubah kata sandi kedua Super Admin dan seluruh akun demo sebelum memakai sistem d
 4. Supervisor mengisi status kerja dan nilai aktual staf. Manager mengisi KPI Supervisor langsung.
 5. Manager menyetujui, mengoreksi dengan alasan, atau mengembalikan lembar staf.
 6. Hanya hari `Bekerja` yang disetujui masuk ke SUM/AVERAGE bulanan. Nilai kosong tidak dianggap nol.
-7. Setelah akhir periode dan seluruh hari disetujui, Manager memfinalkan hasil per pegawai. Pegawai baru dapat melihat hasil setelah final.
+7. Pegawai dapat melihat status dan nilai harian yang sudah dikirim, serta skor/predikat sementara dari hari yang sudah disetujui. Setelah akhir periode dan seluruh hari disetujui, Manager memfinalkan hasil per pegawai sebagai hasil resmi.
 8. Super Admin dapat membuka hasil final kembali dengan alasan; perubahan tersimpan pada audit.
 
 Evidence bersifat opsional, maksimal 3 file per lembar dan 10 MB per file. File disimpan privat, diverifikasi tipe/hash, dan wajib lolos Windows Defender atau scanner yang ditentukan lewat `MALWARE_SCANNER_PATH`.

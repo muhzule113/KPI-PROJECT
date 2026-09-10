@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { currentUser } from "@/modules/access/current-user";
-import { canEnterDailySheet, canReviewDailySheet, canViewMonthly } from "@/modules/access/policy";
+import { canViewDailyDetail } from "@/modules/access/policy";
 import { prisma } from "@/lib/prisma";
 import { resolveEvidencePath } from "@/modules/files/evidence";
 import { kpiSubjectFromSnapshot } from "@/modules/kpi/monthly-operations";
@@ -17,7 +17,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
   });
   if (!evidence) return NextResponse.json({ error: "Evidence tidak ditemukan." }, { status: 404 });
   const subject = kpiSubjectFromSnapshot(evidence.dailySheet.monthlyKpi);
-  if (!canViewMonthly(user, subject) && !canEnterDailySheet(user, subject) && !canReviewDailySheet(user, subject)) {
+  if (!canViewDailyDetail(user, subject, evidence.dailySheet.status)) {
     return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
   }
   try {

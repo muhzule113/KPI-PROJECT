@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { reviewDailySheetAction } from "@/app/(workspace)/app/review/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { IndicatorValueField } from "@/components/indicator-value-field";
 
 type WorkStatus = "WORKED" | "OFF" | "PERMIT" | "SICK";
 type Decision = "APPROVE" | "CORRECT" | "RETURN";
@@ -45,7 +46,18 @@ export function ReviewForm({ sheet }: { sheet: { id: string; rowVersion: number;
         <strong>{label}</strong><span>{description}</span>
       </label>)}</div>
     </fieldset> : null}
-    {(correcting ? workStatus === "WORKED" : sheet.workStatus === "WORKED") ? <div className="indicator-list motion-reveal">{sheet.items.map((item) => <div className="indicator-row" key={item.id}><div><h3>{item.name}</h3><p>Nilai awal: <strong>{item.value ?? "Belum diisi"} {item.unit}</strong>. Target {item.target} {item.unit}.</p></div>{correcting ? <div className="field"><label htmlFor={`value-${item.id}`}>Nilai efektif</label><input type="hidden" name="itemId" value={item.id} /><input className="control" id={`value-${item.id}`} name="value" type="number" min={item.kind === "RATING" ? 1 : 0} max={item.kind === "RATING" ? 5 : item.unit === "%" ? 100 : 1000000000} step={item.kind === "RATING" ? 1 : "any"} defaultValue={item.value ?? ""} required /></div> : null}</div>)}</div> : null}
+    {(correcting ? workStatus === "WORKED" : sheet.workStatus === "WORKED") ? <div className="indicator-list motion-reveal">{sheet.items.map((item, index) => <div className="indicator-row" key={item.id}>
+      <div className="indicator-copy">
+        <span className="indicator-position">Indikator {index + 1} dari {sheet.items.length}</span>
+        <h3>{item.name}</h3>
+        <p>{item.description || "Periksa nilai awal terhadap target indikator."}</p>
+        <div className="indicator-target"><span>Target</span><strong>{item.target} {item.unit}</strong></div>
+      </div>
+      <div className="indicator-entry">
+        <div className="indicator-original"><span>Nilai awal</span><strong>{item.value === null ? "Belum diisi" : `${item.value} ${item.unit}`}</strong></div>
+        {correcting ? <IndicatorValueField itemId={item.id} kind={item.kind} unit={item.unit} defaultValue={item.value} label={item.kind === "RATING" ? "Rating koreksi" : "Nilai koreksi"} /> : null}
+      </div>
+    </div>)}</div> : null}
     {decision !== "APPROVE" ? <div className="field motion-reveal"><label htmlFor="reason">{decision === "RETURN" ? "Alasan pengembalian" : "Alasan koreksi"}</label><textarea className="control" id="reason" name="reason" maxLength={1000} required /></div> : null}
     <div className="form-actions"><SubmitButton variant={decision === "RETURN" ? "danger" : "primary"} pendingText="Menyimpan review...">{decision === "RETURN" ? "Kembalikan lembar" : decision === "CORRECT" ? "Simpan koreksi dan setujui" : "Setujui lembar"}</SubmitButton></div>
   </ActionForm>;

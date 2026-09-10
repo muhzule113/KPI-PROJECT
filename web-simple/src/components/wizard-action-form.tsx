@@ -47,7 +47,7 @@ export function WizardActionForm({ action, steps, submitLabel = "Simpan", pendin
         </section>
       ))}
       <footer className="dialog-actions">
-        <DialogCancel />
+        {step === 0 ? <DialogCancel /> : null}
         {step > 0 ? <Button type="button" variant="secondary" onClick={() => setStep((current) => current - 1)}><ArrowLeftIcon aria-hidden="true" />Kembali</Button> : null}
         {step < steps.length - 1 ? <Button type="button" onClick={next}>Lanjut<ArrowRightIcon aria-hidden="true" /></Button> : <SubmitButton pendingText={pendingText}>{submitLabel}</SubmitButton>}
       </footer>

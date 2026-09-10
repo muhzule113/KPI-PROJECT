@@ -1576,6 +1576,121 @@ textarea.control {
   line-height: 1.45;
 }
 
+.indicator-copy,
+.indicator-entry,
+.indicator-value-field {
+  min-width: 0;
+}
+
+.indicator-position {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 680;
+}
+
+.indicator-target {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 6px 9px;
+  border-left: 3px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.indicator-target strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.indicator-entry {
+  display: grid;
+  gap: 12px;
+}
+
+.indicator-original,
+.indicator-result {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.indicator-result {
+  align-content: center;
+  justify-items: end;
+}
+
+.indicator-original span,
+.indicator-result span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.indicator-original strong,
+.indicator-result strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.value-input-shell {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.value-input-shell:hover {
+  border-color: var(--muted);
+}
+
+.value-input-shell:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(216 255 63 / 14%);
+}
+
+.value-input-shell .control {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.value-input-shell .control:hover,
+.value-input-shell .control:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.value-unit {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 8px 12px;
+  border-left: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--graphite);
+  font-size: 0.78rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
 .evidence-section {
   display: grid;
   gap: 12px;
@@ -1681,6 +1796,22 @@ textarea.control {
   grid-template-columns: minmax(250px, 0.36fr) minmax(0, 1fr);
   align-items: start;
   gap: 22px;
+}
+
+.mobile-sheet-picker {
+  display: none;
+}
+
+.mobile-sheet-picker-body {
+  display: grid;
+  gap: 12px;
+}
+
+.select-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .selection-list {
@@ -1891,21 +2022,22 @@ textarea.control {
 .select-trigger:focus-visible,
 .date-trigger:focus-visible { border-color: var(--accent); }
 
-.select-field:has(.control-clear) .select-trigger { padding-right: 42px; }
+.select-field:has(.control-clear) .select-trigger { padding-right: 80px; }
 
 .control-clear {
   position: absolute;
   z-index: 1;
-  top: 6px;
-  right: 32px;
+  top: 50%;
+  right: 34px;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: var(--muted);
+  transform: translateY(-50%);
 }
 
 .control-clear:hover { background: var(--surface-soft); color: var(--ink); }
@@ -1935,7 +2067,7 @@ textarea.control {
 .select-item {
   position: relative;
   display: flex;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   gap: 9px;
   padding: 9px 11px 9px 34px;
@@ -2049,8 +2181,8 @@ textarea.control {
 
 .dialog-close {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid transparent;
@@ -2136,9 +2268,9 @@ textarea.control {
 .calendar-dialog .rdp-root {
   --rdp-accent-color: var(--accent);
   --rdp-accent-background-color: var(--accent-soft);
-  --rdp-day-height: 42px;
-  --rdp-day-width: 42px;
-  --rdp-nav-height: 42px;
+  --rdp-day-height: 44px;
+  --rdp-day-width: 44px;
+  --rdp-nav-height: 44px;
   margin: 0;
   padding: 16px 20px 8px;
 }
@@ -2150,7 +2282,14 @@ textarea.control {
 .calendar-dialog .rdp-weekday { color: var(--muted); font-size: 0.73rem; font-weight: 650; }
 .calendar-dialog .rdp-day_button,
 .calendar-dialog .rdp-button_previous,
-.calendar-dialog .rdp-button_next { border-radius: 8px; color: var(--graphite); }
+.calendar-dialog .rdp-button_next {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 8px;
+  color: var(--graphite);
+}
 .calendar-dialog .rdp-day_button:hover,
 .calendar-dialog .rdp-button_previous:hover,
 .calendar-dialog .rdp-button_next:hover { background: var(--surface-strong); color: var(--ink); }
@@ -2514,8 +2653,8 @@ textarea.control {
 
 @media (max-width: 680px) {
   .workspace-content {
-    padding-right: 14px;
-    padding-left: 14px;
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
   .page-header {
@@ -2612,9 +2751,32 @@ textarea.control {
   }
 
   .form-grid,
-  .choice-grid,
   .choice-grid.decision {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .choice-card {
+    min-height: 96px;
+    padding: 12px;
+  }
+
+  .choice-grid.decision .choice-card {
+    min-height: 80px;
+  }
+
+  .control {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+
+  .field label,
+  .field-label {
+    font-size: 0.85rem;
   }
 
   .toolbar {
@@ -2642,9 +2804,62 @@ textarea.control {
     align-self: flex-start;
   }
 
+  .desktop-sheet-list {
+    display: none;
+  }
+
+  .mobile-sheet-picker {
+    display: block;
+  }
+
+  .mobile-sheet-picker-body {
+    padding: 16px;
+  }
+
+  .mobile-sheet-picker button {
+    width: 100%;
+  }
+
+  .indicator-list {
+    display: grid;
+    gap: 12px;
+    border-block: 0;
+  }
+
   .indicator-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--surface);
+  }
+
+  .indicator-row:first-child {
+    border-top: 1px solid var(--line);
+  }
+
+  .indicator-row h3 {
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+
+  .indicator-row p {
+    font-size: 0.84rem;
+    line-height: 1.55;
+  }
+
+  .indicator-result {
+    justify-items: start;
+  }
+
+  .indicator-original strong,
+  .indicator-result strong {
+    font-size: 1.08rem;
+  }
+
+  .value-unit {
+    min-height: 48px;
   }
 
   .definition-list > div {
@@ -2676,7 +2891,8 @@ textarea.control {
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: min(92dvh, 860px);
+    max-height: min(860px, calc(100dvh - max(12px, env(safe-area-inset-top))));
+    overscroll-behavior-y: contain;
     transform: none;
     border-right: 0;
     border-bottom: 0;
@@ -2685,22 +2901,28 @@ textarea.control {
     animation-name: sheet-in;
   }
 
-  .dialog-header { padding: 18px; }
+  .dialog-header {
+    min-height: 76px;
+    padding: 16px;
+  }
 
   .dialog-content > form,
-  .dialog-body { padding: 18px; }
+  .dialog-body {
+    padding: 18px 16px;
+    scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
 
   .dialog-actions {
     bottom: -18px;
-    margin: 4px -18px -18px;
-    padding: 13px 18px max(13px, env(safe-area-inset-bottom));
+    margin: 4px -16px -18px;
+    padding: 13px 16px max(13px, env(safe-area-inset-bottom));
   }
 
   .dialog-actions > * { flex: 1 1 auto; }
   .calendar-dialog .rdp-root { padding-right: 12px; padding-left: 12px; }
 
   .toast-region {
-    right: 14px;
+    right: 16px;
     bottom: calc(76px + env(safe-area-inset-bottom));
   }
 }
@@ -2758,6 +2980,21 @@ textarea.control {
   .form-actions > button,
   .form-actions > a {
     width: 100%;
+  }
+
+  .dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dialog-actions > * {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .dialog-content > form,
+  .dialog-body {
+    scroll-padding-bottom: calc(144px + env(safe-area-inset-bottom));
   }
 
   .standalone-shell,

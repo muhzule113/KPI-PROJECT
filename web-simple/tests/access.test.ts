@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   canEnterDailySheet,
   canFinalizeMonthly,
+  canViewDailyDetail,
   canReviewDailySheet,
   canViewMonthly,
   type AccessProfile,
@@ -42,6 +43,23 @@ test("Pegawai hanya melihat hasil miliknya yang sudah final", () => {
   assert.equal(canViewMonthly(employee, subject), false);
   assert.equal(canViewMonthly(employee, { ...subject, status: "FINALIZED" }), true);
   assert.equal(canViewMonthly({ ...employee, employeeId: "e-lain" }, { ...subject, status: "FINALIZED" }), false);
+});
+
+test("rincian harian Pegawai terbuka setelah dikirim tanpa membuka draf", () => {
+  assert.equal(canViewDailyDetail(employee, subject, "PENDING"), false);
+  assert.equal(canViewDailyDetail(employee, subject, "DRAFT"), false);
+  assert.equal(canViewDailyDetail(employee, subject, "SUBMITTED"), true);
+  assert.equal(canViewDailyDetail(employee, subject, "REVISION_REQUIRED"), true);
+  assert.equal(canViewDailyDetail(employee, subject, "APPROVED"), true);
+  assert.equal(canViewDailyDetail({ ...employee, employeeId: "e-lain" }, subject, "APPROVED"), false);
+  assert.equal(canViewDailyDetail({ ...employee, active: false }, subject, "APPROVED"), false);
+});
+
+test("rincian harian penilai mengikuti assignment dan cabang", () => {
+  assert.equal(canViewDailyDetail(supervisor, subject, "DRAFT"), true);
+  assert.equal(canViewDailyDetail(manager, subject, "SUBMITTED"), true);
+  assert.equal(canViewDailyDetail({ ...supervisor, branchId: "b-2" }, subject, "APPROVED"), false);
+  assert.equal(canViewDailyDetail({ ...manager, employeeId: "e-manager-lain" }, subject, "APPROVED"), false);
 });
 
 test("Super Admin dapat melihat semua hasil tetapi tidak mengisi penilaian", () => {

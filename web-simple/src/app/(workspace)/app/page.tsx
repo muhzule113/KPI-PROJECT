@@ -78,19 +78,20 @@ export default async function DashboardPage() {
   }
 
   const latest = await prisma.monthlyKpi.findFirst({
-    where: { employeeId: user.employee!.id, status: "FINALIZED" },
+    where: { employeeId: user.employee!.id },
     orderBy: [{ period: { year: "desc" } }, { period: { month: "desc" } }],
     include: { period: true },
   });
+  const latestFinal = latest?.status === "FINALIZED";
   return <>
-    <PageHeader eyebrow="Ringkasan pribadi" title={`Selamat datang, ${user.name}`} description="Hasil KPI akan terlihat setelah difinalkan oleh Manager." />
+    <PageHeader eyebrow="Ringkasan pribadi" title={`Selamat datang, ${user.name}`} description="Pantau nilai sementara, status review harian, dan hasil KPI resmi Anda." />
     <div className="dashboard-flow">
       <Link href="/app/kpi-saya" className="dashboard-focus">
-        <div className="dashboard-focus-copy"><p className="eyebrow">Hasil terbaru</p><h2>{latest ? latest.period.name : "Belum ada hasil final"}</h2><p>{latest ? latest.ratingLabel ?? latest.noScoreReason ?? "Tanpa predikat" : "Manager belum memfinalkan hasil KPI bulanan Anda."}</p>{latest ? <StatusBadge status={latest.status} /> : null}<span className="dashboard-focus-action">Lihat rincian KPI</span></div>
-        <div className="dashboard-focus-meta"><strong>{latest ? formatNumber(latest.finalScore) : "-"}</strong><span>{latest ? "nilai final" : "menunggu finalisasi"}</span></div>
+        <div className="dashboard-focus-copy"><p className="eyebrow">KPI terbaru</p><h2>{latest ? latest.period.name : "Belum ada KPI"}</h2><p>{latest ? latest.ratingLabel ?? latest.noScoreReason ?? "Belum dapat dihitung" : "KPI akan tersedia setelah periode penilaian dibuka."}</p>{latest ? <StatusBadge status={latest.status} /> : null}<span className="dashboard-focus-action">Lihat rincian KPI</span></div>
+        <div className="dashboard-focus-meta"><strong>{latest ? formatNumber(latest.finalScore) : "-"}</strong><span>{latest ? latestFinal ? "nilai final" : "nilai sementara" : "belum tersedia"}</span></div>
         <div className="dashboard-focus-illustration"><RoleWorkbenchIllustration role={user.role} /></div>
       </Link>
-      <ToolList links={[["/app/kpi-saya", "Lihat KPI saya", "Buka rincian nilai dan indikator bulanan yang sudah final.", ChartBarIcon], ["/app/notifikasi", "Buka notifikasi", "Lihat pemberitahuan saat hasil baru tersedia.", BellIcon]]} />
+      <ToolList links={[["/app/kpi-saya", "Lihat KPI saya", "Buka progres harian, nilai sementara, dan hasil final.", ChartBarIcon], ["/app/notifikasi", "Buka notifikasi", "Lihat perubahan status penilaian harian Anda.", BellIcon]]} />
     </div>
   </>;
 }

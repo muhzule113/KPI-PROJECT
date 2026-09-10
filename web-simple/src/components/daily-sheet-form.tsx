@@ -4,6 +4,7 @@ import { useState } from "react";
 import { removeEvidenceAction, saveDailySheetAction, uploadEvidenceAction } from "@/app/(workspace)/app/harian/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { ConfirmAction } from "@/components/confirm-action";
+import { IndicatorValueField } from "@/components/indicator-value-field";
 import { Button } from "@/components/ui/button";
 
 type WorkStatus = "WORKED" | "OFF" | "PERMIT" | "SICK";
@@ -39,7 +40,15 @@ export function DailySheetForm({ sheet, editable, evidenceEditable, directApprov
   if (!editable) return <>
     {sheet.managerReason ? <div className="notice"><strong>Catatan Manager:</strong> {sheet.managerReason}</div> : null}
     <dl className="definition-list sheet-definition"><div><dt>Status kerja</dt><dd>{workStatusLabel(sheet.workStatus)}</dd></div><div><dt>Catatan</dt><dd>{sheet.note || "Tidak ada catatan"}</dd></div></dl>
-    {sheet.workStatus === "WORKED" ? <div className="indicator-list">{sheet.items.map((item) => <div className="indicator-row" key={item.id}><div><h3>{item.name}</h3><p>{item.description || `${item.kind === "RATING" ? "Rating 1-5" : "Nilai aktual"} / target ${item.target} ${item.unit}`}</p></div><strong>{item.value ?? "Belum diisi"} {item.unit}</strong></div>)}</div> : null}
+    {sheet.workStatus === "WORKED" ? <div className="indicator-list">{sheet.items.map((item, index) => <div className="indicator-row" key={item.id}>
+      <div className="indicator-copy">
+        <span className="indicator-position">Indikator {index + 1}</span>
+        <h3>{item.name}</h3>
+        <p>{item.description || "Nilai aktual untuk indikator ini."}</p>
+        <div className="indicator-target"><span>Target</span><strong>{item.target} {item.unit}</strong></div>
+      </div>
+      <div className="indicator-result"><span>Nilai</span><strong>{item.value === null ? "Belum diisi" : `${item.value} ${item.unit}`}</strong></div>
+    </div>)}</div> : null}
     <EvidenceList evidence={sheet.evidence} removable={false} />
   </>;
 
@@ -55,7 +64,15 @@ export function DailySheetForm({ sheet, editable, evidenceEditable, directApprov
           <strong>{label}</strong><span>{description}</span>
         </label>)}</div>
       </fieldset>
-      {working ? <div className="indicator-list motion-reveal">{sheet.items.map((item) => <div className="indicator-row" key={item.id}><div><h3>{item.name}</h3><p>{item.description || "Masukkan nilai aktual."} Target: {item.target} {item.unit}. {item.kind === "RATING" ? "Gunakan rating bulat 1-5." : ""}</p></div><div className="field"><label htmlFor={`value-${item.id}`}>Aktual ({item.unit})</label><input type="hidden" name="itemId" value={item.id} /><input className="control" id={`value-${item.id}`} name="value" type="number" min={item.kind === "RATING" ? 1 : 0} max={item.kind === "RATING" ? 5 : item.unit === "%" ? 100 : 1000000000} step={item.kind === "RATING" ? 1 : "any"} defaultValue={item.value ?? ""} required /></div></div>)}</div> : <p className="help motion-reveal">Nilai indikator tidak diperlukan untuk hari Libur, Izin, atau Sakit.</p>}
+      {working ? <div className="indicator-list motion-reveal">{sheet.items.map((item, index) => <div className="indicator-row" key={item.id}>
+        <div className="indicator-copy">
+          <span className="indicator-position">Indikator {index + 1} dari {sheet.items.length}</span>
+          <h3>{item.name}</h3>
+          <p>{item.description || "Masukkan nilai aktual untuk indikator ini."}</p>
+          <div className="indicator-target"><span>Target</span><strong>{item.target} {item.unit}</strong></div>
+        </div>
+        <IndicatorValueField itemId={item.id} kind={item.kind} unit={item.unit} defaultValue={item.value} label={item.kind === "RATING" ? "Rating aktual" : "Nilai aktual"} />
+      </div>)}</div> : <p className="help motion-reveal">Nilai indikator tidak diperlukan untuk hari Libur, Izin, atau Sakit.</p>}
       <div className="field"><label htmlFor="note">Catatan</label><textarea className="control" id="note" name="note" maxLength={1000} defaultValue={sheet.note ?? ""} placeholder={working ? "Wajib jika ada rating di bawah target." : "Keterangan status kerja (opsional)."} /></div>
       {correctingApproved ? <div className="field motion-reveal"><label htmlFor="correctionReason">Alasan koreksi</label><textarea className="control" id="correctionReason" name="correctionReason" maxLength={1000} required /></div> : null}
       <div className="form-actions">

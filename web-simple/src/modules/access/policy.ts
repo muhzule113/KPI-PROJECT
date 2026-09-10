@@ -58,3 +58,11 @@ export function canViewMonthly(actor: AccessProfile, subject: KpiSubject) {
   }
   return subject.managerId === actor.employeeId;
 }
+
+export function canViewDailyDetail(actor: AccessProfile, subject: KpiSubject, sheetStatus: string) {
+  if (!actor.active) return false;
+  if (actor.role === "EMPLOYEE") {
+    return actor.employeeId === subject.employeeId && ["SUBMITTED", "REVISION_REQUIRED", "APPROVED"].includes(sheetStatus);
+  }
+  return canViewMonthly(actor, subject);
+}

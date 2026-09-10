@@ -35,14 +35,30 @@ try {
 
     const staffKpi = await tx.monthlyKpi.findFirstOrThrow({
       where: { periodId: period.id, positionCodeSnapshot: "PELAYAN" },
-      include: { items: { orderBy: { sortOrderSnapshot: "asc" } }, dailySheets: { where: { entryDate: new Date(Date.UTC(slot.year, slot.month - 1, 9)) } } },
+      include: { employee: { include: { user: true } }, items: { orderBy: { sortOrderSnapshot: "asc" } }, dailySheets: { where: { entryDate: new Date(Date.UTC(slot.year, slot.month - 1, 9)) } } },
     });
     const staffValues = staffKpi.items.map((item) => ({ itemId: item.id, value: item.unitSnapshot === "%" ? 90 : 1 }));
     const submitted = await saveDailySheet(tx, supervisor, { sheetId: staffKpi.dailySheets[0].id, rowVersion: staffKpi.dailySheets[0].rowVersion, workStatus: "WORKED", values: staffValues, submit: true, note: "Pelayanan harian selesai." }, now);
     assert.equal(submitted.status, "SUBMITTED");
+    const beforeApproval = await tx.monthlyKpi.findUniqueOrThrow({ where: { id: staffKpi.id } });
+    assert.equal(beforeApproval.finalScore, null, "Lembar menunggu review belum boleh masuk skor sementara.");
+    const submittedOwnerNotification = await tx.notification.findUniqueOrThrow({ where: { dedupeKey: `daily-submitted-owner:${submitted.sheetId}:${submitted.rowVersion}:${staffKpi.employee.userId}` } });
+    assert.equal(submittedOwnerNotification.actionUrl, `/app/kpi-saya/${staffKpi.id}?sheet=${submitted.sheetId}`);
 
-    const approved = await reviewDailySheet(tx, manager, { sheetId: submitted.sheetId, rowVersion: submitted.rowVersion, decision: "APPROVE" }, now);
+    const returned = await reviewDailySheet(tx, manager, { sheetId: submitted.sheetId, rowVersion: submitted.rowVersion, decision: "RETURN", reason: "Periksa kembali data pelayanan." }, now);
+    assert.equal(returned.status, "REVISION_REQUIRED");
+    const returnedOwnerNotification = await tx.notification.findUniqueOrThrow({ where: { dedupeKey: `daily-reviewed-owner:${returned.sheetId}:${returned.rowVersion}:${staffKpi.employee.userId}` } });
+    assert.equal(returnedOwnerNotification.type, "own_daily_returned");
+
+    const resubmitted = await saveDailySheet(tx, supervisor, { sheetId: returned.sheetId, rowVersion: returned.rowVersion, workStatus: "WORKED", values: staffValues, submit: true, note: "Data pelayanan sudah diperiksa ulang." }, now);
+    assert.equal(resubmitted.status, "SUBMITTED");
+    const approved = await reviewDailySheet(tx, manager, { sheetId: resubmitted.sheetId, rowVersion: resubmitted.rowVersion, decision: "APPROVE" }, now);
     assert.equal(approved.status, "APPROVED");
+    const afterApproval = await tx.monthlyKpi.findUniqueOrThrow({ where: { id: staffKpi.id } });
+    assert.notEqual(afterApproval.finalScore, null, "Hari disetujui harus masuk skor sementara.");
+    assert.equal(afterApproval.status, "IN_PROGRESS");
+    const approvedOwnerNotification = await tx.notification.findUniqueOrThrow({ where: { dedupeKey: `daily-reviewed-owner:${approved.sheetId}:${approved.rowVersion}:${staffKpi.employee.userId}` } });
+    assert.equal(approvedOwnerNotification.type, "own_daily_approved");
     const complaintItem = await tx.monthlyKpiItem.findFirstOrThrow({ where: { monthlyKpiId: staffKpi.id, codeSnapshot: "CS-05" } });
     assert.equal(complaintItem.actual?.toFixed(2), "1.00");
 
@@ -59,6 +75,8 @@ try {
     assert.equal(correctedValue.enteredValue?.toNumber(), 1);
     assert.equal(correctedValue.managerValue?.toNumber(), 2);
     assert.equal(correctedValue.effectiveValue?.toNumber(), 2);
+    const correctedOwnerNotification = await tx.notification.findUniqueOrThrow({ where: { dedupeKey: `daily-reviewed-owner:${corrected.sheetId}:${corrected.rowVersion}:${staffKpi.employee.userId}` } });
+    assert.equal(correctedOwnerNotification.type, "own_daily_corrected");
 
     const supervisorKpi = await tx.monthlyKpi.findFirstOrThrow({
       where: { periodId: period.id, positionCodeSnapshot: "SPV" },
