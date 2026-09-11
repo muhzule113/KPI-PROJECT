@@ -3,6 +3,7 @@
 !.env.example
 !.env.production.example
 .next/
+.next-*/
 node_modules/
 src/generated/
 storage/evidence/*

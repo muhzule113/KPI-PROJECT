@@ -220,7 +220,7 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 - Setelah Supervisor menyetujui penilaian staf, Manager yang ditugaskan dapat mengonfirmasi seluruh indikator per karyawan atau mengubah satu indikator. Perubahan wajib memiliki alasan, tidak mengubah fakta sumber, dan menjadi nilai efektif harian.
 - Khusus KPI Supervisor, Manager yang ditugaskan menilai dan memfinalisasi langsung. Satu Manager cukup; self-assessment dan self-approval tetap dilarang.
 - KPI Supervisor menunggu hasil anggota tim; approval anggota tidak menunggu KPI Supervisor.
-- Skor dan predikat KPI sendiri hanya terlihat setelah publikasi periode. Penilai yang ditugaskan dapat melihat hasil tim untuk tugas review/approval; Auditor membaca lintas cabang dan Admin KPI memonitor periode.
+- Karyawan operasional dapat melihat skor dan predikat sementara miliknya di dashboard serta KPI Saya sebelum publikasi. Nilai sementara hanya memakai hari bekerja yang sudah disetujui, wajib diberi label belum final, dan dapat berubah; ekspor karyawan tetap hanya memuat hasil final. Penilai yang ditugaskan dapat melihat hasil tim untuk tugas review/approval; Auditor membaca lintas cabang dan Admin KPI memonitor periode.
 
 ---
 
@@ -1362,7 +1362,7 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 
 - [ ] Tiap role dapat login hanya pada platform yang diizinkan; URL/API langsung dan sesi lama memakai aturan yang sama.
 - [ ] Pekerjaan operasional menjadi fakta KPI tanpa submit karyawan.
-- [ ] Skor/predikat sendiri sebelum publikasi tidak bocor melalui detail, harian, dashboard, ekspor, koreksi atau notifikasi.
+- [ ] Skor/predikat sementara milik sendiri hanya terlihat di dashboard dan KPI Saya, dihitung dari hari bekerja yang sudah disetujui, serta selalu dibedakan dari hasil final; ekspor karyawan tetap hanya memuat hasil final.
 - [ ] Histori milik sendiri tetap dapat dibaca setelah periode ditutup.
 
 ### AC-04 — Penilaian dan Rekap Supervisor
