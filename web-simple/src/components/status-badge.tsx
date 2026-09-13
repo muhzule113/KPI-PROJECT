@@ -5,7 +5,7 @@ import {
   MinusCircleIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 const labels: Record<string, string> = {
   PENDING: "Belum diisi",
@@ -29,19 +29,13 @@ const labels: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string | null }) {
-  if (!status) return <span className="status neutral"><MinusCircleIcon aria-hidden="true" />Belum dipilih</span>;
+  if (!status) return <Badge variant="secondary" className="status neutral"><MinusCircleIcon aria-hidden="true" />Belum dipilih</Badge>;
   const success = ["ACTIVE", "APPROVED", "FINALIZED", "COMPLETED", "WORKED"].includes(status);
   const info = status === "SUBMITTED";
   const warning = ["READY", "REOPENED", "PERMIT", "SICK"].includes(status);
   const danger = ["INACTIVE", "REVISION_REQUIRED", "RETIRED"].includes(status);
   const isLive = ["IN_PROGRESS", "SUBMITTED", "OPEN"].includes(status);
   const Icon = success ? CheckCircleIcon : info ? InfoIcon : warning ? ClockIcon : danger ? WarningCircleIcon : MinusCircleIcon;
-  return <span className={cn("status", {
-    success,
-    info,
-    warning,
-    danger,
-    neutral: ["PENDING", "DRAFT", "IN_PROGRESS", "OPEN", "OFF"].includes(status),
-    live: isLive,
-  })}><Icon aria-hidden="true" />{labels[status] ?? status}</span>;
+  const variant = success ? "success" : info ? "info" : warning ? "warning" : danger ? "destructive" : "secondary";
+  return <Badge variant={variant} className={`status${isLive ? " live" : ""}`}><Icon aria-hidden="true" />{labels[status] ?? status}</Badge>;
 }

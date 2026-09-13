@@ -1,6 +1,6 @@
 import type { Icon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { StateVignette } from "@/components/illustrations";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -16,5 +16,10 @@ export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?:
 }
 
 export function EmptyState({ title, description, icon, action }: { title: string; description: string; icon: Icon; action?: ReactNode }) {
-  return <div className="empty-state"><StateVignette icon={icon} /><div><h2>{title}</h2><p>{description}</p>{action ? <div className="empty-state-action">{action}</div> : null}</div></div>;
+  const Icon = icon;
+  return <Empty className="empty-state">
+    <EmptyMedia><Icon size={24} weight="duotone" aria-hidden="true" /></EmptyMedia>
+    <EmptyHeader><EmptyTitle>{title}</EmptyTitle><EmptyDescription>{description}</EmptyDescription></EmptyHeader>
+    {action ? <EmptyContent className="empty-state-action">{action}</EmptyContent> : null}
+  </Empty>;
 }

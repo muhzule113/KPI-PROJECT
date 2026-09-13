@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { AuthWorkbenchIllustration } from "@/components/illustrations";
 import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { CheckboxField } from "@/components/ui/form-controls";
+import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { USERNAME_INPUT_PATTERN } from "@/lib/username";
 
@@ -39,14 +41,19 @@ export function LoginForm() {
     <MobileBrand />
     <header><p className="auth-kicker">Selamat datang</p><h1>Masuk ke KPI Harian</h1><p>Gunakan akun kerja yang dibuat oleh Super Admin.</p></header>
     <form onSubmit={submit} className="form-stack">
-      <div className="field"><label htmlFor="username">Username</label><input className="control" id="username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={50} pattern={USERNAME_INPUT_PATTERN} title="Gunakan 3–50 karakter: huruf, angka, titik, garis bawah, atau tanda hubung." required autoFocus /></div>
-      <div className="field">
-        <div className="field-heading"><label htmlFor="password">Kata sandi</label><span>Lupa kata sandi? Hubungi Super Admin.</span></div>
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="username">Username</FieldLabel>
+          <Input id="username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={50} pattern={USERNAME_INPUT_PATTERN} title="Gunakan 3–50 karakter: huruf, angka, titik, garis bawah, atau tanda hubung." required autoFocus />
+        </Field>
+        <Field>
+          <div className="field-heading"><FieldLabel htmlFor="password">Kata sandi</FieldLabel><FieldDescription>Lupa kata sandi? Hubungi Super Admin.</FieldDescription></div>
         <PasswordInput id="password" name="password" autoComplete="current-password" />
-      </div>
+        </Field>
+      </FieldGroup>
       <CheckboxField name="remember" label="Tetap masuk di perangkat ini" />
       {error ? <p className="form-message error" role="alert">{error}</p> : null}
-      <Button type="submit" disabled={busy}>{busy ? <SpinnerGapIcon className="animate-spin" aria-hidden="true" /> : null}{busy ? "Memeriksa akun..." : "Masuk"}</Button>
+      <Button type="submit" disabled={busy}>{busy ? <SpinnerGapIcon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}{busy ? "Memeriksa akun..." : "Masuk"}</Button>
     </form>
   </>;
 }
@@ -61,7 +68,7 @@ function PasswordInput({ id, name, autoComplete, minLength, maxLength, autoFocus
 }) {
   const [visible, setVisible] = useState(false);
   return <div className="password-control">
-    <input className="control" id={id} name={name} type={visible ? "text" : "password"} minLength={minLength} maxLength={maxLength} autoComplete={autoComplete} required autoFocus={autoFocus} />
+    <Input id={id} name={name} type={visible ? "text" : "password"} minLength={minLength} maxLength={maxLength} autoComplete={autoComplete} required autoFocus={autoFocus} />
     <button className="password-toggle" type="button" onClick={() => setVisible((value) => !value)} aria-label={visible ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"} aria-pressed={visible}>
       {visible ? <EyeSlashIcon size={20} aria-hidden="true" /> : <EyeIcon size={20} aria-hidden="true" />}
     </button>

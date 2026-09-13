@@ -22,10 +22,11 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Separator } from "@/components/ui/separator";
 import type { UserRole } from "@/modules/access/policy";
 
 type NavItem = {
@@ -127,7 +128,7 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
           </div>
         </div>
         <nav className="desktop-navigation" aria-label="Navigasi utama">
-          <NavList items={items.filter((item) => item.href !== "/app/notifikasi")} pathname={pathname} unread={unread} horizontal />
+          <NavList items={items.filter((item) => item.href !== "/app/notifikasi")} pathname={pathname} unread={unread} horizontal showSections />
         </nav>
       </header>
 
@@ -153,11 +154,14 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
             <Dialog.Title className="sr-only">Menu aplikasi</Dialog.Title>
             <Dialog.Description className="sr-only">Pilih halaman aplikasi KPI Harian.</Dialog.Description>
             <div className="mobile-drawer-header">
-              <Brand />
-              <Dialog.Close className="drawer-close" aria-label="Tutup menu"><XIcon size={20} aria-hidden="true" /></Dialog.Close>
+              <div className="drawer-handle" aria-hidden="true" />
+              <div className="mobile-drawer-header-row">
+                <Brand />
+                <Dialog.Close className="drawer-close" aria-label="Tutup menu"><XIcon size={20} aria-hidden="true" /></Dialog.Close>
+              </div>
             </div>
             <nav className="mobile-drawer-body" aria-label="Semua halaman">
-              <NavList items={items} pathname={pathname} unread={unread} onNavigate={() => setMenuOpen(false)} />
+              <NavList items={items} pathname={pathname} unread={unread} onNavigate={() => setMenuOpen(false)} showSections />
             </nav>
             <div className="mobile-drawer-footer">
               <UserPanel name={userName} context={roleContext} initials={initials(userName)} onSignOut={signOut} busy={signingOut} />
@@ -170,19 +174,32 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
 }
 
 function Brand() {
-  return <Link className="sidebar-brand" href="/app"><span className="brand-mark">K</span><span><strong>KPI Harian</strong><small>Penilaian manual</small></span></Link>;
+  return <Link className="sidebar-brand group" href="/app"><span className="brand-mark">K</span><span><strong>KPI Harian</strong><small>Penilaian manual</small></span></Link>;
 }
 
-function NavList({ items, pathname, unread, onNavigate, horizontal = false }: { items: NavItem[]; pathname: string; unread: number; onNavigate?: () => void; horizontal?: boolean }) {
-  return <div className={cn("nav-list", horizontal && "nav-list-horizontal")}>{items.map((item) => {
+function NavList({ items, pathname, unread, onNavigate, horizontal = false, showSections = false }: { items: NavItem[]; pathname: string; unread: number; onNavigate?: () => void; horizontal?: boolean; showSections?: boolean }) {
+  return <div className={cn("nav-list", horizontal && "nav-list-horizontal")}>{items.map((item, index) => {
     const Icon = item.icon;
     const active = isActive(pathname, item.href);
-    return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("nav-link", active && "active")} aria-current={active ? "page" : undefined} title={horizontal ? item.label : undefined}>
+    const section = navSection(item);
+    const previousSection = index > 0 ? navSection(items[index - 1]) : "";
+    const showSection = showSections && section !== previousSection && section !== "Workspace";
+    return <Fragment key={item.href}>
+      {showSection ? <div className="nav-section-heading"><Separator /><span>{section}</span></div> : null}
+      <Link href={item.href} onClick={onNavigate} className={cn("nav-link", active && "active")} aria-current={active ? "page" : undefined} title={horizontal ? item.label : undefined}>
+      {active ? <span className="nav-active-indicator" aria-hidden="true" /> : null}
       <Icon size={19} weight={active ? "fill" : "regular"} aria-hidden="true" />
       <span>{item.label}</span>
       {item.href === "/app/notifikasi" && unread > 0 ? <span className="nav-count">{unread > 99 ? "99+" : unread}</span> : null}
-    </Link>;
+      </Link>
+    </Fragment>;
   })}</div>;
+}
+
+function navSection(item: NavItem) {
+  if (item.href.startsWith("/app/pengaturan")) return "Konfigurasi";
+  if (item.href === "/app/audit") return "Kontrol";
+  return "Workspace";
 }
 
 function MobileNavLink({ item, pathname, unread }: { item: NavItem; pathname: string; unread: number }) {
@@ -192,6 +209,7 @@ function MobileNavLink({ item, pathname, unread }: { item: NavItem; pathname: st
     <span className="mobile-nav-icon-wrap">
       <Icon size={20} weight={active ? "fill" : "regular"} aria-hidden="true" />
       {item.href === "/app/notifikasi" && unread > 0 ? <span className="notification-count">{unread > 99 ? "99+" : unread}</span> : null}
+      {active ? <span className="mobile-nav-active-dot" aria-hidden="true" /> : null}
     </span>
     <span>{item.label}</span>
   </Link>;

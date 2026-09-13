@@ -16,6 +16,7 @@ import Link from "next/link";
 import { RoleWorkbenchIllustration } from "@/components/illustrations";
 import { PageHeader } from "@/components/page-elements";
 import { StatusBadge } from "@/components/status-badge";
+import { Card } from "@/components/ui/card";
 import { todayInMakassar } from "@/lib/date";
 import { prisma } from "@/lib/prisma";
 import { formatNumber } from "@/lib/utils";
@@ -136,7 +137,7 @@ function Dashboard({ role, header, focus, metrics, links }: {
 function MetricLedger({ metrics }: { metrics: Metric[] }) {
   return <section className="metric-ledger" aria-labelledby="metric-ledger-title"><div className="metric-ledger-heading"><h2 id="metric-ledger-title">Catatan angka</h2><p>Posisi pekerjaan saat ini</p></div><dl>{metrics.map(([label, value, icon, note]) => {
     const Icon = icon;
-    return <div className="metric-ledger-row" key={label}><dt><Icon size={19} weight="duotone" aria-hidden="true" /><span>{label}</span></dt><dd><strong>{value}</strong>{note ? <small>{note}</small> : null}</dd></div>;
+    return <Card className="metric-ledger-row" key={label}><dt><Icon size={19} weight="duotone" aria-hidden="true" /><span>{label}</span></dt><dd><strong>{value}</strong>{note ? <small>{note}</small> : null}</dd></Card>;
   })}</dl></section>;
 }
 

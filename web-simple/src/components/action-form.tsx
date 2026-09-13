@@ -1,9 +1,10 @@
 "use client";
 
-import { SpinnerGapIcon } from "@phosphor-icons/react";
+import { SpinnerGapIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useActionState, useEffect, useRef, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useDialogControl } from "@/components/ui/form-dialog";
 import { useToast } from "@/components/toast-provider";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ export function ActionForm({ action, children, className, closeOnSuccess = false
   resetOnSuccess?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
-  const errorRef = useRef<HTMLParagraphElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const wasPending = useRef(false);
   const dialog = useDialogControl();
@@ -41,7 +42,7 @@ export function ActionForm({ action, children, className, closeOnSuccess = false
 
   return (
     <form ref={formRef} action={formAction} className={className} onSubmit={() => { wasPending.current = true; }}>
-      {state.error ? <p ref={errorRef} className="form-message error" role="alert" tabIndex={-1}>{state.error}</p> : null}
+      {state.error ? <Alert ref={errorRef} variant="destructive" className="form-message error" tabIndex={-1}><WarningCircleIcon aria-hidden="true" /><AlertDescription>{state.error}</AlertDescription></Alert> : null}
       {children}
     </form>
   );
@@ -56,5 +57,5 @@ export function SubmitButton({ children, pendingText = "Menyimpan...", variant =
   value?: string;
 }) {
   const { pending } = useFormStatus();
-  return <Button type="submit" name={name} value={value} variant={variant} className={cn(className)} disabled={pending}>{pending ? <SpinnerGapIcon className="animate-spin" aria-hidden="true" /> : null}{pending ? pendingText : children}</Button>;
+  return <Button type="submit" name={name} value={value} variant={variant} className={cn(className)} disabled={pending}>{pending ? <SpinnerGapIcon data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}{pending ? pendingText : children}</Button>;
 }
