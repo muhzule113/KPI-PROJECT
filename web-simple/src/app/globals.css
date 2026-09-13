@@ -3019,7 +3019,7 @@ html[data-theme="light"] .status.neutral {
   }
 
   .auth-mobile-vignette .workbench-illustration.compact {
-    max-height: 76px;
+    max-height: 150px;
   }
 
   .auth-card-toolbar {
@@ -4433,7 +4433,7 @@ html[data-theme="light"] .status.neutral {
   }
 
   .auth-mobile-vignette .workbench-illustration.compact {
-    max-height: 68px;
+    max-height: 150px;
   }
 
   .auth-card > p,
