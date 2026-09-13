@@ -34,6 +34,7 @@ export function StatusBadge({ status }: { status: string | null }) {
   const info = status === "SUBMITTED";
   const warning = ["READY", "REOPENED", "PERMIT", "SICK"].includes(status);
   const danger = ["INACTIVE", "REVISION_REQUIRED", "RETIRED"].includes(status);
+  const isLive = ["IN_PROGRESS", "SUBMITTED", "OPEN"].includes(status);
   const Icon = success ? CheckCircleIcon : info ? InfoIcon : warning ? ClockIcon : danger ? WarningCircleIcon : MinusCircleIcon;
   return <span className={cn("status", {
     success,
@@ -41,5 +42,6 @@ export function StatusBadge({ status }: { status: string | null }) {
     warning,
     danger,
     neutral: ["PENDING", "DRAFT", "IN_PROGRESS", "OPEN", "OFF"].includes(status),
+    live: isLive,
   })}><Icon aria-hidden="true" />{labels[status] ?? status}</span>;
 }

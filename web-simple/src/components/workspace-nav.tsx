@@ -79,6 +79,7 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
   const [signingOut, setSigningOut] = useState(false);
   const items = navItems.filter((item) => item.roles.includes(role));
   const mobileItems = mobilePriorities[role].map((href) => navItems.find((item) => item.href === href)!);
+  const mobileHasActiveItem = mobileItems.some((item) => isActive(pathname, item.href));
   const activeItem = [...items].reverse().find((item) => isActive(pathname, item.href)) ?? items[0];
   const roleContext = `${roleLabels[role]} / ${branchName}`;
 
@@ -101,7 +102,7 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
           </div>
           <div className="topbar-actions">
             <Link className={cn("notification-link", isActive(pathname, "/app/notifikasi") && "active")} href="/app/notifikasi" aria-label={unread ? `${unread} notifikasi belum dibaca` : "Notifikasi"} aria-current={isActive(pathname, "/app/notifikasi") ? "page" : undefined}>
-              <BellIcon size={21} weight={isActive(pathname, "/app/notifikasi") ? "fill" : "regular"} aria-hidden="true" />
+              <BellIcon size={20} weight={isActive(pathname, "/app/notifikasi") ? "fill" : "regular"} aria-hidden="true" />
               {unread > 0 ? <span className="notification-count">{unread > 99 ? "99+" : unread}</span> : null}
             </Link>
             <details key={pathname} className="account-menu" suppressHydrationWarning onKeyDown={(event) => {
@@ -119,7 +120,7 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
                 <div className="account-panel-copy"><strong>{userName}</strong><span>{roleContext}</span></div>
                 <ThemeToggle />
                 <button className="nav-link account-signout" type="button" onClick={signOut} disabled={signingOut}>
-                  <SignOutIcon size={20} aria-hidden="true" /><span>{signingOut ? "Keluar..." : "Keluar"}</span>
+                  <SignOutIcon size={19} aria-hidden="true" /><span>{signingOut ? "Keluar..." : "Keluar"}</span>
                 </button>
               </div>
             </details>
@@ -138,8 +139,10 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
         <nav className="mobile-nav" aria-label="Navigasi utama seluler">
           {mobileItems.map((item) => <MobileNavLink key={item.href} item={item} pathname={pathname} unread={unread} />)}
           <Dialog.Trigger asChild>
-            <button className="mobile-nav-link" type="button" aria-label="Buka semua menu">
-              <ListIcon size={22} aria-hidden="true" />
+            <button className={cn("mobile-nav-link", (menuOpen || !mobileHasActiveItem) && "active")} type="button" aria-label="Buka semua menu">
+              <span className="mobile-nav-icon-wrap">
+                <ListIcon size={20} weight={(menuOpen || !mobileHasActiveItem) ? "bold" : "regular"} aria-hidden="true" />
+              </span>
               <span>Menu</span>
             </button>
           </Dialog.Trigger>
@@ -151,7 +154,7 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
             <Dialog.Description className="sr-only">Pilih halaman aplikasi KPI Harian.</Dialog.Description>
             <div className="mobile-drawer-header">
               <Brand />
-              <Dialog.Close className="drawer-close" aria-label="Tutup menu"><XIcon size={22} aria-hidden="true" /></Dialog.Close>
+              <Dialog.Close className="drawer-close" aria-label="Tutup menu"><XIcon size={20} aria-hidden="true" /></Dialog.Close>
             </div>
             <nav className="mobile-drawer-body" aria-label="Semua halaman">
               <NavList items={items} pathname={pathname} unread={unread} onNavigate={() => setMenuOpen(false)} />
@@ -175,7 +178,7 @@ function NavList({ items, pathname, unread, onNavigate, horizontal = false }: { 
     const Icon = item.icon;
     const active = isActive(pathname, item.href);
     return <Link key={item.href} href={item.href} onClick={onNavigate} className={cn("nav-link", active && "active")} aria-current={active ? "page" : undefined} title={horizontal ? item.label : undefined}>
-      <Icon size={20} weight={active ? "fill" : "regular"} aria-hidden="true" />
+      <Icon size={19} weight={active ? "fill" : "regular"} aria-hidden="true" />
       <span>{item.label}</span>
       {item.href === "/app/notifikasi" && unread > 0 ? <span className="nav-count">{unread > 99 ? "99+" : unread}</span> : null}
     </Link>;
@@ -186,9 +189,11 @@ function MobileNavLink({ item, pathname, unread }: { item: NavItem; pathname: st
   const Icon = item.icon;
   const active = isActive(pathname, item.href);
   return <Link href={item.href} className={cn("mobile-nav-link", active && "active")} aria-current={active ? "page" : undefined}>
-    <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
+    <span className="mobile-nav-icon-wrap">
+      <Icon size={20} weight={active ? "fill" : "regular"} aria-hidden="true" />
+      {item.href === "/app/notifikasi" && unread > 0 ? <span className="notification-count">{unread > 99 ? "99+" : unread}</span> : null}
+    </span>
     <span>{item.label}</span>
-    {item.href === "/app/notifikasi" && unread > 0 ? <span className="notification-count">{unread > 99 ? "99+" : unread}</span> : null}
   </Link>;
 }
 
@@ -201,8 +206,8 @@ function UserPanel({ name, context, initials: value, onSignOut, busy }: {
 }) {
   return <div className="sidebar-user">
     <div className="sidebar-profile"><span className="user-avatar" aria-hidden="true">{value}</span><div><strong>{name}</strong><span>{context}</span></div></div>
-    <button className="nav-link" type="button" onClick={onSignOut} disabled={busy}>
-      <SignOutIcon size={20} aria-hidden="true" /><span>{busy ? "Keluar..." : "Keluar"}</span>
+    <button className="nav-link account-signout" type="button" onClick={onSignOut} disabled={busy}>
+      <SignOutIcon size={19} aria-hidden="true" /><span>{busy ? "Keluar..." : "Keluar"}</span>
     </button>
   </div>;
 }

@@ -7,11 +7,15 @@ import { THEME_META_COLORS } from "@/lib/theme";
 import "@daypicker/react/style.css";
 import "./globals.css";
 
-const bricolageGrotesque = localFont({
-  src: "./fonts/BricolageGrotesque-Variable.ttf",
-  variable: "--font-bricolage",
-  weight: "200 800",
+const instrumentSans = localFont({
+  src: [
+    { path: "./fonts/instrument-sans/instrument-sans-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/instrument-sans/instrument-sans-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/instrument-sans/instrument-sans-600.woff2", weight: "600", style: "normal" },
+  ],
+  variable: "--font-sans",
   display: "swap",
+  fallback: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
 });
 
 export const metadata: Metadata = {
@@ -24,6 +28,6 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return <html lang="id" data-theme="dark" suppressHydrationWarning>
     <head><ThemeBootstrap /></head>
-    <body className={bricolageGrotesque.variable}><ToastProvider>{children}</ToastProvider></body>
+    <body className={instrumentSans.variable}><ToastProvider>{children}</ToastProvider></body>
   </html>;
 }

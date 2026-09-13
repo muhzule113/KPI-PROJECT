@@ -1,5 +1,6 @@
 import type { Icon } from "@phosphor-icons/react";
 import {
+  ArrowRightIcon,
   BellIcon,
   BuildingsIcon,
   CalendarDotsIcon,
@@ -88,8 +89,17 @@ export default async function DashboardPage() {
     <PageHeader eyebrow="Ringkasan pribadi" title={`Selamat datang, ${user.name}`} description="Pantau nilai sementara, status review harian, dan hasil KPI resmi Anda." />
     <div className="dashboard-flow">
       <Link href="/app/kpi-saya" className="dashboard-focus">
-        <div className="dashboard-focus-copy"><p className="eyebrow">KPI terbaru</p><h2>{latest ? latest.period.name : "Belum ada KPI"}</h2><p>{latest ? latestHasScore ? latest.ratingLabel ?? latest.noScoreReason ?? "Belum dapat dihitung" : "Belum dapat dihitung" : "KPI akan tersedia setelah periode penilaian dibuka."}</p>{latest ? <StatusBadge status={latest.status} /> : null}<span className="dashboard-focus-action">Lihat rincian KPI</span></div>
-        <div className="dashboard-focus-meta"><strong>{latest && latestHasScore ? formatNumber(latest.finalScore) : "-"}</strong><span>{latest ? latestFinal ? "nilai final" : "nilai sementara" : "belum tersedia"}</span></div>
+        <div className="dashboard-focus-copy">
+          <p className="eyebrow">KPI terbaru</p>
+          <h2>{latest ? latest.period.name : "Belum ada KPI"}</h2>
+          <p>{latest ? latestHasScore ? latest.ratingLabel ?? latest.noScoreReason ?? "Belum dapat dihitung" : "Belum dapat dihitung" : "KPI akan tersedia setelah periode penilaian dibuka."}</p>
+          {latest ? <StatusBadge status={latest.status} /> : null}
+          <span className="dashboard-focus-action"><span>Lihat rincian KPI</span><ArrowRightIcon size={16} aria-hidden="true" /></span>
+        </div>
+        <div className="dashboard-focus-meta">
+          <strong>{latest && latestHasScore ? formatNumber(latest.finalScore) : "-"}</strong>
+          <span>{latest ? latestFinal ? "nilai final" : "nilai sementara" : "belum tersedia"}</span>
+        </div>
         <div className="dashboard-focus-illustration"><RoleWorkbenchIllustration role={user.role} /></div>
       </Link>
       <ToolList links={[["/app/kpi-saya", "Lihat KPI saya", "Buka progres harian, nilai sementara, dan hasil final.", ChartBarIcon], ["/app/notifikasi", "Buka notifikasi", "Lihat perubahan status penilaian harian Anda.", BellIcon]]} />
@@ -105,7 +115,19 @@ function Dashboard({ role, header, focus, metrics, links }: {
   links: QuickLink[];
 }) {
   return <>{header}<div className="dashboard-flow">
-    <Link href={focus[0]} className="dashboard-focus"><div className="dashboard-focus-copy"><p className="eyebrow">{focus[1]}</p><h2>{focus[2]}</h2><p>{focus[3]}</p><span className="dashboard-focus-action">Buka pekerjaan</span></div><div className="dashboard-focus-meta"><strong>{focus[4]}</strong><span>{focus[5]}</span></div><div className="dashboard-focus-illustration"><RoleWorkbenchIllustration role={role} /></div></Link>
+    <Link href={focus[0]} className="dashboard-focus">
+      <div className="dashboard-focus-copy">
+        <p className="eyebrow">{focus[1]}</p>
+        <h2>{focus[2]}</h2>
+        <p>{focus[3]}</p>
+        <span className="dashboard-focus-action"><span>Buka pekerjaan</span><ArrowRightIcon size={16} aria-hidden="true" /></span>
+      </div>
+      <div className="dashboard-focus-meta">
+        <strong>{focus[4]}</strong>
+        <span>{focus[5]}</span>
+      </div>
+      <div className="dashboard-focus-illustration"><RoleWorkbenchIllustration role={role} /></div>
+    </Link>
     <MetricLedger metrics={metrics} />
     <ToolList links={links} />
   </div></>;
@@ -121,6 +143,6 @@ function MetricLedger({ metrics }: { metrics: Metric[] }) {
 function ToolList({ links }: { links: QuickLink[] }) {
   return <section className="tool-section"><div className="section-heading"><h2>Alat kerja</h2><p>Pilih sesuai pekerjaan yang ingin diselesaikan.</p></div><div className="tool-list">{links.map(([href, title, description, icon]) => {
     const Icon = icon;
-    return <Link href={href} key={href} className="tool-link"><span className="tool-link-icon"><Icon size={21} weight="duotone" aria-hidden="true" /></span><span className="tool-link-copy"><strong>{title}</strong><span>{description}</span></span><span className="tool-link-action">Buka</span></Link>;
+    return <Link href={href} key={href} className="tool-link"><span className="tool-link-icon"><Icon size={21} weight="duotone" aria-hidden="true" /></span><span className="tool-link-copy"><strong>{title}</strong><span>{description}</span></span><span className="tool-link-action"><span>Buka</span><ArrowRightIcon size={14} aria-hidden="true" /></span></Link>;
   })}</div></section>;
 }

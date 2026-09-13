@@ -24,6 +24,7 @@ Aplikasi operasional KPI dengan bahasa visual **signal console**: gelap, fokus, 
 
 - Desktop memakai chrome bar tunggal, tab konteks halaman, dan sidebar 232 px dengan ikon serta label agar tujuan menu langsung terbaca tanpa menebak ikon.
 - Mobile mempertahankan tiga tujuan utama plus Menu dan bottom navigation.
+- Pada layar kecil, Menu menjadi penanda aktif untuk halaman sekunder; tabel berubah menjadi ledger baris label/nilai, sedangkan daftar alat kerja memakai divider agar data tidak terasa seperti kumpulan kartu yang sama.
 - Dashboard memakai satu panel fokus berlapis, ledger metrik, dan alat kerja dua kolom; data tetap nyata.
 - Form, filter, tab, kontrol input, dan tabel mempertahankan perilaku bisnis, dengan permukaan hijau gelap dan header tabel sticky.
 - Radius 8/11/14/16 px membedakan kontrol, pilihan, panel, dan hero.
