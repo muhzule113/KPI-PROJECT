@@ -10,6 +10,7 @@ import {
   MASTER_KPI_POSITION_NAMES,
   MASTER_KPI_TEMPLATES,
   type MasterKpiIndicator,
+  type MasterKpiPositionCode,
 } from "../src/modules/kpi/master-kpi-templates.ts";
 import { createPeriod, openPeriod } from "../src/modules/kpi/period-operations.ts";
 
@@ -43,13 +44,56 @@ async function main() {
   const backupAdminUser = await credentialUser("admin.cadangan", "Super Admin Cadangan", "ADMIN");
   const managerUser = await credentialUser("manager", "Manager Toko", "MANAGER");
   const supervisorUser = await credentialUser("supervisor", "Supervisor Toko", "SUPERVISOR");
-  const employeeUser = await credentialUser("pegawai", "Pelayan Contoh", "EMPLOYEE");
-  const technicianUser = await credentialUser("teknisi", "Teknisi Contoh", "EMPLOYEE");
-
   const manager = await prisma.employee.findUnique({ where: { employeeNumber: "EMP-MGR-001" } }) ?? await prisma.employee.create({ data: { userId: managerUser.id, employeeNumber: "EMP-MGR-001", name: managerUser.name, branchId: branch.id, positionId: positions.MGR.id, joinedAt: new Date("2025-01-01T00:00:00.000Z") } });
   const supervisor = await prisma.employee.findUnique({ where: { employeeNumber: "EMP-SPV-001" } }) ?? await prisma.employee.create({ data: { userId: supervisorUser.id, employeeNumber: "EMP-SPV-001", name: supervisorUser.name, branchId: branch.id, positionId: positions.SPV.id, managerId: manager.id, joinedAt: new Date("2025-01-01T00:00:00.000Z") } });
-  if (!await prisma.employee.findUnique({ where: { employeeNumber: "EMP-PLY-001" } })) await prisma.employee.create({ data: { userId: employeeUser.id, employeeNumber: "EMP-PLY-001", name: employeeUser.name, branchId: branch.id, positionId: positions.PELAYAN.id, supervisorId: supervisor.id, managerId: manager.id, joinedAt: new Date("2025-01-01T00:00:00.000Z") } });
-  if (!await prisma.employee.findUnique({ where: { employeeNumber: "EMP-TEK-001" } })) await prisma.employee.create({ data: { userId: technicianUser.id, employeeNumber: "EMP-TEK-001", name: technicianUser.name, branchId: branch.id, positionId: positions.TEKNISI.id, supervisorId: supervisor.id, managerId: manager.id, joinedAt: new Date("2025-01-01T00:00:00.000Z") } });
+
+  // Roster pegawai toko (Nama Tampilan, Username, Kode Jabatan) — urut sesuai daftar.
+  const ROSTER: ReadonlyArray<readonly [string, string, MasterKpiPositionCode]> = [
+    ["Cumi", "cumi", "CREW"],
+    ["Ica", "ica", "KASIR"],
+    ["Nurajizah", "nurajizah", "PELAYAN"],
+    ["Miming", "miming", "TEKNISI"],
+    ["Muhammad Novriansyah", "muhammad.novriansyah", "TEKNISI"],
+    ["Akmal", "akmal", "TEKNISI"],
+    ["Ani", "ani", "CREW"],
+    ["Pandy", "pandy", "TEKNISI"],
+    ["Wahyu", "wahyu", "TEKNISI"],
+    ["Jusri", "jusri", "TEKNISI"],
+    ["Lastri", "lastri", "PELAYAN"],
+    ["Mikma", "mikma", "KASIR"],
+    ["Awalia", "awalia", "KASIR"],
+    ["Soleha", "soleha", "PELAYAN"],
+    ["Abu Rizal", "abu.rizal", "TEKNISI"],
+    ["Andi Syukur", "andi.syukur", "TEKNISI"],
+    ["Ida Ayu Putri Shalihah", "ida.ayu", "KASIR"],
+    ["Risky Rahmawati A.", "risky.rahmawati", "KASIR"],
+    ["Mia", "mia", "KASIR"],
+    ["Muhammad Akbar", "muhammad.akbar", "TEKNISI"],
+    ["Dzul", "dzul", "TEKNISI"],
+    ["Muh. Ikhsan", "muh.ikhsan", "TEKNISI"],
+    ["Abrar Syaputra", "abrar.syaputra", "TEKNISI"],
+    ["Faisal (Icahl)", "faisal", "TEKNISI"],
+    ["Kaneki", "kaneki", "TEKNISI"],
+    ["Ciu Andi", "ciu.andi", "TEKNISI"],
+    ["Andi Al-Faruq", "andi.alfaruq", "KURIR"],
+    ["Pipah", "pipah", "CREW"],
+    ["Eva", "eva", "KASIR"],
+    ["Fani", "fani", "KASIR"],
+    ["Sela", "sela", "PELAYAN"],
+    ["Ria", "ria", "PELAYAN"],
+    ["Astri", "astri", "CREW"],
+    ["Kia", "kia", "KASIR"],
+    ["Nita", "nita", "ADMIN_OPS"],
+  ];
+
+  let rosterCount = 0;
+  for (const [index, [name, username, positionCode]] of ROSTER.entries()) {
+    const employeeNumber = `EMP-${String(index + 1).padStart(3, "0")}`;
+    if (await prisma.employee.findUnique({ where: { employeeNumber } })) { rosterCount++; continue; }
+    const user = await credentialUser(username, name, "EMPLOYEE");
+    await prisma.employee.create({ data: { userId: user.id, employeeNumber, name, branchId: branch.id, positionId: positions[positionCode].id, supervisorId: supervisor.id, managerId: manager.id, joinedAt: new Date("2025-01-01T00:00:00.000Z") } });
+    rosterCount++;
+  }
 
   for (const [code, indicators] of Object.entries(MASTER_KPI_TEMPLATES)) {
     await syncTemplate(positions[code].id, `KPI ${MASTER_KPI_POSITION_NAMES[code as keyof typeof MASTER_KPI_POSITION_NAMES]}`, indicators);
@@ -66,7 +110,7 @@ async function main() {
     });
   }
 
-  console.info(`Seed selesai untuk ${adminUser.username}, ${backupAdminUser.username}, ${managerUser.username}, ${supervisorUser.username}, ${employeeUser.username}, dan ${technicianUser.username}.`);
+  console.info(`Seed selesai: ${adminUser.username}, ${backupAdminUser.username}, ${managerUser.username}, ${supervisorUser.username}, dan ${rosterCount} pegawai (EMP-001..EMP-${String(rosterCount).padStart(3, "0")}).`);
 }
 
 async function syncTemplate(positionId: string, name: string, indicators: readonly MasterKpiIndicator[]) {

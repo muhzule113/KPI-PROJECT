@@ -1,7 +1,7 @@
 import type { CategoryBandInput, CategoryOptionInput } from "./category-options.ts";
 import type { MonthlyIndicatorInput } from "./calculation.ts";
 
-export type MasterKpiPositionCode = "TEKNISI" | "PELAYAN" | "ADMIN_OPS" | "KASIR" | "GUDANG" | "SPV";
+export type MasterKpiPositionCode = "TEKNISI" | "PELAYAN" | "ADMIN_OPS" | "KASIR" | "GUDANG" | "SPV" | "CREW" | "KURIR";
 
 export type MasterKpiIndicator = Omit<MonthlyIndicatorInput, "values"> & {
   code: string;
@@ -28,6 +28,8 @@ export const MASTER_KPI_POSITION_NAMES: Record<MasterKpiPositionCode, string> = 
   KASIR: "Kasir",
   GUDANG: "Gudang / Sparepart",
   SPV: "Supervisor",
+  CREW: "Crew",
+  KURIR: "Kurir",
 };
 
 export const MASTER_KPI_TEMPLATES = {
@@ -81,6 +83,22 @@ export const MASTER_KPI_TEMPLATES = {
     indicator("SUP-05", "Coaching/evaluasi karyawan", "Persentase coaching dan evaluasi yang diselesaikan.", "%", "AVERAGE", "HIGHER", 100, null, 10, 5),
     categoryIndicator("SUP-06", "Kepatuhan SOP", "Persentase kepatuhan terhadap SOP Supervisor.", 95, 10, 6),
     indicator("SUP-07", "Ketepatan laporan", "Persentase laporan yang disampaikan tepat waktu.", "%", "AVERAGE", "HIGHER", 100, null, 5, 7),
+  ],
+  CREW: [
+    indicator("CRW-01", "Kehadiran & disiplin", "Persentase kehadiran dan disiplin kerja.", "%", "AVERAGE", "HIGHER", 95, null, 20, 1),
+    indicator("CRW-02", "Kepatuhan SOP", "Persentase kepatuhan terhadap SOP crew.", "%", "AVERAGE", "HIGHER", 95, null, 20, 2),
+    indicator("CRW-03", "Kerapian & kebersihan area", "Persentase kerapian dan kebersihan area kerja.", "%", "AVERAGE", "HIGHER", 90, null, 15, 3),
+    indicator("CRW-04", "Kecepatan respons permintaan", "Persentase permintaan yang ditangani sesuai standar waktu.", "%", "AVERAGE", "HIGHER", 95, null, 15, 4),
+    indicator("CRW-05", "Kerja sama tim", "Persentase mutu kerja sama dengan rekan tim.", "%", "AVERAGE", "HIGHER", 90, null, 15, 5),
+    indicator("CRW-06", "Kelengkapan laporan harian", "Persentase laporan harian yang lengkap.", "%", "AVERAGE", "HIGHER", 100, null, 15, 6),
+  ],
+  KURIR: [
+    indicator("KUR-01", "Jumlah pengiriman selesai", "Jumlah pengiriman yang selesai.", "unit", "SUM", "HIGHER", 100, null, 30, 1),
+    indicator("KUR-02", "Ketepatan waktu pengiriman", "Persentase pengiriman yang selesai tepat waktu.", "%", "AVERAGE", "HIGHER", 95, null, 25, 2),
+    indicator("KUR-03", "Akurasi serah terima barang", "Persentase serah terima barang tanpa kesalahan.", "%", "AVERAGE", "HIGHER", 99, null, 20, 3),
+    indicator("KUR-04", "Kondisi barang saat diterima", "Persentase barang yang diterima dalam kondisi baik.", "%", "AVERAGE", "HIGHER", 100, null, 10, 4),
+    indicator("KUR-05", "Kepatuhan SOP pengiriman", "Persentase kepatuhan terhadap SOP pengiriman.", "%", "AVERAGE", "HIGHER", 95, null, 10, 5),
+    indicator("KUR-06", "Kehadiran & disiplin", "Persentase kehadiran dan disiplin kerja.", "%", "AVERAGE", "HIGHER", 95, null, 5, 6),
   ],
 } as const satisfies Record<MasterKpiPositionCode, readonly MasterKpiIndicator[]>;
 
