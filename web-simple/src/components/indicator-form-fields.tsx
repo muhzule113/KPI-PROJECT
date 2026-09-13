@@ -120,12 +120,17 @@ export function IndicatorFormFields({ versionId, indicator }: { versionId: strin
     {kind === "SYSTEM" || kind === "IMPORTED" ? <p className="help">Nilai diisi otomatis oleh sistem atau proses impor; Supervisor tidak memasukkannya secara manual.</p> : null}
   </>;
 
+  const categoryRows = options.map((option, optionIndex) => ({
+    option,
+    optionIndex,
+    thresholdIndex: optionIndex < 4 ? direction === "HIGHER" ? 3 - optionIndex : optionIndex : null,
+  }));
   const categories = <div className="form-stack">
-    <p className="help">Supervisor mengetik angka sesuai satuan indikator. Label predikat ditampilkan otomatis berdasarkan empat batas berikut.</p>
-    {options.map((option, index) => <div className="form-grid" key={index}>
-      <input type="hidden" name="categoryKey" value={index + 1} />
-      <label className="field"><span className="field-label">Tingkat {index + 1} · label</span><input className="control" name={`categoryLabel:${index + 1}`} value={option.label} onChange={(event) => setOptions((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, label: event.target.value } : candidate))} required /></label>
-      {index < 4 ? <label className="field"><span className="field-label">Batas minimum</span><input className="control" name={`categoryThreshold:${index + 1}`} type="number" step="0.0001" min={0} max={unit === "%" ? 100 : 1000000000} value={option.threshold ?? ""} onChange={(event) => setOptions((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, threshold: event.target.value } : candidate))} required /></label> : <p className="help">Rentang terbuka (tanpa batas atas).</p>}
+    <p className="help">Supervisor mengetik angka sesuai satuan indikator. Label predikat ditampilkan otomatis berdasarkan empat ambang. Untuk arah lebih tinggi lebih baik, ambang ditampilkan sebagai batas minimum tiap label: misalnya “Sangat Baik” mulai dari 90. Untuk arah lebih rendah atau nol, ambang menjadi batas maksimum.</p>
+    {categoryRows.map(({ option, optionIndex, thresholdIndex }) => <div className="form-grid" key={optionIndex}>
+      <input type="hidden" name="categoryKey" value={optionIndex + 1} />
+      <label className="field"><span className="field-label">Tingkat {optionIndex + 1} · label</span><input className="control" name={`categoryLabel:${optionIndex + 1}`} value={option.label} onChange={(event) => setOptions((current) => current.map((candidate, candidateIndex) => candidateIndex === optionIndex ? { ...candidate, label: event.target.value } : candidate))} required /></label>
+      {thresholdIndex !== null ? <label className="field"><span className="field-label">{direction === "HIGHER" ? "Batas minimum" : "Batas maksimum"}</span><input className="control" name={`categoryThreshold:${thresholdIndex + 1}`} type="number" step="0.0001" min={0} max={unit === "%" ? 100 : 1000000000} value={options[thresholdIndex].threshold ?? ""} onChange={(event) => setOptions((current) => current.map((candidate, candidateIndex) => candidateIndex === thresholdIndex ? { ...candidate, threshold: event.target.value } : candidate))} required /></label> : <p className="help">Rentang terbuka ({direction === "HIGHER" ? "di bawah batas terendah" : "di atas batas tertinggi"}).</p>}
     </div>)}
     {preview.length ? <div className="notice" aria-live="polite"><strong>Preview rentang ({direction === "HIGHER" ? "lebih tinggi lebih baik" : "lebih rendah / nol lebih baik"})</strong><ul>{preview.map(([range, label]) => <li key={range}>{range} {unit} → {label}</li>)}</ul></div> : <p className="help">Isi empat batas berurutan untuk melihat preview rentang.</p>}
   </div>;

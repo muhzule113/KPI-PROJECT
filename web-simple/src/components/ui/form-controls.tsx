@@ -9,9 +9,24 @@ import { useId, useRef, useState, type InputHTMLAttributes, type ReactNode } fro
 import { Button } from "@/components/ui/button";
 import { dateFromIso, dateToIso, dateWithinBounds } from "@/lib/date-picker";
 import { todayInMakassar } from "@/lib/date";
+import { SEARCH_MAX_LENGTH } from "@/lib/search";
 import { cn, formatDate } from "@/lib/utils";
 
 export type SelectOption = { value: string; label: string };
+
+export function SearchField({ name = "q", label = "Cari", defaultValue = "", placeholder, maxLength = SEARCH_MAX_LENGTH, className }: {
+  name?: string;
+  label?: string;
+  defaultValue?: string;
+  placeholder?: string;
+  maxLength?: number;
+  className?: string;
+}) {
+  return <label className={cn("field", className)}>
+    <span className="field-label">{label}</span>
+    <input className="control" type="search" name={name} defaultValue={defaultValue} placeholder={placeholder} maxLength={maxLength} />
+  </label>;
+}
 
 export function SelectField({ name, label, options, value, defaultValue, onValueChange, placeholder = "Pilih opsi", required, disabled, help, className }: {
   name: string;

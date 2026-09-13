@@ -8,12 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "border border-[var(--accent)] bg-[var(--accent)] text-[var(--primary-foreground)] shadow-[0_8px_24px_rgb(118_152_22_/_12%)] hover:-translate-y-px hover:bg-[var(--primary-dark)]",
+        primary: "border border-[var(--accent)] bg-[var(--accent)] text-[var(--primary-foreground)] shadow-[var(--button-shadow)] hover:-translate-y-px hover:bg-[var(--primary-dark)]",
         secondary: "border border-[var(--line-strong)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--muted)] hover:bg-[var(--surface-soft)]",
         danger: "border border-[var(--danger)] bg-[var(--surface)] text-[var(--danger)] hover:bg-[var(--danger-soft)]",
         ghost: "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--ink)]",
       },
-      size: { default: "min-h-11", small: "min-h-11 min-w-11 px-3 text-xs" },
+      size: { default: "min-h-11", small: "min-h-11 min-w-[44px] px-3 text-xs" },
     },
     defaultVariants: { variant: "primary", size: "default" },
   },
