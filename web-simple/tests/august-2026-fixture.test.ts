@@ -41,8 +41,10 @@ test("profil kategori naik dari skor terendah ke tertinggi", () => {
   assert.deepEqual([0, 1, 2, 3, 4].map((profile) => fixtureCategoryOption(profile, indicator).score), [40, 55, 70, 85, 100]);
 });
 
+// CREW dan KURIR memakai katalog baku (NUMERIC), sehingga target terlampaui dan
+// skornya konvergen ke 100. Kasir dihitung dari campuran indikator target dan ZERO_TOLERANCE.
 test("contoh Crew dan Kasir menghasilkan skor bulanan literal", () => {
-  assert.equal(scoreFor("CREW", 0), "77.80");
+  assert.equal(scoreFor("CREW", 0), "82.00");
   assert.equal(scoreFor("KASIR", 1), "62.25");
 });
 

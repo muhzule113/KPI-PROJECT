@@ -43,7 +43,7 @@
 
 ### 1.1 Konteks Bisnis
 
-Perusahaan bergerak di bidang penjualan dan servis HP. Struktur operasional melibatkan berbagai jabatan: Teknisi, Pelayan, Admin, Kasir, Gudang/Sparepart, dan Supervisor yang semuanya memiliki kontribusi berbeda terhadap performa bisnis.
+Perusahaan bergerak di bidang penjualan dan servis HP. Struktur operasional melibatkan berbagai jabatan: Teknisi, Pelayan, Admin, Kasir, Gudang/Sparepart, Supervisor, Crew, dan Kurir yang semuanya memiliki kontribusi berbeda terhadap performa bisnis.
 
 ### 1.2 Masalah yang Ada Saat Ini
 
@@ -226,7 +226,7 @@ Jabatan menentukan pekerjaan dan template; role menentukan kewenangan aplikasi. 
 
 ## 6. Master KPI per Jabatan
 
-Enam template pada bagian ini adalah katalog baku 39 indikator berdasarkan tujuh gambar referensi WhatsApp. Semua indikator memakai nilai `NUMERIC`; indikator bersatuan `%` diisi langsung pada rentang 0–100. Persentase dan rasio memakai agregasi `AVERAGE`, sedangkan jumlah unit, komplain, dan selisih kas memakai `SUM`.
+Delapan template pada bagian ini adalah katalog baku 51 indikator. Enam template pertama (Teknisi sampai Supervisor) berasal dari tujuh gambar referensi WhatsApp; template Crew dan Kurir ditambahkan agar seluruh jabatan operasional yang menjadi subjek KPI memiliki definisi resmi. Semua indikator memakai nilai `NUMERIC`; indikator bersatuan `%` diisi langsung pada rentang 0–100. Persentase dan rasio memakai agregasi `AVERAGE`, sedangkan jumlah unit, komplain, dan selisih kas memakai `SUM`.
 
 Pada aplikasi web saat ini, nilai tetap masuk melalui alur penilaian harian Supervisor dan koreksi Manager. Kolom sumber data di bawah adalah konteks bisnis, bukan integrasi otomatis dalam lingkup penyelarasan ini. Perubahan master selalu menjadi versi baru untuk periode berikutnya; snapshot periode Agustus dan September 2026 tidak dibangun ulang.
 
@@ -319,7 +319,35 @@ Pada aplikasi web saat ini, nilai tetap masuk melalui alur penilaian harian Supe
 
 > **Keputusan:** Target Supervisor telah dikunci sesuai katalog baku dan dinilai langsung oleh Manager melalui alur harian yang ada.
 
-### 6.7 Owner / Manager
+### 6.7 Crew
+
+| Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
+|---|---|---:|---|---|---|---|
+| CRW-01 | Kehadiran & disiplin | 20% | ≥ 95% | Higher | Absensi & catatan atasan | Supervisor |
+| CRW-02 | Kepatuhan SOP | 20% | ≥ 95% | Higher | Checklist observasi | Supervisor |
+| CRW-03 | Kerapian & kebersihan area | 15% | ≥ 90% | Higher | Checklist observasi | Supervisor |
+| CRW-04 | Kecepatan respons permintaan | 15% | ≥ 95% | Higher | Catatan permintaan harian | Supervisor |
+| CRW-05 | Kerja sama tim | 15% | ≥ 90% | Higher | Penilaian atasan | Supervisor |
+| CRW-06 | Kelengkapan laporan harian | 15% | 100% | Higher | Laporan harian di sistem | Supervisor |
+| | **Total** | **100%** | | | | |
+
+Crew mencakup pekerjaan pendukung operasional toko yang tidak terikat meja layanan atau meja kasir. Seluruh indikator bernilai `AVERAGE` dengan satuan `%`, sehingga dinilai melalui alur harian Supervisor dan koreksi Manager seperti jabatan lain.
+
+### 6.8 Kurir
+
+| Kode | Indikator | Bobot | Target | Arah | Sumber Data | Yang Isi |
+|---|---|---:|---|---|---|---|
+| KUR-01 | Jumlah pengiriman selesai | 30% | ≥ 100 unit/bulan | Higher | Bukti pengiriman | Supervisor |
+| KUR-02 | Ketepatan waktu pengiriman | 25% | ≥ 95% | Higher | Timestamp pengiriman | Supervisor |
+| KUR-03 | Akurasi serah terima barang | 20% | ≥ 99% | Higher | Berita acara serah terima | Supervisor |
+| KUR-04 | Kondisi barang saat diterima | 10% | 100% | Higher | Laporan penerimaan | Supervisor |
+| KUR-05 | Kepatuhan SOP pengiriman | 10% | ≥ 95% | Higher | Checklist observasi | Supervisor |
+| KUR-06 | Kehadiran & disiplin | 5% | ≥ 95% | Higher | Absensi & catatan atasan | Supervisor |
+| | **Total** | **100%** | | | | |
+
+KUR-01 memakai agregasi `SUM` dengan satuan unit, sehingga cap 100% dicapai saat total pengiriman bulanan menyentuh target. Indikator lain memakai `AVERAGE` bersatuan `%`.
+
+### 6.9 Owner / Manager
 
 Owner/Manager tidak menjadi subjek KPI dalam katalog baku ini. Sistem tidak membuat template atau indikator fiktif untuk jabatan tersebut.
 

@@ -45,17 +45,9 @@ export const AUGUST_2026_ROSTER = [
   { name: "Nita", username: "nita", employeeNumber: "AUG26-035", positionCode: "ADMIN_OPS" },
 ] as const satisfies readonly { name: string; username: string; employeeNumber: string; positionCode: RosterPositionCode }[];
 
+// CREW dan KURIR kini bagian dari katalog baku, sehingga template di bawah hanya
+// menambahkan konteks demo; definisi indikatornya mengikuti MASTER_KPI_TEMPLATES.
 export const FIXTURE_TEMPLATES = {
-  CREW: [
-    indicator("CRW-01", "Tugas operasional selesai", "Jumlah tugas operasional yang selesai.", "NUMERIC", "tugas", "SUM", "HIGHER", 180, null, 40, 1),
-    indicator("CRW-02", "Kualitas pekerjaan", "Rating ketelitian dan kualitas hasil kerja.", "RATING", "rating", "AVERAGE", "HIGHER", 4, null, 35, 2),
-    indicator("CRW-03", "Kedisiplinan kerja", "Rating kepatuhan terhadap jadwal dan prosedur.", "RATING", "rating", "AVERAGE", "HIGHER", 4, null, 25, 3),
-  ],
-  KURIR: [
-    indicator("KUR-01", "Pengantaran selesai", "Jumlah pengantaran yang selesai dan tercatat.", "NUMERIC", "pengantaran", "SUM", "HIGHER", 120, null, 40, 1),
-    indicator("KUR-02", "Ketepatan waktu", "Persentase pengantaran yang tiba sesuai jadwal.", "NUMERIC", "%", "AVERAGE", "HIGHER", 95, null, 35, 2),
-    indicator("KUR-03", "Kedisiplinan kerja", "Rating kepatuhan terhadap jadwal dan prosedur.", "RATING", "rating", "AVERAGE", "HIGHER", 4, null, 25, 3),
-  ],
   ...MASTER_KPI_TEMPLATES,
 } as const satisfies Record<string, readonly FixtureIndicator[]>;
 

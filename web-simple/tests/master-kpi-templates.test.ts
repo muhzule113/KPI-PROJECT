@@ -56,12 +56,28 @@ const expected = {
     ["SUP-06", 10, 95, null, "AVERAGE", "HIGHER", "%"],
     ["SUP-07", 5, 100, null, "AVERAGE", "HIGHER", "%"],
   ],
+  CREW: [
+    ["CRW-01", 20, 95, null, "AVERAGE", "HIGHER", "%"],
+    ["CRW-02", 20, 95, null, "AVERAGE", "HIGHER", "%"],
+    ["CRW-03", 15, 90, null, "AVERAGE", "HIGHER", "%"],
+    ["CRW-04", 15, 95, null, "AVERAGE", "HIGHER", "%"],
+    ["CRW-05", 15, 90, null, "AVERAGE", "HIGHER", "%"],
+    ["CRW-06", 15, 100, null, "AVERAGE", "HIGHER", "%"],
+  ],
+  KURIR: [
+    ["KUR-01", 30, 100, null, "SUM", "HIGHER", "unit"],
+    ["KUR-02", 25, 95, null, "AVERAGE", "HIGHER", "%"],
+    ["KUR-03", 20, 99, null, "AVERAGE", "HIGHER", "%"],
+    ["KUR-04", 10, 100, null, "AVERAGE", "HIGHER", "%"],
+    ["KUR-05", 10, 95, null, "AVERAGE", "HIGHER", "%"],
+    ["KUR-06", 5, 95, null, "AVERAGE", "HIGHER", "%"],
+  ],
 } as const;
 
-test("katalog baku memuat enam template dan 39 indikator sesuai urutan", () => {
+test("katalog baku memuat delapan template dan 51 indikator sesuai urutan", () => {
   assert.deepEqual(Object.keys(MASTER_KPI_TEMPLATES), Object.keys(expected));
-  assert.equal(Object.values(MASTER_KPI_TEMPLATES).flat().length, 39);
-  assert.equal(new Set(Object.values(MASTER_KPI_TEMPLATES).flat().map((indicator) => indicator.code)).size, 39);
+  assert.equal(Object.values(MASTER_KPI_TEMPLATES).flat().length, 51);
+  assert.equal(new Set(Object.values(MASTER_KPI_TEMPLATES).flat().map((indicator) => indicator.code)).size, 51);
 
   for (const [positionCode, tuples] of Object.entries(expected)) {
     const indicators = MASTER_KPI_TEMPLATES[positionCode as keyof typeof MASTER_KPI_TEMPLATES];

@@ -14,6 +14,9 @@ if (!connectionString) throw new Error("DATABASE_URL wajib diisi.");
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const rollback = new Error("ROLLBACK_VERIFIKASI_MASTER_KPI");
+// Katalog baku tidak lagi berukuran tetap; hitung dari sumbernya agar script tidak
+// perlu diubah setiap kali jabatan baru masuk katalog.
+const CATALOG_SIZE = Object.keys(MASTER_KPI_TEMPLATES).length;
 
 try {
   const adminUser = await prisma.user.findUniqueOrThrow({ where: { username: "admin" } });
@@ -21,13 +24,13 @@ try {
 
   await expectRollback(prisma.$transaction(async (tx) => {
     const historyBefore = await historyFingerprint(tx);
-    const outsideBefore = await outsideCatalogFingerprint(tx);
+    const nonCatalogBefore = await nonCatalogFingerprint(tx);
     const activeBefore = await activeVersions(tx);
     const auditBefore = await tx.auditEvent.count({ where: { action: "sync_master_kpi_template" } });
 
     const first = await syncMasterKpiTemplates(tx, admin);
-    assert.equal(first.updated.length + first.skipped.length, 6);
-    assert.equal(new Set([...first.updated, ...first.skipped].map((item) => item.positionCode)).size, 6);
+    assert.equal(first.updated.length + first.skipped.length, CATALOG_SIZE);
+    assert.equal(new Set([...first.updated, ...first.skipped].map((item) => item.positionCode)).size, CATALOG_SIZE);
 
     for (const update of first.updated) {
       assert.equal(activeBefore.get(update.positionCode)?.id, update.fromVersionId);
@@ -40,11 +43,11 @@ try {
     const auditCount = await tx.auditEvent.count({ where: { action: "sync_master_kpi_template" } });
     const second = await syncMasterKpiTemplates(tx, admin);
     assert.equal(second.updated.length, 0);
-    assert.equal(second.skipped.length, 6);
+    assert.equal(second.skipped.length, CATALOG_SIZE);
     assert.equal(await tx.kpiTemplateVersion.count(), versionCount);
     assert.equal(await tx.auditEvent.count({ where: { action: "sync_master_kpi_template" } }), auditCount);
     assert.equal(await historyFingerprint(tx), historyBefore);
-    assert.equal(await outsideCatalogFingerprint(tx), outsideBefore);
+    assert.equal(await nonCatalogFingerprint(tx), nonCatalogBefore);
     throw rollback;
   }, { isolationLevel: "Serializable", maxWait: 10_000, timeout: 120_000 }));
 
@@ -103,9 +106,11 @@ async function historyFingerprint(tx: Prisma.TransactionClient) {
   }));
 }
 
-async function outsideCatalogFingerprint(tx: Prisma.TransactionClient) {
+// Jabatan di luar katalog baku: CREW/KURIR sudah masuk katalog, tersisa MGR yang
+// memang bukan subjek KPI.
+async function nonCatalogFingerprint(tx: Prisma.TransactionClient) {
   return fingerprint(await tx.position.findMany({
-    where: { code: { in: ["CREW", "KURIR", "MGR"] } },
+    where: { code: { in: ["MGR"] } },
     orderBy: { code: "asc" },
     include: { template: { include: { versions: { orderBy: { versionNumber: "asc" }, include: { indicators: { orderBy: [{ sortOrder: "asc" }, { code: "asc" }] } } } } } },
   }));
