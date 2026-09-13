@@ -13,7 +13,7 @@ const buttonVariants = cva(
         danger: "border border-[var(--danger)] bg-[var(--surface)] text-[var(--danger)] hover:bg-[var(--danger-soft)]",
         ghost: "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--ink)]",
       },
-      size: { default: "min-h-11", small: "min-h-11 px-3 text-xs" },
+      size: { default: "min-h-11", small: "min-h-11 min-w-11 px-3 text-xs" },
     },
     defaultVariants: { variant: "primary", size: "default" },
   },

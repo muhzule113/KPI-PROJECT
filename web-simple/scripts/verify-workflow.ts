@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.ts";
 import type { AccessProfile } from "../src/modules/access/policy.ts";
-import { reviewDailySheet, saveDailySheet } from "../src/modules/kpi/daily-operations.ts";
+import { reviewDailySheet, saveDailySheet, type DailyValueInput } from "../src/modules/kpi/daily-operations.ts";
 import { finalizeMonthlyKpi } from "../src/modules/kpi/monthly-operations.ts";
 import { createPeriod, openPeriod } from "../src/modules/kpi/period-operations.ts";
 
@@ -12,6 +12,26 @@ const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL wajib diisi.");
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const rollback = new Error("ROLLBACK_VERIFICATION");
+
+type DailyEntryItem = {
+  id: string;
+  kindSnapshot: string;
+  unitSnapshot: string;
+  categoryOptionsSnapshot: unknown;
+};
+
+// Semua indikator manual memakai nilai aman sesuai jenis dan satuannya.
+function dailyEntries(items: readonly DailyEntryItem[]): DailyValueInput[] {
+  return items.map((item) => {
+    if (item.kindSnapshot === "CATEGORY") {
+      return { itemId: item.id, status: "AVAILABLE" as const, value: item.unitSnapshot === "%" ? 89 : 10 };
+    }
+    if (item.kindSnapshot === "SYSTEM" || item.kindSnapshot === "IMPORTED") return { itemId: item.id, status: "AVAILABLE" as const };
+    if (item.kindSnapshot === "CHECKBOX") return { itemId: item.id, status: "AVAILABLE" as const, value: 1 };
+    if (item.kindSnapshot === "RATING") return { itemId: item.id, status: "AVAILABLE" as const, value: 4 };
+    return { itemId: item.id, status: "AVAILABLE" as const, value: item.unitSnapshot === "%" ? 90 : 1 };
+  });
+}
 
 try {
   await prisma.$transaction(async (tx) => {
@@ -37,7 +57,7 @@ try {
       where: { periodId: period.id, positionCodeSnapshot: "PELAYAN" },
       include: { employee: { include: { user: true } }, items: { orderBy: { sortOrderSnapshot: "asc" } }, dailySheets: { where: { entryDate: new Date(Date.UTC(slot.year, slot.month - 1, 9)) } } },
     });
-    const staffValues = staffKpi.items.map((item) => ({ itemId: item.id, value: item.unitSnapshot === "%" ? 90 : 1 }));
+    const staffValues = dailyEntries(staffKpi.items);
     const submitted = await saveDailySheet(tx, supervisor, { sheetId: staffKpi.dailySheets[0].id, rowVersion: staffKpi.dailySheets[0].rowVersion, workStatus: "WORKED", values: staffValues, submit: true, note: "Pelayanan harian selesai." }, now);
     assert.equal(submitted.status, "SUBMITTED");
     const beforeApproval = await tx.monthlyKpi.findUniqueOrThrow({ where: { id: staffKpi.id } });
@@ -86,7 +106,7 @@ try {
       sheetId: supervisorKpi.dailySheets[0].id,
       rowVersion: supervisorKpi.dailySheets[0].rowVersion,
       workStatus: "WORKED",
-      values: supervisorKpi.items.map((item) => ({ itemId: item.id, value: item.unitSnapshot === "%" ? 90 : 1 })),
+      values: dailyEntries(supervisorKpi.items),
       submit: true,
       note: "Kontrol dan coaching terlaksana.",
     }, now);

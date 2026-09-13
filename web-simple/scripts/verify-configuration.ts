@@ -15,7 +15,7 @@ import {
   startRatingDraft,
   startTemplateDraft,
 } from "../src/modules/admin/template-operations.ts";
-import { createPeriod, openPeriod } from "../src/modules/kpi/period-operations.ts";
+import { createPeriod, openPeriod, savePeriodTemplateSelections } from "../src/modules/kpi/period-operations.ts";
 import { ratingBandsFromSnapshot } from "../src/modules/kpi/period.ts";
 
 const connectionString = process.env.DATABASE_URL;
@@ -100,6 +100,8 @@ try {
     await activateRatingDraft(tx, admin, ratingDraft.id);
     assert.equal((await tx.kpiRatingScheme.findUniqueOrThrow({ where: { id: activeRating.id } })).status, "RETIRED");
 
+    const temporaryEmployee = await tx.employee.findFirstOrThrow({ where: { employeeNumber: "EMP-TEK-001" } });
+    await tx.employee.update({ where: { id: temporaryEmployee.id }, data: { positionId: position.id } });
     const existingPeriods = new Set((await tx.kpiPeriod.findMany({ select: { year: true, month: true } })).map((period) => `${period.year}-${period.month}`));
     let candidate: { year: number; month: number } | undefined;
     for (let year = 2080; year <= 2100 && !candidate; year += 1) {
@@ -107,10 +109,18 @@ try {
     }
     assert.ok(candidate, "Periode verifikasi kosong tidak tersedia.");
     const period = await createPeriod(tx, admin, candidate);
+    const defaults = await tx.kpiPeriodTemplateSelection.findMany({ where: { periodId: period.id } });
+    await savePeriodTemplateSelections(tx, admin, period.id, defaults.map((selection) => ({
+      positionId: selection.positionId,
+      templateVersionId: selection.positionId === position.id ? firstDraft.id : selection.templateVersionId,
+    })));
     await openPeriod(tx, admin, period.id);
-    const newKpi = await tx.monthlyKpi.findFirstOrThrow({ where: { periodId: period.id, positionCodeSnapshot: "PELAYAN" }, include: { items: { orderBy: { sortOrderSnapshot: "asc" } } } });
+    const newKpi = await tx.monthlyKpi.findFirstOrThrow({ where: { periodId: period.id, employeeId: temporaryEmployee.id }, include: { items: { orderBy: { sortOrderSnapshot: "asc" } } } });
+    const newPelayanKpi = await tx.monthlyKpi.findFirstOrThrow({ where: { periodId: period.id, positionCodeSnapshot: "PELAYAN" }, include: { items: { orderBy: { sortOrderSnapshot: "asc" } } } });
     assert.equal((await tx.monthlyKpiItem.findFirstOrThrow({ where: { monthlyKpiId: oldKpi.id }, orderBy: { sortOrderSnapshot: "asc" } })).nameSnapshot, oldItemName);
-    assert.equal(newKpi.items[0].nameSnapshot, revisedName);
+    assert.equal(newKpi.items[0].nameSnapshot, firstIndicator.name);
+    assert.equal(newPelayanKpi.items[0].nameSnapshot, revisedName);
+    await assert.rejects(savePeriodTemplateSelections(tx, admin, period.id, defaults.map((selection) => ({ positionId: selection.positionId, templateVersionId: selection.templateVersionId }))), /DRAFT/i);
     assert.equal(ratingBandsFromSnapshot(oldKpi.ratingBandsSnapshot).some((band) => band.label === "Istimewa Verifikasi"), false);
     assert.equal(ratingBandsFromSnapshot(newKpi.ratingBandsSnapshot).find((band) => band.code === "STAR")?.label, "Istimewa Verifikasi");
 

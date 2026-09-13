@@ -1,14 +1,18 @@
 import Decimal from "decimal.js";
 import type { Aggregation, Direction, ValueKind } from "./calculation.ts";
+import { validateCategoryBands, type CategoryBandInput } from "./category-options.ts";
 
-type TemplateIndicator = {
+export type TemplateIndicator = {
   code: string;
   kind: ValueKind;
+  unit?: string;
   aggregation: Aggregation;
   direction: Direction;
   target: number | string;
   failureLimit: number | string | null;
   weight: number | string;
+  activeCategoryOptions?: number;
+  categoryBands?: readonly CategoryBandInput[];
 };
 
 export type RatingBandSnapshot = {
@@ -17,6 +21,23 @@ export type RatingBandSnapshot = {
   minScore: number | string;
   sortOrder: number;
 };
+
+export type PeriodTemplateSelectionInput = Readonly<{
+  positionId: string;
+  templateVersionId: string;
+}>;
+
+export function validatePeriodTemplateSelections(
+  selections: readonly PeriodTemplateSelectionInput[],
+  requiredPositionIds: readonly string[] = [],
+): { ok: true } | { ok: false; reason: string } {
+  if (!selections.length) return { ok: false, reason: "Minimal satu versi template harus dipilih." };
+  const positionIds = selections.map((selection) => selection.positionId);
+  if (new Set(positionIds).size !== positionIds.length) return { ok: false, reason: "Satu jabatan hanya boleh memiliki satu versi template per periode." };
+  if (requiredPositionIds.some((positionId) => !positionIds.includes(positionId))) return { ok: false, reason: "Versi template untuk seluruh jabatan yang dinilai wajib dipilih." };
+  if (selections.some((selection) => !selection.positionId || !selection.templateVersionId)) return { ok: false, reason: "Jabatan dan versi template wajib dipilih." };
+  return { ok: true };
+}
 
 const RATING_CODES = ["POOR", "FAIR", "GOOD", "VERY_GOOD", "STAR"] as const;
 
@@ -54,9 +75,24 @@ export function validateTemplate(indicators: readonly TemplateIndicator[]): { ok
     const target = new Decimal(indicator.target);
     if (!weight.isFinite() || weight.lte(0) || weight.gt(100)) return { ok: false, reason: "Bobot tiap indikator harus lebih dari 0 dan maksimal 100." };
     if (!target.isFinite()) return { ok: false, reason: `Target ${indicator.code} tidak valid.` };
+    if (indicator.kind === "RATING" || indicator.kind === "CHECKBOX") {
+      if (indicator.aggregation !== "AVERAGE") {
+        return { ok: false, reason: `Indikator ${indicator.code} wajib memakai agregasi AVERAGE.` };
+      }
+      if (indicator.direction !== "HIGHER") return { ok: false, reason: `Arah indikator ${indicator.code} harus HIGHER.` };
+    }
     if (indicator.kind === "RATING") {
-      if (indicator.aggregation !== "AVERAGE") return { ok: false, reason: "Indikator rating wajib memakai agregasi AVERAGE." };
-      if (indicator.direction !== "HIGHER" || target.lt(1) || target.gt(5)) return { ok: false, reason: "Target rating harus 1 sampai 5 dengan arah HIGHER." };
+      if (target.lt(1) || target.gt(5)) return { ok: false, reason: "Target rating harus 1 sampai 5 dengan arah HIGHER." };
+    } else if (indicator.kind === "CHECKBOX") {
+      if (!target.eq(100)) return { ok: false, reason: `Target ${indicator.code} untuk indikator centang wajib 100.` };
+    } else if (indicator.kind === "CATEGORY") {
+      if (indicator.categoryBands) {
+        const bandsValidation = validateCategoryBands(indicator.categoryBands, indicator.direction, indicator.unit ?? "");
+        if (!bandsValidation.ok) return { ok: false, reason: `${indicator.code}: ${bandsValidation.reason}` };
+      } else if (indicator.activeCategoryOptions !== 5) {
+        return { ok: false, reason: `Indikator ${indicator.code} wajib memiliki lima tingkat predikat aktif (kategori aktif).` };
+      }
+      if (indicator.direction !== "ZERO_TOLERANCE" && target.lte(0)) return { ok: false, reason: `Target ${indicator.code} harus lebih besar dari 0.` };
     } else if (indicator.direction !== "ZERO_TOLERANCE" && target.lte(0)) {
       return { ok: false, reason: `Target ${indicator.code} harus lebih besar dari 0.` };
     }

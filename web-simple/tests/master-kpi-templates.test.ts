@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MASTER_KPI_TEMPLATES } from "../src/modules/kpi/master-kpi-templates.ts";
+import { KPI_CATEGORY_SCALE, MASTER_KPI_TEMPLATES } from "../src/modules/kpi/master-kpi-templates.ts";
 import { calculateMonthlyIndicator } from "../src/modules/kpi/calculation.ts";
 import { validateTemplate } from "../src/modules/kpi/period.ts";
 
@@ -76,8 +76,24 @@ test("katalog baku memuat enam template dan 39 indikator sesuai urutan", () => {
     ]), tuples);
     assert.deepEqual(indicators.map((indicator) => indicator.sortOrder), indicators.map((_, index) => index + 1));
     assert.equal(indicators.reduce((total, indicator) => total + Number(indicator.weight), 0), 100);
-    assert.deepEqual(validateTemplate(indicators), { ok: true });
-    assert.ok(indicators.every((indicator) => indicator.kind === "NUMERIC"));
+    assert.deepEqual(validateTemplate(indicators.map((indicator) => ({
+      ...indicator,
+      activeCategoryOptions: (indicator.categoryOptions ?? []).filter((option) => option.isActive !== false).length,
+    }))), { ok: true });
+    assert.ok(indicators.every((indicator) => indicator.kind === "CATEGORY"
+      ? (indicator.categoryOptions ?? []).length === KPI_CATEGORY_SCALE.length
+      : indicator.kind === "NUMERIC"));
+  }
+});
+
+test("indikator kategori memakai satu skala kualitatif bersama", () => {
+  const categoryIndicators = Object.values(MASTER_KPI_TEMPLATES).flat().filter((indicator) => indicator.kind === "CATEGORY");
+  assert.deepEqual(categoryIndicators.map((indicator) => indicator.code), ["TEK-05", "TEK-06", "ADM-06", "KSR-05", "KSR-06", "GUD-06", "GUD-07", "SUP-03", "SUP-06"]);
+  for (const indicator of categoryIndicators) {
+    assert.deepEqual(indicator.categoryOptions?.map((option) => [option.label, option.score, option.sortOrder, option.isActive]),
+      KPI_CATEGORY_SCALE.map((option) => [option.label, option.score, option.sortOrder, true]));
+    assert.equal(indicator.aggregation, "AVERAGE");
+    assert.equal(indicator.direction, "HIGHER");
   }
 });
 

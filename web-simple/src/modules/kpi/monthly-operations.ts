@@ -5,6 +5,7 @@ import { isoDate, todayInMakassar } from "@/lib/date";
 import { notifyUsers } from "@/modules/notifications";
 import { calculateFinalScore, calculateMonthlyIndicator, type MonthlyIndicatorResult } from "@/modules/kpi/calculation";
 import { ratingBandsFromSnapshot, ratingForScore } from "@/modules/kpi/period";
+import { isLegacyCategorySnapshot } from "@/modules/kpi/category-options";
 import { finalizeReadiness, reopenMonthlyResult } from "@/modules/kpi/workflow";
 
 export async function lockMonthlyKpi(tx: Prisma.TransactionClient, monthlyKpiId: string) {
@@ -45,7 +46,8 @@ export async function recalculateMonthlyKpi(tx: Prisma.TransactionClient, monthl
         include: {
           dailyValues: {
             where: { dailySheet: { status: "APPROVED", effectiveWorkStatus: "WORKED" } },
-            select: { effectiveValue: true },
+            select: { effectiveValue: true, status: true, managerStatus: true },
+            orderBy: { dailySheet: { entryDate: "asc" } },
           },
         },
       },
@@ -55,14 +57,24 @@ export async function recalculateMonthlyKpi(tx: Prisma.TransactionClient, monthl
 
   const results: MonthlyIndicatorResult[] = [];
   for (const item of kpi.items) {
+    // Hanya nilai berstatus AVAILABLE yang dihitung; kosong dan "tidak berlaku" tidak pernah menjadi 0.
+    const available = item.dailyValues.filter((value) => (value.managerStatus ?? value.status) === "AVAILABLE" && value.effectiveValue !== null);
     const result = calculateMonthlyIndicator({
       kind: item.kindSnapshot,
       aggregation: item.aggregationSnapshot,
       direction: item.directionSnapshot,
-      values: item.dailyValues.flatMap((value) => value.effectiveValue === null ? [] : [value.effectiveValue.toString()]),
+      values: available.map((value) => value.effectiveValue!.toString()),
       target: item.targetSnapshot.toString(),
       failureLimit: item.failureLimitSnapshot?.toString() ?? null,
       weight: item.weightSnapshot.toString(),
+      legacyCategoryScoring: item.kindSnapshot === "CATEGORY" && isLegacyCategorySnapshot(item.categoryOptionsSnapshot),
+      emptyReason: item.dailyValues.length === 0
+        ? "NO_VALUES"
+        : item.dailyValues.every((value) => (value.managerStatus ?? value.status) === "NOT_APPLICABLE")
+          ? "NOT_APPLICABLE"
+          : item.dailyValues.every((value) => (value.managerStatus ?? value.status) === "MISSING")
+            ? "MISSING"
+            : "NO_VALUES",
     });
     results.push(result);
     await tx.monthlyKpiItem.update({

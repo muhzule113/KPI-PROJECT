@@ -10,9 +10,12 @@ import {
   AUGUST_2026_ROSTER,
   AUGUST_WORKED_DAYS,
   FIXTURE_TEMPLATES,
+  fixtureCategoryOption,
   fixtureValuesForIndicator,
   type FixtureIndicator,
 } from "../src/modules/kpi/august-2026-fixture.ts";
+import { categoryOptionsFromSnapshot } from "../src/modules/kpi/category-options.ts";
+import { indicatorCreateInput, KPI_CATEGORY_SCALE } from "../src/modules/kpi/master-kpi-templates.ts";
 import { finalizeMonthlyKpi, recalculateMonthlyKpi } from "../src/modules/kpi/monthly-operations.ts";
 import { createPeriod, openPeriod } from "../src/modules/kpi/period-operations.ts";
 
@@ -145,14 +148,31 @@ try {
         },
       });
 
-      const valuesByItem = new Map(monthlyKpi.items.map((item) => [item.id, fixtureValuesForIndicator(profileIndex, snapshotIndicator(item))]));
+      const fixtureSnapshots = new Map(monthlyKpi.items.map((item) => {
+        const snapshot = item.kindSnapshot === "CATEGORY" ? legacyCategorySnapshot(item.categoryOptionsSnapshot) : item.categoryOptionsSnapshot;
+        return [item.id, snapshot] as const;
+      }));
+      for (const item of monthlyKpi.items.filter((candidate) => candidate.kindSnapshot === "CATEGORY")) {
+        await tx.monthlyKpiItem.update({ where: { id: item.id }, data: { categoryOptionsSnapshot: fixtureSnapshots.get(item.id)! as Prisma.InputJsonValue } });
+      }
+      const valuesByItem = new Map(monthlyKpi.items.map((item) => {
+        const indicator = snapshotIndicator({ ...item, categoryOptionsSnapshot: fixtureSnapshots.get(item.id) });
+        return [item.id, {
+          values: fixtureValuesForIndicator(profileIndex, indicator),
+          categoryOptionId: indicator.kind === "CATEGORY" ? fixtureCategoryOption(profileIndex, indicator).id : null,
+        }];
+      }));
       await tx.dailyValue.createMany({
-        data: workedSheets.flatMap((sheet, day) => monthlyKpi.items.map((item) => ({
-          dailySheetId: sheet.id,
-          monthlyKpiItemId: item.id,
-          enteredValue: valuesByItem.get(item.id)![day],
-          effectiveValue: valuesByItem.get(item.id)![day],
-        }))),
+        data: workedSheets.flatMap((sheet, day) => monthlyKpi.items.map((item) => {
+          const entry = valuesByItem.get(item.id)!;
+          return {
+            dailySheetId: sheet.id,
+            monthlyKpiItemId: item.id,
+            enteredValue: entry.values[day],
+            effectiveValue: entry.values[day],
+            categoryOptionId: entry.categoryOptionId,
+          };
+        })),
       });
       await recalculateMonthlyKpi(tx, monthlyKpi.id, completedAt);
       const current = await tx.monthlyKpi.findUniqueOrThrow({ where: { id: monthlyKpi.id }, select: { rowVersion: true } });
@@ -207,9 +227,18 @@ async function ensureTemplate(
       versionNumber: (latest._max.versionNumber ?? 0) + 1,
       status: "ACTIVE",
       activatedAt: new Date("2026-08-01T00:00:00.000Z"),
-      indicators: { create: [...indicators] },
+      indicators: { create: indicators.map((indicator) => indicatorCreateInput(indicator)) },
     },
   });
+}
+
+function legacyCategorySnapshot(value: unknown) {
+  return categoryOptionsFromSnapshot(value).map((option, index) => ({
+    id: option.id,
+    label: option.label,
+    score: String(KPI_CATEGORY_SCALE[index]?.score ?? 0),
+    sortOrder: option.sortOrder,
+  }));
 }
 
 function snapshotIndicator(item: {
@@ -224,6 +253,7 @@ function snapshotIndicator(item: {
   failureLimitSnapshot: { toString(): string } | null;
   weightSnapshot: { toString(): string };
   sortOrderSnapshot: number;
+  categoryOptionsSnapshot: unknown;
 }): FixtureIndicator {
   return {
     code: item.codeSnapshot,
@@ -237,5 +267,10 @@ function snapshotIndicator(item: {
     failureLimit: item.failureLimitSnapshot?.toString() ?? null,
     weight: item.weightSnapshot.toString(),
     sortOrder: item.sortOrderSnapshot,
+    categoryOptions: categoryOptionsFromSnapshot(item.categoryOptionsSnapshot ?? []).map((option) => ({
+      ...option,
+      score: "score" in option && option.score != null ? option.score : "threshold" in option && option.threshold != null ? option.threshold : 0,
+      isActive: true,
+    })),
   };
 }

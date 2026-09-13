@@ -3,11 +3,21 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { AccessProfile } from "@/modules/access/policy";
 import { activateTemplate, startTemplateDraft } from "@/modules/admin/template-operations";
 import {
+  indicatorCreateInput,
   MASTER_KPI_TEMPLATES,
   type MasterKpiIndicator,
   type MasterKpiPositionCode,
 } from "@/modules/kpi/master-kpi-templates";
 import { validateTemplate } from "@/modules/kpi/period";
+import type { CategoryBandInput } from "@/modules/kpi/category-options";
+
+// Nilai opsi dari DB (Decimal) dan dari katalog (number) harus bisa dibandingkan apa adanya.
+type ComparableCategoryOption = {
+  label: string;
+  threshold?: number | string | { toString(): string } | null;
+  sortOrder: number;
+  isActive?: boolean;
+};
 
 type ComparableIndicator = {
   code: string;
@@ -21,6 +31,7 @@ type ComparableIndicator = {
   failureLimit: number | string | { toString(): string } | null;
   weight: number | string | { toString(): string };
   sortOrder: number;
+  categoryOptions?: readonly ComparableCategoryOption[];
 };
 
 export type MasterKpiSyncResult = {
@@ -36,9 +47,16 @@ export async function syncMasterKpiTemplates(
   if (!actor.active || actor.role !== "ADMIN") throw new Error("Hanya Super Admin yang dapat menyinkronkan master KPI.");
 
   const entries = Object.entries(MASTER_KPI_TEMPLATES) as Array<[MasterKpiPositionCode, readonly MasterKpiIndicator[]]>;
-  for (const [, indicators] of entries) {
-    const validation = validateTemplate(indicators);
-    if (!validation.ok) throw new Error(validation.reason);
+  // Katalog baku divalidasi lebih dulu agar kesalahan konfigurasi gagal sebelum menyentuh versi template.
+  for (const [positionCode, indicators] of entries) {
+    const validation = validateTemplate(indicators.map((indicator) => ({
+      ...indicator,
+      activeCategoryOptions: (indicator.categoryOptions ?? []).filter((option) => option.isActive !== false).length,
+      categoryBands: indicator.categoryOptions?.some((option) => option.threshold !== undefined)
+        ? indicator.categoryOptions.map((option) => ({ label: option.label, threshold: option.threshold ?? null, sortOrder: option.sortOrder, isActive: option.isActive })) as readonly CategoryBandInput[]
+        : undefined,
+    })));
+    if (!validation.ok) throw new Error(`Katalog KPI ${positionCode} tidak valid: ${validation.reason}`);
   }
 
   const templates = await tx.kpiTemplate.findMany({
@@ -48,7 +66,7 @@ export async function syncMasterKpiTemplates(
       versions: {
         where: { status: { in: ["ACTIVE", "DRAFT"] } },
         orderBy: { versionNumber: "asc" },
-        include: { indicators: { orderBy: [{ sortOrder: "asc" }, { code: "asc" }] } },
+        include: { indicators: { orderBy: [{ sortOrder: "asc" }, { code: "asc" }], include: { categoryOptions: { orderBy: { sortOrder: "asc" } } } } },
       },
     },
   });
@@ -79,9 +97,9 @@ export async function syncMasterKpiTemplates(
   for (const change of changes) {
     const draft = change.draft ?? await startTemplateDraft(tx, actor, change.template.id);
     await tx.kpiIndicator.deleteMany({ where: { templateVersionId: draft.id } });
-    await tx.kpiIndicator.createMany({
-      data: change.indicators.map((indicator) => ({ templateVersionId: draft.id, ...indicator })),
-    });
+    for (const indicator of change.indicators) {
+      await tx.kpiIndicator.create({ data: { templateVersionId: draft.id, ...indicatorCreateInput(indicator) } });
+    }
     await activateTemplate(tx, actor, draft.id, now);
     await tx.auditEvent.create({
       data: {
@@ -122,5 +140,11 @@ function indicatorSignature(indicator: ComparableIndicator) {
     failureLimit: indicator.failureLimit === null ? null : new Decimal(indicator.failureLimit.toString()).toString(),
     weight: new Decimal(indicator.weight.toString()).toString(),
     sortOrder: indicator.sortOrder,
+    categoryOptions: (indicator.categoryOptions ?? []).map((option) => ({
+      label: option.label,
+      threshold: option.threshold === null || option.threshold === undefined ? null : new Decimal(option.threshold.toString()).toString(),
+      sortOrder: option.sortOrder,
+      isActive: option.isActive ?? true,
+    })),
   };
 }

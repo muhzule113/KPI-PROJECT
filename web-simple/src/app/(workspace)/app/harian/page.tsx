@@ -10,6 +10,7 @@ import { todayInMakassar } from "@/lib/date";
 import { formatDate } from "@/lib/utils";
 import { requireRole } from "@/modules/access/current-user";
 import { canChangeEvidence } from "@/modules/files/evidence";
+import { dailyValueView } from "@/modules/kpi/daily-value-view";
 
 const validDate = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,16 +33,43 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
     },
   });
   const selected = sheets.find((sheet) => sheet.id === query.sheet) ?? sheets[0];
+  const selectedIndex = selected ? sheets.findIndex((sheet) => sheet.id === selected.id) : -1;
   const completed = sheets.filter((sheet) => ["SUBMITTED", "APPROVED"].includes(sheet.status)).length;
   const future = date > today;
 
+  const dailyItems = selected ? dailyValueView(selected.monthlyKpi.items, selected.values) : [];
+
   return <><PageHeader eyebrow="Penilaian harian" title={user.role === "MANAGER" ? "Nilai Supervisor" : "Nilai anggota tim"} description="Pilih tanggal, isi status kerja, lalu masukkan seluruh nilai aktual untuk hari bekerja." />
-    <form method="get" className="toolbar"><DatePickerField label="Tanggal penilaian" name="date" defaultValue={date} max={today} required /><Button type="submit" variant="secondary">Tampilkan</Button><span className="help">{completed} dari {sheets.length} lembar sudah dikirim/disetujui</span></form>
+    <div className="assessment-context">
+      <form method="get" className="toolbar assessment-date-toolbar"><DatePickerField label="Tanggal penilaian" name="date" defaultValue={date} max={today} required /><Button type="submit" variant="secondary">Tampilkan</Button><span className="help">{completed} dari {sheets.length} lembar sudah dikirim/disetujui</span></form>
+      {selected && sheets.length > 1 ? <form method="get" className="panel mobile-sheet-picker"><div className="panel-body mobile-sheet-picker-body"><input type="hidden" name="date" value={date} /><SelectField label="Lompat ke pegawai" name="sheet" defaultValue={selected.id} options={sheets.map((sheet) => ({ value: sheet.id, label: `${sheet.monthlyKpi.employeeNameSnapshot} / ${sheet.monthlyKpi.positionNameSnapshot}` }))} required /><Button type="submit" variant="secondary">Buka lembar</Button><div className="employee-pager" aria-label="Navigasi pegawai">
+        {selectedIndex > 0 ? <Link className="employee-pager-link" href={`/app/harian?date=${date}&sheet=${sheets[selectedIndex - 1].id}`}>Sebelumnya</Link> : <span className="employee-pager-link is-disabled" aria-disabled="true">Sebelumnya</span>}
+        <span className="employee-pager-position" aria-live="polite">{selectedIndex + 1} dari {sheets.length}</span>
+        {selectedIndex < sheets.length - 1 ? <Link className="employee-pager-link" href={`/app/harian?date=${date}&sheet=${sheets[selectedIndex + 1].id}`}>Berikutnya</Link> : <span className="employee-pager-link is-disabled" aria-disabled="true">Berikutnya</span>}
+      </div></div></form> : null}
+    </div>
     {future ? <div className="notice">Tanggal mendatang tidak dapat dinilai.</div> : null}
     {!sheets.length ? <EmptyState icon={CalendarDotsIcon} title="Tidak ada lembar pada tanggal ini" description="Pastikan periode sudah dibuka dan pegawai berada dalam masa kerja pada tanggal tersebut." /> : <div className="detail-grid">
-      {selected && sheets.length > 1 ? <form method="get" className="panel mobile-sheet-picker"><div className="panel-body mobile-sheet-picker-body"><input type="hidden" name="date" value={date} /><SelectField label="Pegawai yang dinilai" name="sheet" defaultValue={selected.id} options={sheets.map((sheet) => ({ value: sheet.id, label: `${sheet.monthlyKpi.employeeNameSnapshot} / ${sheet.monthlyKpi.positionNameSnapshot}` }))} required /><Button type="submit" variant="secondary">Buka lembar</Button></div></form> : null}
       <section className="panel desktop-sheet-list"><div className="panel-header"><div><h2>Daftar pegawai</h2><p>{formatDate(entryDate)}</p></div></div><div className="nav-list selection-list">{sheets.map((sheet) => <Link className={`nav-link selection-link ${selected?.id === sheet.id ? "active" : ""}`} href={`/app/harian?date=${date}&sheet=${sheet.id}`} key={sheet.id}><span className="selection-copy"><strong>{sheet.monthlyKpi.employeeNameSnapshot}</strong><small>{sheet.monthlyKpi.positionNameSnapshot}</small></span><StatusBadge status={sheet.status} /></Link>)}</div></section>
-      {selected ? <section className="panel"><div className="panel-header"><div><h2>{selected.monthlyKpi.employeeNameSnapshot}</h2><p>{selected.monthlyKpi.positionNameSnapshot} · {formatDate(selected.entryDate)}</p></div><StatusBadge status={selected.status} /></div><div className="panel-body"><DailySheetForm directApproval={user.role === "MANAGER"} editable={!future && selected.monthlyKpi.status !== "FINALIZED" && (["PENDING", "DRAFT", "REVISION_REQUIRED"].includes(selected.status) || (user.role === "MANAGER" && selected.status === "APPROVED"))} evidenceEditable={!future && canChangeEvidence(selected.status, selected.monthlyKpi.status)} sheet={{ id: selected.id, rowVersion: selected.rowVersion, status: selected.status, workStatus: selected.workStatus, note: selected.note, managerReason: selected.managerReason, items: selected.monthlyKpi.items.map((item) => ({ id: item.id, name: item.nameSnapshot, description: item.descriptionSnapshot, kind: item.kindSnapshot, unit: item.unitSnapshot, target: item.targetSnapshot.toString(), value: selected.values.find((value) => value.monthlyKpiItemId === item.id)?.enteredValue?.toString() ?? null })), evidence: selected.evidence.map((item) => ({ id: item.id, fileName: item.fileName, fileSize: `${Math.ceil(Number(item.fileSize) / 1024)} KB` })) }} /></div></section> : null}
+      {selected ? <section className="panel">
+        <div className="panel-header"><div><h2>{selected.monthlyKpi.employeeNameSnapshot}</h2><p>{selected.monthlyKpi.positionNameSnapshot} · {formatDate(selected.entryDate)}</p></div><StatusBadge status={selected.status} /></div>
+        <div className="panel-body"><DailySheetForm
+          key={selected.id}
+          directApproval={user.role === "MANAGER"}
+          editable={!future && selected.monthlyKpi.status !== "FINALIZED" && (["PENDING", "DRAFT", "REVISION_REQUIRED"].includes(selected.status) || (user.role === "MANAGER" && selected.status === "APPROVED"))}
+          evidenceEditable={!future && canChangeEvidence(selected.status, selected.monthlyKpi.status)}
+          sheet={{
+            id: selected.id,
+            rowVersion: selected.rowVersion,
+            status: selected.status,
+            workStatus: selected.workStatus,
+            note: selected.note,
+            managerReason: selected.managerReason,
+            items: dailyItems,
+            evidence: selected.evidence.map((item) => ({ id: item.id, fileName: item.fileName, fileSize: `${Math.ceil(Number(item.fileSize) / 1024)} KB` })),
+          }}
+        /></div>
+      </section> : null}
     </div>}
   </>;
 }

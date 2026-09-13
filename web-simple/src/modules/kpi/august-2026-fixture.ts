@@ -1,10 +1,11 @@
-import { MASTER_KPI_TEMPLATES, type MasterKpiIndicator } from "./master-kpi-templates.ts";
+import { KPI_CATEGORY_SCALE, MASTER_KPI_TEMPLATES, type MasterKpiIndicator } from "./master-kpi-templates.ts";
 
 export const AUGUST_WORKED_DAYS = 30;
 
 export type RosterPositionCode = "CREW" | "KASIR" | "PELAYAN" | "TEKNISI" | "KURIR" | "ADMIN_OPS";
 
-export type FixtureIndicator = MasterKpiIndicator;
+export type FixtureCategoryOption = { label: string; score: number | string; threshold?: number | string | null; sortOrder: number; isActive?: boolean; id?: string };
+export type FixtureIndicator = Omit<MasterKpiIndicator, "categoryOptions"> & { categoryOptions?: readonly FixtureCategoryOption[] };
 
 export const AUGUST_2026_ROSTER = [
   { name: "Cumi", username: "cumi", employeeNumber: "AUG26-001", positionCode: "CREW" },
@@ -61,9 +62,22 @@ export const FIXTURE_TEMPLATES = {
 const PROFILE_FACTORS = [0.82, 0.9, 0.96, 1, 1.05] as const;
 const PROFILE_RATINGS = [3, 4, 4, 5, 5] as const;
 
+
+// Profil 0 memakai kategori berskor terendah; profil terakhir memakai yang tertinggi.
+export function fixtureCategoryOption(profileIndex: number, indicator: FixtureIndicator) {
+  const profile = Math.abs(profileIndex) % PROFILE_FACTORS.length;
+  const options: readonly FixtureCategoryOption[] = [...(indicator.categoryOptions ?? KPI_CATEGORY_SCALE)].sort((left, right) => Number(left.score) - Number(right.score));
+  const option = options[Math.min(profile, options.length - 1)];
+  return { id: option.id ?? null, score: round4(Number(option.score)) };
+}
+
 export function fixtureValuesForIndicator(profileIndex: number, indicator: FixtureIndicator) {
   const profile = Math.abs(profileIndex) % PROFILE_FACTORS.length;
   if (indicator.kind === "RATING") return Array.from({ length: AUGUST_WORKED_DAYS }, () => PROFILE_RATINGS[profile]);
+  if (indicator.kind === "CATEGORY") {
+    const score = fixtureCategoryOption(profileIndex, indicator).score;
+    return Array.from({ length: AUGUST_WORKED_DAYS }, () => score);
+  }
   if (indicator.direction === "ZERO_TOLERANCE") {
     return Array.from({ length: AUGUST_WORKED_DAYS }, (_, day) => profile < 2 && day === 0 ? 1_000 : 0);
   }

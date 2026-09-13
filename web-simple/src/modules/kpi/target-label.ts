@@ -20,3 +20,23 @@ function withUnit(value: TargetValue, unit: string) {
   if (unit === "Rp") return `Rp${value}`;
   return `${value} ${unit}`;
 }
+
+export type KpiValueKindLabel = "NUMERIC" | "RATING" | "CHECKBOX" | "CATEGORY" | "SYSTEM" | "IMPORTED";
+export type KpiAggregationLabel = "SUM" | "AVERAGE" | "LATEST" | "COUNT";
+
+// Label dipakai bersama oleh tabel konfigurasi admin dan ringkasan rekap bulanan.
+export function kindLabel(kind: KpiValueKindLabel) {
+  if (kind === "RATING") return "Rating 1–5";
+  if (kind === "CHECKBOX") return "Centang";
+  if (kind === "CATEGORY") return "Angka + predikat";
+  if (kind === "SYSTEM") return "Nilai sistem";
+  if (kind === "IMPORTED") return "Impor";
+  return "Angka";
+}
+
+export function aggregationLabel(aggregation: KpiAggregationLabel) {
+  if (aggregation === "AVERAGE") return "Rata-rata";
+  if (aggregation === "LATEST") return "Nilai terakhir";
+  if (aggregation === "COUNT") return "Jumlah hari";
+  return "Jumlah";
+}

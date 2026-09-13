@@ -1,35 +1,102 @@
-import { Prisma, type WorkStatus } from "@/generated/prisma/client";
+import { Prisma, type ValueKind, type ValueStatus, type WorkStatus } from "@/generated/prisma/client";
 import { todayInMakassar, isoDate } from "@/lib/date";
 import type { AccessProfile } from "@/modules/access/policy";
 import { canEnterDailySheet, canReviewDailySheet } from "@/modules/access/policy";
 import { notifyUsers } from "@/modules/notifications";
+import { categoryOptionsFromSnapshot, resolveCategoryOption } from "@/modules/kpi/category-options";
 import { kpiSubjectFromSnapshot, lockMonthlyKpi, recalculateMonthlyKpi } from "@/modules/kpi/monthly-operations";
+import { resolveSystemValue } from "@/modules/kpi/system-value";
 import { validateDailyIndicatorValue } from "@/modules/kpi/value-validation";
 import { reviewDailySheet as decideDailyReview, submitDailySheet } from "@/modules/kpi/workflow";
 
-export type DailyValueInput = { itemId: string; value: number };
+// `status` adalah keadaan entri (terisi / belum / tidak berlaku); `value` dan `categoryOptionId`
+// hanya bermakna saat status AVAILABLE. Jenis SYSTEM/IMPORTED mengabaikan kiriman klien.
+export type DailyValueInput = {
+  itemId: string;
+  status: "PENDING" | "AVAILABLE" | "NOT_APPLICABLE";
+  value?: number | null;
+  categoryOptionId?: string | null;
+};
+
+type ResolvedDailyValue = {
+  status: ValueStatus;
+  value: number | null;
+  categoryOptionId: string | null;
+};
+
+type SheetItem = {
+  id: string;
+  codeSnapshot: string;
+  nameSnapshot: string;
+  kindSnapshot: ValueKind;
+  unitSnapshot: string;
+  targetSnapshot: { toNumber(): number };
+  categoryOptionsSnapshot: unknown;
+};
+
+const EMPTY_VALUE: ResolvedDailyValue = { status: "PENDING", value: null, categoryOptionId: null };
 
 function validatedValues(
-  items: Array<{ id: string; nameSnapshot: string; kindSnapshot: "NUMERIC" | "RATING"; unitSnapshot: string; targetSnapshot: { toNumber(): number } }>,
+  items: SheetItem[],
   workStatus: WorkStatus,
-  values: DailyValueInput[],
-  note?: string,
+  entries: DailyValueInput[],
+  note: string | undefined,
 ) {
   if (workStatus !== "WORKED") {
-    if (values.length) throw new Error("Hari nonkerja tidak boleh memiliki nilai indikator.");
-    return new Map<string, number>();
+    if (entries.length) throw new Error("Hari nonkerja tidak boleh memiliki nilai indikator.");
+    return new Map<string, ResolvedDailyValue>();
   }
-  const valueMap = new Map(values.map((entry) => [entry.itemId, entry.value]));
-  if (valueMap.size !== values.length || valueMap.size !== items.length || items.some((item) => !valueMap.has(item.id))) {
+  const entryMap = new Map(entries.map((entry) => [entry.itemId, entry]));
+  if (entryMap.size !== entries.length || entryMap.size !== items.length || items.some((item) => !entryMap.has(item.id))) {
     throw new Error("Seluruh indikator wajib diisi tepat satu kali.");
   }
+
+  const resolved = new Map<string, ResolvedDailyValue>();
   for (const item of items) {
-    const value = valueMap.get(item.id)!;
-    validateDailyIndicatorValue({ name: item.nameSnapshot, kind: item.kindSnapshot, unit: item.unitSnapshot }, value);
-    if (item.kindSnapshot === "RATING" && value < item.targetSnapshot.toNumber() && !note?.trim()) throw new Error("Catatan wajib diisi jika rating berada di bawah target.");
+    const entry = entryMap.get(item.id)!;
+
+    if (item.kindSnapshot === "SYSTEM" || item.kindSnapshot === "IMPORTED") {
+      const outcome = resolveSystemValue();
+      resolved.set(item.id, outcome.status === "AVAILABLE"
+        ? { status: "AVAILABLE", value: outcome.value, categoryOptionId: null }
+        : { status: "MISSING", value: null, categoryOptionId: null });
+      continue;
+    }
+    if (entry.status !== "AVAILABLE") {
+      resolved.set(item.id, { ...EMPTY_VALUE, status: entry.status });
+      continue;
+    }
+
+    const rule = { name: item.nameSnapshot, kind: item.kindSnapshot, unit: item.unitSnapshot };
+    if (item.kindSnapshot === "CATEGORY") {
+      // Periode baru menyimpan angka mentah; hanya snapshot legacy yang masih menerima option id.
+      if (entry.value !== null && entry.value !== undefined) {
+        validateDailyIndicatorValue(rule, entry.value);
+        resolved.set(item.id, { status: "AVAILABLE", value: entry.value, categoryOptionId: null });
+        continue;
+      }
+      if (!entry.categoryOptionId) throw new Error(`Nilai angka untuk ${item.nameSnapshot} wajib diisi.`);
+      const option = resolveCategoryOption(categoryOptionsFromSnapshot(item.categoryOptionsSnapshot), entry.categoryOptionId);
+      if (!("score" in option) || option.score === null) throw new Error(`Snapshot kategori ${item.nameSnapshot} tidak mendukung data legacy.`);
+      const score = Number(option.score);
+      validateDailyIndicatorValue(rule, score);
+      resolved.set(item.id, { status: "AVAILABLE", value: score, categoryOptionId: option.id });
+      continue;
+    }
+
+    const value = entry.value;
+    if (value === null || value === undefined || !Number.isFinite(value)) throw new Error(`Nilai ${item.nameSnapshot} wajib diisi.`);
+    validateDailyIndicatorValue(rule, value);
+    if (item.kindSnapshot === "RATING" && value < item.targetSnapshot.toNumber() && !note?.trim()) {
+      throw new Error("Catatan wajib diisi jika rating berada di bawah target.");
+    }
+    resolved.set(item.id, { status: "AVAILABLE", value, categoryOptionId: null });
   }
-  return valueMap;
+  return resolved;
 }
+
+const valueSignature = (value: ResolvedDailyValue) =>
+  JSON.stringify([value.status, value.value === null ? null : String(value.value), value.categoryOptionId]);
 
 export async function saveDailySheet(
   tx: Prisma.TransactionClient,
@@ -74,14 +141,21 @@ export async function saveDailySheet(
   if (!correctingApproved && !["PENDING", "DRAFT", "REVISION_REQUIRED"].includes(sheet.status)) throw new Error("Lembar harian tidak dapat diubah pada status saat ini.");
 
   const valueMap = validatedValues(sheet.monthlyKpi.items, input.workStatus, input.values, input.note);
-  const priorValues = new Map(sheet.values.map((value) => [value.monthlyKpiItemId, value.enteredValue?.toNumber() ?? null]));
-  const changed = sheet.workStatus !== input.workStatus || sheet.monthlyKpi.items.some((item) => priorValues.get(item.id) !== (valueMap.get(item.id) ?? null));
+  const priorValues = new Map(sheet.values.map((value) => [value.monthlyKpiItemId, valueSignature({
+    status: value.status,
+    value: value.enteredValue?.toNumber() ?? null,
+    categoryOptionId: value.categoryOptionId,
+  })]));
+  const changed = sheet.workStatus !== input.workStatus ||
+    sheet.monthlyKpi.items.some((item) => priorValues.get(item.id) !== valueSignature(valueMap.get(item.id)!));
   if (correctingApproved && !changed) throw new Error("Tidak ada perubahan yang perlu disimpan.");
 
+  const valuesComplete = input.workStatus !== "WORKED" ||
+    sheet.monthlyKpi.items.every((item) => valueMap.get(item.id)!.status !== "PENDING");
   const nextStatus = correctingApproved
     ? "APPROVED"
     : input.submit
-      ? submitDailySheet({ actorRole: actor.role, subjectRole: subject.role, currentStatus: sheet.status, workStatus: input.workStatus, valuesComplete: input.workStatus !== "WORKED" || valueMap.size === sheet.monthlyKpi.items.length })
+      ? submitDailySheet({ actorRole: actor.role, subjectRole: subject.role, currentStatus: sheet.status, workStatus: input.workStatus, valuesComplete })
       : "DRAFT";
   const approved = nextStatus === "APPROVED";
   const timestamp = now;
@@ -105,12 +179,17 @@ export async function saveDailySheet(
   await tx.dailyValue.deleteMany({ where: { dailySheetId: sheet.id } });
   if (input.workStatus === "WORKED") {
     await tx.dailyValue.createMany({
-      data: sheet.monthlyKpi.items.map((item) => ({
-        dailySheetId: sheet.id,
-        monthlyKpiItemId: item.id,
-        enteredValue: valueMap.get(item.id)!,
-        effectiveValue: approved ? valueMap.get(item.id)! : null,
-      })),
+      data: sheet.monthlyKpi.items.map((item) => {
+        const value = valueMap.get(item.id)!;
+        return {
+          dailySheetId: sheet.id,
+          monthlyKpiItemId: item.id,
+          enteredValue: value.value,
+          status: value.status,
+          categoryOptionId: value.categoryOptionId,
+          effectiveValue: approved && value.status === "AVAILABLE" ? value.value : null,
+        };
+      }),
     });
   }
   await tx.auditEvent.create({
@@ -181,16 +260,25 @@ export async function reviewDailySheet(
   const allowApproved = sheet.status === "APPROVED";
   const effectiveWorkStatus = input.decision === "CORRECT" ? input.workStatus : sheet.workStatus;
   if (!effectiveWorkStatus) throw new Error("Status kerja harian belum tersedia.");
-  const currentValues = new Map(sheet.values.map((value) => [value.monthlyKpiItemId, value.enteredValue?.toNumber() ?? null]));
+  const currentValues = new Map(sheet.values.map((value) => [value.monthlyKpiItemId, value]));
+  const asResolved = (value: (typeof sheet.values)[number]): ResolvedDailyValue => ({
+    status: value.status,
+    value: value.enteredValue?.toNumber() ?? null,
+    categoryOptionId: value.categoryOptionId,
+  });
   const reviewedValues = input.decision === "CORRECT"
     ? validatedValues(sheet.monthlyKpi.items, effectiveWorkStatus, input.values ?? [], input.reason)
     : new Map(sheet.monthlyKpi.items.flatMap((item) => {
-        const value = currentValues.get(item.id);
-        return value === null || value === undefined ? [] : [[item.id, value] as const];
+        const current = currentValues.get(item.id);
+        return current ? [[item.id, asResolved(current)] as const] : [];
       }));
+  const isCorrected = (itemId: string) => {
+    const current = currentValues.get(itemId);
+    const next = reviewedValues.get(itemId);
+    return !current || !next || valueSignature(asResolved(current)) !== valueSignature(next);
+  };
   const changed = input.decision === "CORRECT" && (
-    effectiveWorkStatus !== sheet.workStatus ||
-    sheet.monthlyKpi.items.some((item) => currentValues.get(item.id) !== (reviewedValues.get(item.id) ?? null))
+    effectiveWorkStatus !== sheet.workStatus || sheet.monthlyKpi.items.some((item) => isCorrected(item.id))
   );
   const nextStatus = decideDailyReview({ currentStatus: sheet.status, decision: input.decision, changed, reason: input.reason, allowApproved });
   const approved = nextStatus === "APPROVED";
@@ -211,16 +299,35 @@ export async function reviewDailySheet(
 
   if (approved && effectiveWorkStatus === "WORKED") {
     for (const item of sheet.monthlyKpi.items) {
-      const enteredValue = currentValues.get(item.id) ?? null;
-      const effectiveValue = reviewedValues.get(item.id)!;
+      const current = currentValues.get(item.id);
+      const next = reviewedValues.get(item.id) ?? EMPTY_VALUE;
+      const corrected = input.decision === "CORRECT" && isCorrected(item.id);
       await tx.dailyValue.upsert({
         where: { dailySheetId_monthlyKpiItemId: { dailySheetId: sheet.id, monthlyKpiItemId: item.id } },
-        update: { managerValue: input.decision === "CORRECT" && enteredValue !== effectiveValue ? effectiveValue : null, effectiveValue },
-        create: { dailySheetId: sheet.id, monthlyKpiItemId: item.id, enteredValue, managerValue: effectiveValue, effectiveValue },
+        update: {
+          managerValue: corrected ? next.value : null,
+          managerStatus: corrected ? next.status : null,
+          managerCategoryOptionId: corrected ? next.categoryOptionId : null,
+          effectiveValue: next.status === "AVAILABLE" ? next.value : null,
+        },
+        create: {
+          dailySheetId: sheet.id,
+          monthlyKpiItemId: item.id,
+          enteredValue: current?.enteredValue ?? null,
+          status: current?.status ?? next.status,
+          categoryOptionId: current?.categoryOptionId ?? null,
+          managerValue: corrected ? next.value : null,
+          managerStatus: corrected ? next.status : null,
+          managerCategoryOptionId: corrected ? next.categoryOptionId : null,
+          effectiveValue: next.status === "AVAILABLE" ? next.value : null,
+        },
       });
     }
   } else {
-    await tx.dailyValue.updateMany({ where: { dailySheetId: sheet.id }, data: { managerValue: null, effectiveValue: null } });
+    await tx.dailyValue.updateMany({
+      where: { dailySheetId: sheet.id },
+      data: { managerValue: null, managerStatus: null, managerCategoryOptionId: null, effectiveValue: null },
+    });
   }
   await tx.auditEvent.create({
     data: {

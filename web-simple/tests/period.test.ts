@@ -4,12 +4,17 @@ import {
   assessmentDates,
   ratingBandsFromSnapshot,
   ratingForScore,
+  validatePeriodTemplateSelections,
   validateRatingBands,
   validateTemplate,
+  type PeriodTemplateSelectionInput,
+  type TemplateIndicator,
 } from "../src/modules/kpi/period.ts";
 
-const reasonOf = (result: ReturnType<typeof validateTemplate>) => result.ok ? "" : result.reason;
-const ratingReasonOf = (result: ReturnType<typeof validateRatingBands>) => result.ok ? "" : result.reason;
+type TemplateValidation = { ok: true } | { ok: false; reason: string };
+type RatingBandsValidation = { ok: true } | { ok: false; reason: string };
+const reasonOf = (result: TemplateValidation) => result.ok ? "" : result.reason;
+const ratingReasonOf = (result: RatingBandsValidation) => result.ok ? "" : result.reason;
 
 test("periode membuat satu lembar untuk setiap tanggal kalender", () => {
   const dates = assessmentDates({ periodStart: "2026-09-01", periodEnd: "2026-09-30", joinedAt: "2025-01-01", endedAt: null });
@@ -78,4 +83,80 @@ test("skala predikat menolak band hilang, urutan salah, dan batas duplikat", () 
   assert.match(ratingReasonOf(validateRatingBands(bands.slice(0, 4))), /lima/i);
   assert.match(ratingReasonOf(validateRatingBands(bands.map((band) => band.code === "STAR" ? { ...band, code: "VERY_GOOD" } : band))), /kode/i);
   assert.match(ratingReasonOf(validateRatingBands(bands.map((band) => band.code === "STAR" ? { ...band, minScore: 90 } : band))), /meningkat|unik/i);
+});
+
+const indicatorOf = (overrides: Partial<TemplateIndicator>): TemplateIndicator => ({
+  code: "IND",
+  kind: "NUMERIC",
+  aggregation: "SUM",
+  direction: "HIGHER",
+  target: 10,
+  failureLimit: null,
+  weight: 100,
+  ...overrides,
+});
+
+test("checkbox wajib memakai target 100 dengan AVERAGE dan HIGHER", () => {
+  assert.deepEqual(validateTemplate([
+    indicatorOf({ kind: "CHECKBOX", aggregation: "AVERAGE", target: 100 }),
+  ]), { ok: true });
+
+  const reason = reasonOf(validateTemplate([
+    indicatorOf({ kind: "CHECKBOX", aggregation: "AVERAGE", target: 99 }),
+  ]));
+  assert.match(reason, /centang/i);
+  assert.match(reason, /100/);
+});
+
+test("Angka + predikat tidak memaksa agregasi atau arah", () => {
+  assert.deepEqual(validateTemplate([
+    indicatorOf({ kind: "CATEGORY", aggregation: "AVERAGE", target: 90, activeCategoryOptions: 5 }),
+  ]), { ok: true });
+
+  assert.match(reasonOf(validateTemplate([
+    indicatorOf({ kind: "CATEGORY", aggregation: "AVERAGE", target: 90 }),
+  ])), /kategori aktif/i);
+
+  assert.deepEqual(validateTemplate([
+    indicatorOf({ kind: "CATEGORY", aggregation: "SUM", target: 90, activeCategoryOptions: 5 }),
+  ]), { ok: true });
+
+  assert.match(reasonOf(validateTemplate([
+    indicatorOf({
+      kind: "CATEGORY",
+      aggregation: "AVERAGE",
+      direction: "LOWER",
+      target: 90,
+      failureLimit: 50,
+      activeCategoryOptions: 5,
+    }),
+  ])), /failure limit/i);
+});
+
+test("rating legacy tetap mewajibkan agregasi AVERAGE", () => {
+  assert.match(reasonOf(validateTemplate([
+    indicatorOf({ kind: "RATING", aggregation: "LATEST", target: 4 }),
+  ])), /AVERAGE/);
+});
+
+test("numerik tetap menerima agregasi SUM LATEST COUNT", () => {
+  for (const aggregation of ["SUM", "LATEST", "COUNT"] as const) {
+    assert.deepEqual(validateTemplate([indicatorOf({ aggregation })]), { ok: true });
+  }
+});
+
+test("periode dapat memilih satu versi template untuk setiap jabatan", () => {
+  const selections: PeriodTemplateSelectionInput[] = [
+    { positionId: "pelayan", templateVersionId: "pelayan-v2" },
+    { positionId: "teknisi", templateVersionId: "teknisi-v3" },
+  ];
+  assert.deepEqual(validatePeriodTemplateSelections(selections, ["pelayan", "teknisi"]), { ok: true });
+  const incomplete = validatePeriodTemplateSelections(selections.slice(0, 1), ["pelayan", "teknisi"]);
+  assert.equal(incomplete.ok, false);
+  if (incomplete.ok) throw new Error("Seleksi periode tidak boleh lengkap saat satu jabatan belum dipilih.");
+  assert.match(incomplete.reason, /seluruh jabatan/i);
+  const duplicate = validatePeriodTemplateSelections([selections[0], selections[0]], ["pelayan"]);
+  assert.equal(duplicate.ok, false);
+  if (duplicate.ok) throw new Error("Seleksi periode tidak boleh memuat jabatan duplikat.");
+  assert.match(duplicate.reason, /satu jabatan/i);
 });

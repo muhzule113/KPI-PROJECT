@@ -4,10 +4,10 @@ import { useState } from "react";
 import { reviewDailySheetAction } from "@/app/(workspace)/app/review/actions";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { IndicatorValueField } from "@/components/indicator-value-field";
+import { formatDailyValue, type DailyValueView } from "@/modules/kpi/daily-value-view";
 
 type WorkStatus = "WORKED" | "OFF" | "PERMIT" | "SICK";
 type Decision = "APPROVE" | "CORRECT" | "RETURN";
-type Item = { id: string; name: string; description: string | null; kind: "NUMERIC" | "RATING"; unit: string; target: string; value: string | null };
 
 const decisions: Array<[Decision, string, string]> = [
   ["APPROVE", "Setujui", "Tanpa perubahan"],
@@ -21,7 +21,7 @@ const workStatuses: Array<[WorkStatus, string, string]> = [
   ["SICK", "Sakit", "Tanpa nilai indikator"],
 ];
 
-export function ReviewForm({ sheet }: { sheet: { id: string; rowVersion: number; status: string; workStatus: WorkStatus; note: string | null; items: Item[] } }) {
+export function ReviewForm({ sheet }: { sheet: { id: string; rowVersion: number; status: string; workStatus: WorkStatus; note: string | null; items: DailyValueView[] } }) {
   const approved = sheet.status === "APPROVED";
   const [decision, setDecision] = useState<Decision>(approved ? "CORRECT" : "APPROVE");
   const [workStatus, setWorkStatus] = useState<WorkStatus>(sheet.workStatus);
@@ -54,8 +54,8 @@ export function ReviewForm({ sheet }: { sheet: { id: string; rowVersion: number;
         <div className="indicator-target"><span>Target</span><strong>{item.target} {item.unit}</strong></div>
       </div>
       <div className="indicator-entry">
-        <div className="indicator-original"><span>Nilai awal</span><strong>{item.value === null ? "Belum diisi" : `${item.value} ${item.unit}`}</strong></div>
-        {correcting ? <IndicatorValueField itemId={item.id} kind={item.kind} unit={item.unit} defaultValue={item.value} label={item.kind === "RATING" ? "Rating koreksi" : "Nilai koreksi"} /> : null}
+        <div className="indicator-original"><span>Nilai awal</span><strong>{formatDailyValue(item)}</strong></div>
+        {correcting ? <IndicatorValueField item={item} label={item.kind === "RATING" ? "Rating koreksi" : item.kind === "CATEGORY" ? "Nilai + predikat koreksi" : item.kind === "CHECKBOX" ? "Keterpenuhan" : "Nilai koreksi"} /> : null}
       </div>
     </div>)}</div> : null}
     {decision !== "APPROVE" ? <div className="field motion-reveal"><label htmlFor="reason">{decision === "RETURN" ? "Alasan pengembalian" : "Alasan koreksi"}</label><textarea className="control" id="reason" name="reason" maxLength={1000} required /></div> : null}

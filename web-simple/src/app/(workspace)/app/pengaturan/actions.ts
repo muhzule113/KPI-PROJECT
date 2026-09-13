@@ -19,7 +19,7 @@ import {
   startRatingDraft,
   startTemplateDraft,
 } from "@/modules/admin/template-operations";
-import { createPeriod, openPeriod } from "@/modules/kpi/period-operations";
+import { createPeriod, openPeriod, savePeriodTemplateSelections } from "@/modules/kpi/period-operations";
 
 export type SettingsState = { error?: string; success?: string };
 const text = z.string().trim().min(1).max(120);
@@ -155,16 +155,32 @@ export async function saveIndicatorAction(_: SettingsState, formData: FormData):
   const user = await requireRole("ADMIN");
   const parsed = z.object({
     id: z.string().optional(), versionId: z.string().min(1), code: text, name: text,
-    description: z.string().trim().max(500).optional(), kind: z.enum(["NUMERIC", "RATING"]), unit: text,
-    aggregation: z.enum(["SUM", "AVERAGE"]), direction: z.enum(["HIGHER", "LOWER", "ZERO_TOLERANCE"]),
+    description: z.string().trim().max(500).optional(), kind: z.enum(["NUMERIC", "RATING", "CHECKBOX", "CATEGORY", "SYSTEM", "IMPORTED"]), unit: text,
+    aggregation: z.enum(["SUM", "AVERAGE", "LATEST", "COUNT"]), direction: z.enum(["HIGHER", "LOWER", "ZERO_TOLERANCE"]),
     target: z.coerce.number().finite(), failureLimit: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().finite().optional()),
     weight: z.coerce.number().positive().max(100), sortOrder: z.coerce.number().int().min(1).max(999),
   }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Konfigurasi indikator tidak valid." };
-  try { await prisma.$transaction((tx) => saveIndicator(tx, user, parsed.data)); }
+  try {
+    const categoryBands = parsed.data.kind === "CATEGORY" ? categoryBandsFrom(formData) : undefined;
+    await prisma.$transaction((tx) => saveIndicator(tx, user, { ...parsed.data, categoryBands }));
+  }
   catch (error) { return { error: errorMessage(error) }; }
   refreshSettings();
   return { success: "Indikator draft tersimpan." };
+}
+
+function categoryBandsFrom(formData: FormData) {
+  const keys = formData.getAll("categoryKey").map(String).map(Number).sort((left, right) => left - right);
+  if (keys.length !== 5 || keys.some((key, index) => key !== index + 1)) throw new Error("Lima tingkat predikat wajib diisi.");
+  return keys.map((sortOrder) => {
+    const label = String(formData.get(`categoryLabel:${sortOrder}`) ?? "").trim();
+    const raw = formData.get(`categoryThreshold:${sortOrder}`);
+    const text = raw === null ? "" : String(raw).trim();
+    const threshold = sortOrder === 5 ? null : text === "" ? Number.NaN : Number(text);
+    if (!label || (sortOrder < 5 && !Number.isFinite(threshold))) throw new Error("Data predikat indikator tidak valid.");
+    return { label, threshold, sortOrder, isActive: true };
+  });
 }
 
 export async function removeIndicatorAction(_: SettingsState, formData: FormData): Promise<SettingsState> {
@@ -269,6 +285,19 @@ export async function createPeriodAction(_: SettingsState, formData: FormData): 
   catch (error) { return { error: errorMessage(error) }; }
   refreshSettings();
   return { success: "Periode DRAFT berhasil dibuat." };
+}
+
+export async function savePeriodTemplateSelectionsAction(_: SettingsState, formData: FormData): Promise<SettingsState> {
+  const user = await requireRole("ADMIN");
+  const periodId = z.string().min(1).safeParse(formData.get("periodId"));
+  if (!periodId.success) return { error: "Periode tidak valid." };
+  const selections = [...formData.entries()]
+    .filter(([name]) => name.startsWith("templateVersion:"))
+    .map(([name, value]) => ({ positionId: name.slice("templateVersion:".length), templateVersionId: String(value) }));
+  try { await prisma.$transaction((tx) => savePeriodTemplateSelections(tx, user, periodId.data, selections)); }
+  catch (error) { return { error: errorMessage(error) }; }
+  refreshSettings();
+  return { success: "Versi template periode tersimpan." };
 }
 
 export async function openPeriodAction(_: SettingsState, formData: FormData): Promise<SettingsState> {

@@ -51,11 +51,24 @@ enum WorkStatus {
 enum ValueKind {
   NUMERIC
   RATING
+  CHECKBOX
+  CATEGORY
+  SYSTEM
+  IMPORTED
 }
 
 enum AggregationType {
   SUM
   AVERAGE
+  LATEST
+  COUNT
+}
+
+enum ValueStatus {
+  PENDING
+  AVAILABLE
+  NOT_APPLICABLE
+  MISSING
 }
 
 enum KpiDirection {
@@ -88,17 +101,17 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sessions          Session[]
-  accounts          Account[]
-  employee          Employee?
-  createdPeriods    KpiPeriod[]       @relation("PeriodCreator")
-  enteredSheets     DailySheet[]      @relation("SheetEnteredBy")
-  reviewedSheets    DailySheet[]      @relation("SheetReviewedBy")
-  uploadedEvidence  Evidence[]        @relation("EvidenceUploader")
-  finalizedKpis     MonthlyKpi[]      @relation("KpiFinalizedBy")
-  reopenedKpis      MonthlyKpi[]      @relation("KpiReopenedBy")
-  notifications     Notification[]
-  auditEvents       AuditEvent[]      @relation("AuditActor")
+  sessions         Session[]
+  accounts         Account[]
+  employee         Employee?
+  createdPeriods   KpiPeriod[]    @relation("PeriodCreator")
+  enteredSheets    DailySheet[]   @relation("SheetEnteredBy")
+  reviewedSheets   DailySheet[]   @relation("SheetReviewedBy")
+  uploadedEvidence Evidence[]     @relation("EvidenceUploader")
+  finalizedKpis    MonthlyKpi[]   @relation("KpiFinalizedBy")
+  reopenedKpis     MonthlyKpi[]   @relation("KpiReopenedBy")
+  notifications    Notification[]
+  auditEvents      AuditEvent[]   @relation("AuditActor")
 
   @@map("users")
 }
@@ -177,6 +190,7 @@ model Position {
   employees   Employee[]
   template    KpiTemplate?
   monthlyKpis MonthlyKpi[] @relation("KpiPositionSnapshot")
+  periodTemplateSelections KpiPeriodTemplateSelection[]
 
   @@map("positions")
 }
@@ -216,7 +230,7 @@ model Employee {
 
 model KpiTemplate {
   id         String   @id @default(cuid())
-  positionId String  @unique
+  positionId String   @unique
   name       String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -236,8 +250,9 @@ model KpiTemplateVersion {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  template  KpiTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template   KpiTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
   indicators KpiIndicator[]
+  periodSelections KpiPeriodTemplateSelection[]
 
   @@unique([templateId, versionNumber])
   @@index([templateId, status])
@@ -261,11 +276,29 @@ model KpiIndicator {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  templateVersion KpiTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+  templateVersion KpiTemplateVersion  @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+  categoryOptions KpiCategoryOption[]
 
   @@unique([templateVersionId, code])
   @@index([templateVersionId, sortOrder])
   @@map("kpi_indicators")
+}
+
+model KpiCategoryOption {
+  id          String   @id @default(cuid())
+  indicatorId String
+  label       String
+  threshold   Decimal? @db.Decimal(18, 4)
+  sortOrder   Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  indicator KpiIndicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([indicatorId, sortOrder])
+  @@index([indicatorId, isActive])
+  @@map("kpi_category_options")
 }
 
 model KpiRatingScheme {
@@ -315,10 +348,28 @@ model KpiPeriod {
 
   createdBy   User         @relation("PeriodCreator", fields: [createdById], references: [id], onDelete: Restrict)
   monthlyKpis MonthlyKpi[]
+  templateSelections KpiPeriodTemplateSelection[]
 
   @@unique([year, month])
   @@index([status])
   @@map("kpi_periods")
+}
+
+model KpiPeriodTemplateSelection {
+  id                String             @id @default(cuid())
+  periodId          String
+  positionId        String
+  templateVersionId String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  period          KpiPeriod         @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  position        Position           @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  templateVersion KpiTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([periodId, positionId])
+  @@index([templateVersionId])
+  @@map("kpi_period_template_selections")
 }
 
 model MonthlyKpi {
@@ -351,14 +402,14 @@ model MonthlyKpi {
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
 
-  period      KpiPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
-  employee    Employee  @relation("KpiSubject", fields: [employeeId], references: [id], onDelete: Restrict)
-  branch      Branch    @relation("KpiBranchSnapshot", fields: [branchIdSnapshot], references: [id], onDelete: Restrict)
-  position    Position  @relation("KpiPositionSnapshot", fields: [positionIdSnapshot], references: [id], onDelete: Restrict)
-  supervisor  Employee? @relation("KpiSupervisor", fields: [supervisorIdSnapshot], references: [id], onDelete: SetNull)
-  manager     Employee  @relation("KpiManager", fields: [managerIdSnapshot], references: [id], onDelete: Restrict)
-  finalizedBy User?     @relation("KpiFinalizedBy", fields: [finalizedById], references: [id], onDelete: SetNull)
-  reopenedBy  User?     @relation("KpiReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+  period      KpiPeriod        @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  employee    Employee         @relation("KpiSubject", fields: [employeeId], references: [id], onDelete: Restrict)
+  branch      Branch           @relation("KpiBranchSnapshot", fields: [branchIdSnapshot], references: [id], onDelete: Restrict)
+  position    Position         @relation("KpiPositionSnapshot", fields: [positionIdSnapshot], references: [id], onDelete: Restrict)
+  supervisor  Employee?        @relation("KpiSupervisor", fields: [supervisorIdSnapshot], references: [id], onDelete: SetNull)
+  manager     Employee         @relation("KpiManager", fields: [managerIdSnapshot], references: [id], onDelete: Restrict)
+  finalizedBy User?            @relation("KpiFinalizedBy", fields: [finalizedById], references: [id], onDelete: SetNull)
+  reopenedBy  User?            @relation("KpiReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
   items       MonthlyKpiItem[]
   dailySheets DailySheet[]
 
@@ -369,28 +420,29 @@ model MonthlyKpi {
 }
 
 model MonthlyKpiItem {
-  id                     String            @id @default(cuid())
-  monthlyKpiId           String
-  codeSnapshot           String
-  nameSnapshot           String
-  descriptionSnapshot    String?
-  kindSnapshot           ValueKind
-  unitSnapshot           String
-  aggregationSnapshot    AggregationType
-  directionSnapshot      KpiDirection
-  targetSnapshot         Decimal           @db.Decimal(18, 4)
-  failureLimitSnapshot   Decimal?          @db.Decimal(18, 4)
-  weightSnapshot         Decimal           @db.Decimal(5, 2)
-  sortOrderSnapshot      Int
-  actual                 Decimal?          @db.Decimal(18, 2)
-  achievementPercentage  Decimal?          @db.Decimal(8, 2)
-  weightedScore          Decimal?          @db.Decimal(8, 2)
-  calculationStatus      CalculationStatus @default(PENDING)
-  calculationNote        String?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  id                      String            @id @default(cuid())
+  monthlyKpiId            String
+  codeSnapshot            String
+  nameSnapshot            String
+  descriptionSnapshot     String?
+  kindSnapshot            ValueKind
+  unitSnapshot            String
+  aggregationSnapshot     AggregationType
+  directionSnapshot       KpiDirection
+  targetSnapshot          Decimal           @db.Decimal(18, 4)
+  failureLimitSnapshot    Decimal?          @db.Decimal(18, 4)
+  weightSnapshot          Decimal           @db.Decimal(5, 2)
+  sortOrderSnapshot       Int
+  actual                  Decimal?          @db.Decimal(18, 2)
+  achievementPercentage   Decimal?          @db.Decimal(8, 2)
+  weightedScore           Decimal?          @db.Decimal(8, 2)
+  calculationStatus       CalculationStatus @default(PENDING)
+  calculationNote         String?
+  categoryOptionsSnapshot Json?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
 
-  monthlyKpi  MonthlyKpi  @relation(fields: [monthlyKpiId], references: [id], onDelete: Cascade)
+  monthlyKpi  MonthlyKpi   @relation(fields: [monthlyKpiId], references: [id], onDelete: Cascade)
   dailyValues DailyValue[]
 
   @@unique([monthlyKpiId, codeSnapshot])
@@ -416,11 +468,11 @@ model DailySheet {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  monthlyKpi       MonthlyKpi  @relation(fields: [monthlyKpiId], references: [id], onDelete: Cascade)
-  enteredBy        User?       @relation("SheetEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
-  managerReviewedBy User?      @relation("SheetReviewedBy", fields: [managerReviewedById], references: [id], onDelete: SetNull)
-  values           DailyValue[]
-  evidence         Evidence[]
+  monthlyKpi        MonthlyKpi   @relation(fields: [monthlyKpiId], references: [id], onDelete: Cascade)
+  enteredBy         User?        @relation("SheetEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  managerReviewedBy User?        @relation("SheetReviewedBy", fields: [managerReviewedById], references: [id], onDelete: SetNull)
+  values            DailyValue[]
+  evidence          Evidence[]
 
   @@unique([monthlyKpiId, entryDate])
   @@index([entryDate, status])
@@ -428,14 +480,18 @@ model DailySheet {
 }
 
 model DailyValue {
-  id               String   @id @default(cuid())
-  dailySheetId     String
-  monthlyKpiItemId String
-  enteredValue     Decimal? @db.Decimal(18, 4)
-  managerValue     Decimal? @db.Decimal(18, 4)
-  effectiveValue   Decimal? @db.Decimal(18, 4)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                      String       @id @default(cuid())
+  dailySheetId            String
+  monthlyKpiItemId        String
+  enteredValue            Decimal?     @db.Decimal(18, 4)
+  managerValue            Decimal?     @db.Decimal(18, 4)
+  effectiveValue          Decimal?     @db.Decimal(18, 4)
+  status                  ValueStatus  @default(AVAILABLE)
+  managerStatus           ValueStatus?
+  categoryOptionId        String?
+  managerCategoryOptionId String?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
 
   dailySheet DailySheet     @relation(fields: [dailySheetId], references: [id], onDelete: Cascade)
   item       MonthlyKpiItem @relation(fields: [monthlyKpiItemId], references: [id], onDelete: Cascade)

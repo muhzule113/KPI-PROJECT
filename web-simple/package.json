@@ -27,6 +27,7 @@
     "verify:seed": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-seed-idempotency.ts",
     "verify:august": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-august-2026-fixture.ts",
     "verify:kpi": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-master-kpi-sync.ts",
+    "verify:category": "node --import ./scripts/node-userinfo-workaround.mjs --import tsx scripts/verify-category-assessment.ts",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {

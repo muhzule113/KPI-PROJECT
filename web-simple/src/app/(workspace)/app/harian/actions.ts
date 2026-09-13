@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/modules/access/current-user";
 import { saveDailySheet } from "@/modules/kpi/daily-operations";
 import { removeEvidence, uploadEvidence } from "@/modules/files/evidence-operations";
+import { dailyValuesFromForm } from "@/modules/kpi/daily-value-form";
 
 export type FormState = { error?: string; success?: string };
 
@@ -21,23 +22,12 @@ const sheetSchema = z.object({
 
 const evidenceSchema = z.object({ sheetId: z.string().min(1) });
 
-function valuesFrom(formData: FormData) {
-  const ids = formData.getAll("itemId").map(String);
-  const values = formData.getAll("value");
-  if (ids.length !== values.length) throw new Error("Daftar nilai indikator tidak lengkap.");
-  return ids.map((itemId, index) => {
-    const value = Number(values[index]);
-    if (String(values[index]).trim() === "" || !Number.isFinite(value)) throw new Error("Seluruh nilai indikator wajib berupa angka.");
-    return { itemId, value };
-  });
-}
-
 export async function saveDailySheetAction(_: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
   const parsed = sheetSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Periksa status kerja, catatan, dan versi lembar." };
   try {
-    const values = parsed.data.workStatus === "WORKED" ? valuesFrom(formData) : [];
+    const values = parsed.data.workStatus === "WORKED" ? dailyValuesFromForm(formData) : [];
     await prisma.$transaction((tx) => saveDailySheet(tx, user, {
       ...parsed.data,
       values,

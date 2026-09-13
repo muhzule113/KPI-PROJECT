@@ -462,19 +462,11 @@ if actual != 0 : achievement = 0
 
 > KSR-02 memakai kebijakan ketat: target harus Rp0 dan setiap selisih menghasilkan achievement 0%.
 
-#### Persentase Observasi
+#### Angka + Predikat (CATEGORY)
 
-Dipakai untuk indikator observasi seperti TEK-05, TEK-06, CS-02, ADM-06, KSR-05, dan GUD-06. Penilai memasukkan persentase langsung 0–100; nilai bulanan adalah rata-rata nilai harian yang disetujui. Predikat POOR sampai STAR hanya mengelompokkan skor akhir dan tidak dipakai sebagai input indikator.
+Dipakai untuk indikator observasi seperti TEK-05, TEK-06, ADM-06, KSR-05, dan GUD-06. Supervisor/Manager memasukkan angka sesuai satuan indikator (misalnya 0–100 untuk `%`). Sistem menampilkan lima label tetap—**Sangat Baik**, **Baik**, **Cukup**, **Kurang**, dan **Sangat Kurang**—berdasarkan empat threshold yang dapat diatur Super Admin per indikator. Untuk arah `HIGHER`, nilai di bawah threshold terendah adalah Sangat Kurang dan nilai di atas threshold tertinggi adalah Sangat Baik; arah `LOWER` dan `ZERO_TOLERANCE` membalik pemetaan tersebut dengan batas luar terbuka.
 
-Contoh rubric SOP Teknisi:
-
-| Criterion | Poin | Wajib |
-|---|---:|:---:|
-| Diagnosis sesuai prosedur | 1 | Ya |
-| Penggunaan alat sesuai SOP | 1 | Ya |
-| Pemeriksaan akhir | 1 | Ya |
-| Dokumentasi lengkap | 1 | Ya |
-| Keselamatan kerja | 1 | Ya |
+Label dan threshold disalin ke snapshot saat periode dibuka sehingga perubahan konfigurasi hanya berlaku untuk periode berikutnya. Predikat harian bersifat tampilan saja: nilai mentah tetap diproses menggunakan rumus `target`, `direction`, `aggregation`, dan `weight` yang sama seperti indikator numerik. Pada agregasi `SUM` bulanan, predikat rentang tidak diterapkan pada total agar tidak menyesatkan.
 
 #### Siklus Harian dan Agregasi Bulanan
 
@@ -504,6 +496,8 @@ Kalkulasi internal memakai presisi 6 desimal. Item tidak dibulatkan sebelum diju
 | < 70 | Perlu Perbaikan |
 
 > Ambang ini adalah **rekomendasi awal** dan harus dikonfirmasi pemilik bisnis.
+
+Predikat pada tabel ini adalah predikat akhir global dan terpisah dari predikat rentang harian pada indikator `CATEGORY`.
 
 ### 9.4 Aturan Edge Case
 
@@ -562,7 +556,7 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 
 **Fitur:**
 - CRUD definisi indikator (kode, nama, unit, tipe metrik, arah, sumber data).
-- Template KPI per jabatan dengan versi.
+- Template KPI per jabatan dengan versi; setiap periode DRAFT dapat memilih versi yang sudah dipublikasikan untuk tiap jabatan.
 - Per template version: indikator, bobot, target, formula, rubric, evidence requirement.
 - Validasi: total bobot harus tepat 100% sebelum template bisa diaktifkan.
 - Template aktif bersifat immutable — edit membuat versi baru.
@@ -582,7 +576,7 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 
 **Fitur:**
 - Buat periode dengan nama, rentang tanggal, deadline input/review/approval.
-- Pilih template aktif yang berlaku.
+- Pilih versi template per jabatan (default versi aktif terbaru) sebelum periode dibuka; pilihan menjadi snapshot yang terkunci.
 - Set cap skor, scheme rating, dan scope (seluruh toko / per jabatan).
 - Validasi readiness sebelum periode dibuka: template valid, semua karyawan punya placement, semua deadline logis.
 - Generate KPI karyawan: sistem generate snapshot per karyawan berdasarkan jabatan.
@@ -1352,10 +1346,10 @@ Score → Status → Target → Actual → Source → Evidence → Verification 
 ### AC-01 — Template & Validasi Bobot
 - [ ] Template tidak bisa dipublish jika total bobot bukan tepat 100%.
 - [ ] Template aktif bersifat immutable — edit membuat versi baru.
-- [ ] Periode hanya bisa memakai template yang sudah published dan berlaku.
+- [ ] Periode DRAFT dapat memilih satu versi template yang sudah published/retired untuk setiap jabatan yang dinilai; versi DRAFT tidak dapat dipilih.
 
 ### AC-02 — Snapshot
-- [ ] Perubahan template setelah periode aktif tidak mengubah KPI yang sudah di-generate.
+- [ ] Perubahan template atau versi aktif setelah periode dibuka tidak mengubah KPI yang sudah di-generate.
 - [ ] Recalculation menghasilkan skor yang sama jika data sama.
 
 ### AC-03 — Pekerjaan dan KPI Karyawan

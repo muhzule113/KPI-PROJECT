@@ -6,6 +6,7 @@ import { hashPassword } from "better-auth/crypto";
 import { PrismaClient, type UserRole } from "../src/generated/prisma/client.ts";
 import type { AccessProfile } from "../src/modules/access/policy.ts";
 import {
+  indicatorCreateInput,
   MASTER_KPI_POSITION_NAMES,
   MASTER_KPI_TEMPLATES,
   type MasterKpiIndicator,
@@ -77,7 +78,7 @@ async function syncTemplate(positionId: string, name: string, indicators: readon
       versionNumber: 1,
       status: "ACTIVE",
       activatedAt: new Date(),
-      indicators: { create: [...indicators] },
+      indicators: { create: indicators.map((indicator) => indicatorCreateInput(indicator)) },
     },
   });
 }

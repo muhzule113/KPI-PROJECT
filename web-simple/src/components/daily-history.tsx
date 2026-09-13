@@ -3,18 +3,24 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { formatDate, formatNumber } from "@/lib/utils";
+import type { ValueKind, ValueStatus } from "@/generated/prisma/client";
+import { dailyValueView, formatDailyValue } from "@/modules/kpi/daily-value-view";
+import { resolveCategoryBand } from "@/modules/kpi/category-options";
 
 type DecimalValue = { toNumber(): number };
 type WorkStatus = "WORKED" | "OFF" | "PERMIT" | "SICK";
 
 type HistoryItem = {
   id: string;
+  codeSnapshot: string;
   nameSnapshot: string;
   descriptionSnapshot: string | null;
+  kindSnapshot: ValueKind;
   unitSnapshot: string;
+  directionSnapshot: "HIGHER" | "LOWER" | "ZERO_TOLERANCE";
   targetSnapshot: DecimalValue;
+  categoryOptionsSnapshot: unknown;
 };
-
 type HistorySheet = {
   id: string;
   entryDate: Date;
@@ -28,9 +34,13 @@ type HistorySheet = {
   managerReviewedAt: Date | null;
   values: Array<{
     monthlyKpiItemId: string;
+    status: ValueStatus;
+    managerStatus: ValueStatus | null;
     enteredValue: DecimalValue | null;
     managerValue: DecimalValue | null;
     effectiveValue: DecimalValue | null;
+    categoryOptionId: string | null;
+    managerCategoryOptionId: string | null;
   }>;
   evidence: Array<{ id: string; fileName: string; fileSize: bigint }>;
 };
@@ -60,11 +70,11 @@ export function DailyHistory({
       <div className="table-wrap"><table className="data-table"><thead><tr><th>Tanggal</th><th>Status kerja</th><th>Lembar</th><th>Catatan Manager</th><th></th></tr></thead><tbody>{sheets.map((sheet) => {
         const canReview = reviewEnabled && !monthlyFinalized && ["SUBMITTED", "APPROVED"].includes(sheet.status);
         return <tr key={sheet.id}>
-          <td>{formatDate(sheet.entryDate)}</td>
-          <td><StatusBadge status={sheet.effectiveWorkStatus ?? sheet.workStatus} /></td>
-          <td><StatusBadge status={sheet.status} /></td>
-          <td>{sheet.managerReason || "Tidak ada catatan"}</td>
-          <td><div className="form-actions">
+          <td data-label="Tanggal">{formatDate(sheet.entryDate)}</td>
+          <td data-label="Status kerja"><StatusBadge status={sheet.effectiveWorkStatus ?? sheet.workStatus} /></td>
+          <td data-label="Lembar"><StatusBadge status={sheet.status} /></td>
+          <td data-label="Catatan Manager">{sheet.managerReason || "Tidak ada catatan"}</td>
+          <td data-label="Aksi"><div className="form-actions">
             <Button asChild size="small" variant="ghost"><Link href={`${baseHref}?sheet=${encodeURIComponent(sheet.id)}`}>Rincian</Link></Button>
             {canReview ? <Button asChild size="small" variant="secondary"><Link href={`/app/review?sheet=${sheet.id}`}>{sheet.status === "APPROVED" ? "Koreksi" : "Review"}</Link></Button> : null}
           </div></td>
@@ -81,21 +91,30 @@ function DailyHistoryDetail({ sheet, items, visible }: { sheet: HistorySheet; it
   if (!visible) return <div className="dialog-body"><div className="notice">Rincian nilai dan evidence tersedia setelah Supervisor mengirim lembar ini untuk review.</div></div>;
 
   const effectiveWorkStatus = sheet.effectiveWorkStatus ?? sheet.workStatus;
-  const showIndicators = sheet.workStatus === "WORKED" || effectiveWorkStatus === "WORKED";
+  const showIndicators = effectiveWorkStatus === "WORKED";
   const approved = sheet.status === "APPROVED";
+  const views = dailyValueView(items, sheet.values);
 
   return <div className="dialog-body form-stack">
     <dl className="definition-list">
       <div><dt>Status lembar</dt><dd><StatusBadge status={sheet.status} /></dd></div>
       <div><dt>Status diajukan</dt><dd><StatusBadge status={sheet.workStatus} /></dd></div>
-      {sheet.managerWorkStatus ? <div><dt>Status efektif</dt><dd><StatusBadge status={effectiveWorkStatus} /></dd></div> : null}
+      <div><dt>Status efektif</dt><dd>{sheet.effectiveWorkStatus ? <StatusBadge status={effectiveWorkStatus} /> : "Belum ditetapkan"}</dd></div>
       <div><dt>Dikirim</dt><dd>{sheet.submittedAt ? formatDateTime(sheet.submittedAt) : "Belum dikirim"}</dd></div>
       <div><dt>Direview Manager</dt><dd>{sheet.managerReviewedAt ? formatDateTime(sheet.managerReviewedAt) : "Belum direview"}</dd></div>
-      <div><dt>Catatan penilai</dt><dd>{sheet.note || "Tidak ada catatan"}</dd></div>
+      <div><dt>Catatan Supervisor</dt><dd>{sheet.note || "Tidak ada catatan"}</dd></div>
       <div><dt>Catatan Manager</dt><dd>{sheet.managerReason || "Tidak ada catatan"}</dd></div>
     </dl>
     {showIndicators ? <div className="indicator-list">{items.map((item, index) => {
-      const value = sheet.values.find((entry) => entry.monthlyKpiItemId === item.id);
+      const entry = sheet.values.find((candidate) => candidate.monthlyKpiItemId === item.id);
+      const submittedValue = entry?.enteredValue?.toString() ?? null;
+      const submitted = {
+        ...views[index],
+        status: entry?.status ?? null,
+        value: submittedValue,
+        categoryOptionId: entry?.categoryOptionId ?? null,
+        predicate: submittedValue && views[index].bands.length ? resolveCategoryBand(submittedValue, views[index].bands, views[index].direction)?.label ?? null : null,
+      };
       return <div className="indicator-row" key={item.id}>
         <div className="indicator-copy">
           <span className="indicator-position">Indikator {index + 1} dari {items.length}</span>
@@ -105,18 +124,14 @@ function DailyHistoryDetail({ sheet, items, visible }: { sheet: HistorySheet; it
         </div>
         <div className="indicator-entry">
           {approved ? <>
-            <div className="indicator-original"><span>Nilai awal</span><strong>{displayValue(value?.enteredValue, item.unitSnapshot)}</strong></div>
-            <div className="indicator-result"><span>{value?.managerValue === null || value?.managerValue === undefined ? "Nilai efektif" : "Nilai efektif (koreksi)"}</span><strong>{displayValue(value?.effectiveValue, item.unitSnapshot)}</strong></div>
-          </> : <div className="indicator-result"><span>Nilai diajukan</span><strong>{displayValue(value?.enteredValue, item.unitSnapshot)}</strong></div>}
+            <div className="indicator-original"><span>Nilai awal</span><strong>{formatDailyValue(submitted)}</strong></div>
+            <div className="indicator-result"><span>{entry?.managerStatus || entry?.managerValue ? "Nilai efektif (koreksi)" : "Nilai efektif"}</span><strong>{formatDailyValue(views[index])}</strong></div>
+          </> : <div className="indicator-result"><span>Nilai diajukan</span><strong>{formatDailyValue(submitted)}</strong></div>}
         </div>
       </div>;
     })}</div> : <p className="help">Hari {workStatusLabel(effectiveWorkStatus)} tidak memiliki nilai indikator.</p>}
     {sheet.evidence.length ? <section className="evidence-section"><h3 className="evidence-heading">Bukti pendukung</h3><ul className="evidence-list">{sheet.evidence.map((item) => <li className="evidence-item" key={item.id}><a href={`/api/evidence/${item.id}`}>{item.fileName}</a><span>{Math.ceil(Number(item.fileSize) / 1024)} KB</span></li>)}</ul></section> : null}
   </div>;
-}
-
-function displayValue(value: DecimalValue | null | undefined, unit: string) {
-  return value === null || value === undefined ? "Belum tersedia" : `${formatNumber(value)} ${unit}`;
 }
 
 function workStatusLabel(status: WorkStatus | null) {

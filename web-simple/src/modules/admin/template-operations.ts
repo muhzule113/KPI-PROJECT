@@ -1,5 +1,6 @@
 import { Prisma, type AggregationType, type KpiDirection, type ValueKind } from "@/generated/prisma/client";
 import type { AccessProfile } from "@/modules/access/policy";
+import { validateCategoryBands, validateCategoryOptions, type CategoryBandInput, type CategoryOptionInput } from "@/modules/kpi/category-options";
 import { validateRatingBands, validateTemplate, type RatingBandSnapshot } from "@/modules/kpi/period";
 
 function assertAdmin(actor: AccessProfile) {
@@ -17,6 +18,7 @@ const indicatorJson = (indicator: {
   failureLimit: Prisma.Decimal | number | null;
   weight: Prisma.Decimal | number;
   sortOrder: number;
+  categoryOptions?: Array<{ label: string; threshold: Prisma.Decimal | number | null; sortOrder: number; isActive: boolean }>;
 }) => ({
   code: indicator.code,
   name: indicator.name,
@@ -28,6 +30,12 @@ const indicatorJson = (indicator: {
   failureLimit: indicator.failureLimit === null ? null : String(indicator.failureLimit),
   weight: String(indicator.weight),
   sortOrder: indicator.sortOrder,
+  categoryOptions: indicator.categoryOptions?.map((option) => ({
+    label: option.label,
+    threshold: option.threshold === null ? null : String(option.threshold),
+    sortOrder: option.sortOrder,
+    isActive: option.isActive,
+  })),
 });
 
 export async function saveTemplateName(tx: Prisma.TransactionClient, actor: AccessProfile, templateId: string, name: string) {
@@ -46,7 +54,10 @@ export async function startTemplateDraft(tx: Prisma.TransactionClient, actor: Ac
   const template = await tx.kpiTemplate.findUnique({ where: { id: templateId } });
   if (!template) throw new Error("Template tidak ditemukan.");
   if (await tx.kpiTemplateVersion.findFirst({ where: { templateId, status: "DRAFT" } })) throw new Error("Template masih memiliki draft yang belum diselesaikan.");
-  const active = await tx.kpiTemplateVersion.findFirst({ where: { templateId, status: "ACTIVE" }, include: { indicators: { orderBy: { sortOrder: "asc" } } } });
+  const active = await tx.kpiTemplateVersion.findFirst({
+    where: { templateId, status: "ACTIVE" },
+    include: { indicators: { orderBy: { sortOrder: "asc" }, include: { categoryOptions: { orderBy: { sortOrder: "asc" } } } } },
+  });
   if (!active) throw new Error("Versi aktif yang akan direvisi tidak ditemukan.");
   const latest = await tx.kpiTemplateVersion.aggregate({ where: { templateId }, _max: { versionNumber: true } });
   const draft = await tx.kpiTemplateVersion.create({
@@ -66,6 +77,14 @@ export async function startTemplateDraft(tx: Prisma.TransactionClient, actor: Ac
           failureLimit: indicator.failureLimit,
           weight: indicator.weight,
           sortOrder: indicator.sortOrder,
+          categoryOptions: {
+            create: indicator.categoryOptions.map((option) => ({
+              label: option.label,
+              threshold: option.threshold,
+              sortOrder: option.sortOrder,
+              isActive: option.isActive,
+            })),
+          },
         })),
       },
     },
@@ -97,11 +116,14 @@ export async function saveIndicator(tx: Prisma.TransactionClient, actor: AccessP
   failureLimit?: number;
   weight: number;
   sortOrder: number;
+  categoryBands?: CategoryBandInput[];
+  /** Legacy input accepted while old callers are migrated. */
+  categoryOptions?: CategoryOptionInput[];
 }) {
   assertAdmin(actor);
   const version = await tx.kpiTemplateVersion.findUnique({ where: { id: input.versionId } });
   if (!version || version.status !== "DRAFT") throw new Error("Hanya indikator pada draft template yang dapat diubah.");
-  const before = input.id ? await tx.kpiIndicator.findFirst({ where: { id: input.id, templateVersionId: version.id } }) : null;
+  const before = input.id ? await tx.kpiIndicator.findFirst({ where: { id: input.id, templateVersionId: version.id }, include: { categoryOptions: { orderBy: { sortOrder: "asc" } } } }) : null;
   if (input.id && !before) throw new Error("Indikator draft tidak ditemukan.");
   const data = {
     templateVersionId: version.id,
@@ -110,25 +132,50 @@ export async function saveIndicator(tx: Prisma.TransactionClient, actor: AccessP
     description: input.description?.trim() || null,
     kind: input.kind,
     unit: input.unit.trim(),
-    aggregation: input.kind === "RATING" ? "AVERAGE" as const : input.aggregation,
-    direction: input.kind === "RATING" ? "HIGHER" as const : input.direction,
+    aggregation: input.kind === "RATING" || input.kind === "CHECKBOX" ? "AVERAGE" as const : input.aggregation,
+    direction: input.kind === "RATING" || input.kind === "CHECKBOX" ? "HIGHER" as const : input.direction,
     target: input.target,
-    failureLimit: input.direction === "LOWER" && input.kind === "NUMERIC" ? input.failureLimit : null,
+    failureLimit: input.direction === "LOWER" && (input.kind === "NUMERIC" || input.kind === "CATEGORY") ? input.failureLimit : null,
     weight: input.weight,
     sortOrder: input.sortOrder,
   };
   if (!data.code || !data.name || !data.unit) throw new Error("Kode, nama, dan satuan indikator wajib diisi.");
   if (!Number.isFinite(data.target) || !Number.isFinite(data.weight) || data.weight <= 0 || data.weight > 100) throw new Error("Target dan bobot indikator tidak valid.");
   if (data.kind === "RATING" && (data.target < 1 || data.target > 5)) throw new Error("Target rating harus 1 sampai 5.");
+  if (data.kind === "CHECKBOX" && data.target !== 100) throw new Error("Target indikator centang wajib 100.");
+  const categoryBands = input.categoryBands ?? (input.categoryOptions?.some((option) => option.threshold !== undefined)
+    ? input.categoryOptions.map((option) => ({ label: option.label, threshold: option.threshold ?? null, sortOrder: option.sortOrder, isActive: option.isActive }))
+    : undefined);
+  if (data.kind === "CATEGORY") {
+    const categoryCheck = categoryBands
+      ? validateCategoryBands(categoryBands, data.direction, data.unit)
+      : validateCategoryOptions(input.categoryOptions ?? []);
+    if (!categoryCheck.ok) throw new Error(categoryCheck.reason);
+    if (!categoryBands) throw new Error("Indikator Angka + predikat wajib memakai empat threshold.");
+  }
   if (data.direction === "HIGHER" && data.target <= 0) throw new Error("Target formula higher harus lebih besar dari 0.");
   if (data.direction === "LOWER" && (!data.failureLimit || data.failureLimit <= data.target)) throw new Error("Failure limit harus lebih besar dari target.");
   const duplicate = await tx.kpiIndicator.findFirst({ where: { templateVersionId: version.id, code: data.code, id: input.id ? { not: input.id } : undefined } });
   if (duplicate) throw new Error("Kode indikator harus unik dalam satu versi template.");
+  const options = data.kind === "CATEGORY" ? categoryBands ?? input.categoryOptions ?? [] : [];
   const indicator = before
     ? await tx.kpiIndicator.update({ where: { id: before.id }, data })
     : await tx.kpiIndicator.create({ data });
-  await tx.auditEvent.create({ data: { actorId: actor.userId, action: before ? "update_indicator" : "create_indicator", subjectType: "KpiIndicator", subjectId: indicator.id, beforeJson: before ? indicatorJson(before) : undefined, afterJson: indicatorJson(indicator) } });
-  return indicator;
+  await tx.kpiCategoryOption.deleteMany({ where: { indicatorId: indicator.id } });
+  if (options.length) {
+    await tx.kpiCategoryOption.createMany({
+      data: options.map((option) => ({
+        indicatorId: indicator.id,
+        label: option.label.trim(),
+        threshold: "threshold" in option && option.threshold !== null ? String(option.threshold) : null,
+        sortOrder: option.sortOrder,
+        isActive: option.isActive ?? true,
+      })),
+    });
+  }
+  const saved = await tx.kpiIndicator.findUniqueOrThrow({ where: { id: indicator.id }, include: { categoryOptions: { orderBy: { sortOrder: "asc" } } } });
+  await tx.auditEvent.create({ data: { actorId: actor.userId, action: before ? "update_indicator" : "create_indicator", subjectType: "KpiIndicator", subjectId: saved.id, beforeJson: before ? indicatorJson(before) : undefined, afterJson: indicatorJson(saved) } });
+  return saved;
 }
 
 export async function removeIndicator(tx: Prisma.TransactionClient, actor: AccessProfile, indicatorId: string) {
@@ -141,7 +188,7 @@ export async function removeIndicator(tx: Prisma.TransactionClient, actor: Acces
 
 export async function activateTemplate(tx: Prisma.TransactionClient, actor: AccessProfile, versionId: string, now = new Date()) {
   assertAdmin(actor);
-  const version = await tx.kpiTemplateVersion.findUnique({ where: { id: versionId }, include: { indicators: { orderBy: { sortOrder: "asc" } } } });
+  const version = await tx.kpiTemplateVersion.findUnique({ where: { id: versionId }, include: { indicators: { orderBy: { sortOrder: "asc" }, include: { categoryOptions: { orderBy: { sortOrder: "asc" } } } } } });
   if (!version || version.status !== "DRAFT") throw new Error("Draft template tidak ditemukan.");
   if (new Set(version.indicators.map((indicator) => indicator.sortOrder)).size !== version.indicators.length) throw new Error("Urutan indikator harus unik sebelum template diaktifkan.");
   const validation = validateTemplate(version.indicators.map((indicator) => ({
@@ -152,6 +199,11 @@ export async function activateTemplate(tx: Prisma.TransactionClient, actor: Acce
     target: indicator.target.toString(),
     failureLimit: indicator.failureLimit?.toString() ?? null,
     weight: indicator.weight.toString(),
+    activeCategoryOptions: indicator.categoryOptions.filter((option) => option.isActive).length,
+    unit: indicator.unit,
+    categoryBands: indicator.kind === "CATEGORY" && indicator.categoryOptions.length === 5 && indicator.categoryOptions.slice(0, 4).every((option) => option.threshold !== null) && indicator.categoryOptions[4].threshold === null
+      ? indicator.categoryOptions.map((option) => ({ label: option.label, threshold: option.threshold, sortOrder: option.sortOrder, isActive: option.isActive }))
+      : undefined,
   })));
   if (!validation.ok) throw new Error(validation.reason);
   await tx.kpiTemplateVersion.updateMany({ where: { templateId: version.templateId, status: "ACTIVE" }, data: { status: "RETIRED" } });
