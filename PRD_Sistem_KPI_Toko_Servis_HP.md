@@ -556,7 +556,7 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 
 **Fitur:**
 - CRUD definisi indikator (kode, nama, unit, tipe metrik, arah, sumber data).
-- Template KPI per jabatan dengan versi; setiap periode DRAFT dapat memilih versi yang sudah dipublikasikan untuk tiap jabatan.
+- Template KPI per jabatan dengan versi; setiap periode DRAFT atau OPEN yang belum memiliki nilai penilaian dapat memilih versi yang sudah dipublikasikan untuk tiap jabatan.
 - Per template version: indikator, bobot, target, formula, rubric, evidence requirement.
 - Validasi: total bobot harus tepat 100% sebelum template bisa diaktifkan.
 - Template aktif bersifat immutable — edit membuat versi baru.
@@ -576,7 +576,7 @@ Recalculation selalu memakai snapshot ini — bukan konfigurasi master terkini. 
 
 **Fitur:**
 - Buat periode dengan nama, rentang tanggal, deadline input/review/approval.
-- Pilih versi template per jabatan (default versi aktif terbaru) sebelum periode dibuka; pilihan menjadi snapshot yang terkunci.
+- Pilih versi template per jabatan (default versi aktif terbaru) pada periode DRAFT atau periode OPEN yang belum memiliki nilai penilaian; perubahan pada periode OPEN menyegarkan snapshot indikator, lalu pilihan terkunci setelah penilaian dimulai.
 - Set cap skor, scheme rating, dan scope (seluruh toko / per jabatan).
 - Validasi readiness sebelum periode dibuka: template valid, semua karyawan punya placement, semua deadline logis.
 - Generate KPI karyawan: sistem generate snapshot per karyawan berdasarkan jabatan.

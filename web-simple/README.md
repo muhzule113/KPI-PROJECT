@@ -46,7 +46,7 @@ Ubah kata sandi kedua Super Admin dan seluruh akun demo sebelum memakai sistem d
 
 1. Super Admin memakai menu Cabang, Jabatan, Pengguna, Indikator KPI, Predikat Nilai, dan Periode untuk menyiapkan master penilaian.
 2. Jabatan KPI baru otomatis memperoleh template v1 berstatus DRAFT. Hanya draft yang dapat diedit dan total bobot wajib tepat 100% sebelum diaktifkan.
-3. Super Admin membuat periode DRAFT lalu membukanya. Sistem menyimpan snapshot versi indikator dan predikat aktif, kemudian membuat satu lembar untuk setiap pegawai dan setiap tanggal dalam masa kerja.
+3. Super Admin membuat periode DRAFT lalu memilih versi template indikator per jabatan sebelum membukanya. Periode OPEN yang belum memiliki nilai penilaian masih dapat disesuaikan dari halaman Periode. Saat dibuka atau disesuaikan, sistem menyimpan snapshot versi indikator dan predikat, kemudian memakai snapshot itu untuk lembar harian.
 4. Supervisor mengisi status kerja dan nilai aktual staf. Manager mengisi KPI Supervisor langsung.
 5. Manager menyetujui, mengoreksi dengan alasan, atau mengembalikan lembar staf.
 6. Hanya hari `Bekerja` yang disetujui masuk ke SUM/AVERAGE bulanan. Nilai kosong tidak dianggap nol.

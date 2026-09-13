@@ -87,22 +87,43 @@ export async function savePeriodTemplateSelections(
   if (!actor.active || actor.role !== "ADMIN") throw new Error("Hanya Super Admin yang dapat memilih versi template periode.");
   const period = await tx.kpiPeriod.findUnique({ where: { id: periodId } });
   if (!period) throw new Error("Periode tidak ditemukan.");
-  if (period.status !== "DRAFT") throw new Error("Versi template hanya dapat diubah saat periode masih DRAFT.");
-  if (await tx.monthlyKpi.count({ where: { periodId } })) throw new Error("Snapshot periode sudah pernah dibuat.");
+  const isOpen = period.status === "OPEN";
+  if (period.status !== "DRAFT" && !isOpen) throw new Error("Versi template hanya dapat diubah pada periode DRAFT atau OPEN.");
+  const monthlyKpis = isOpen
+    ? await tx.monthlyKpi.findMany({ where: { periodId }, select: { id: true, positionIdSnapshot: true, status: true } })
+    : [];
+  if (isOpen) {
+    if (!monthlyKpis.length) throw new Error("Snapshot periode berjalan belum tersedia.");
+    const locked = await tx.monthlyKpi.updateMany({
+      where: { id: { in: monthlyKpis.map((monthlyKpi) => monthlyKpi.id) }, status: { not: "FINALIZED" } },
+      data: { rowVersion: { increment: 0 } },
+    });
+    if (locked.count !== monthlyKpis.length) throw new Error("KPI periode sudah berubah atau difinalkan. Muat ulang sebelum mengatur template.");
+    if (await tx.dailyValue.count({ where: { dailySheet: { monthlyKpiId: { in: monthlyKpis.map((monthlyKpi) => monthlyKpi.id) } } } })) {
+      throw new Error("Template periode berjalan tidak dapat diubah setelah ada nilai penilaian tersimpan.");
+    }
+  } else if (await tx.monthlyKpi.count({ where: { periodId } })) {
+    throw new Error("Snapshot periode sudah pernah dibuat.");
+  }
 
   const normalized = selections.map((selection) => ({
     positionId: selection.positionId.trim(),
     templateVersionId: selection.templateVersionId.trim(),
   }));
-  const requiredPositionIds = await eligiblePositionIds(tx, period);
+  const requiredPositionIds = isOpen
+    ? [...new Set(monthlyKpis.map((monthlyKpi) => monthlyKpi.positionIdSnapshot))]
+    : await eligiblePositionIds(tx, period);
   const validation = validatePeriodTemplateSelections(normalized, requiredPositionIds);
   if (!validation.ok) throw new Error(validation.reason);
 
   const positionIds = [...new Set(normalized.map((selection) => selection.positionId))];
   const versionIds = [...new Set(normalized.map((selection) => selection.templateVersionId))];
   const [positions, versions, before] = await Promise.all([
-    tx.position.findMany({ where: { id: { in: positionIds }, isActive: true, isKpiSubject: true }, include: { template: true } }),
-    tx.kpiTemplateVersion.findMany({ where: { id: { in: versionIds }, status: { in: ["ACTIVE", "RETIRED"] } }, include: { template: true } }),
+    tx.position.findMany({ where: { id: { in: positionIds }, ...(isOpen ? { isKpiSubject: true } : { isActive: true, isKpiSubject: true }) }, include: { template: true } }),
+    tx.kpiTemplateVersion.findMany({
+      where: { id: { in: versionIds }, status: { in: ["ACTIVE", "RETIRED"] } },
+      include: { template: true, indicators: { orderBy: { sortOrder: "asc" }, include: { categoryOptions: { orderBy: { sortOrder: "asc" } } } } },
+    }),
     tx.kpiPeriodTemplateSelection.findMany({ where: { periodId }, include: { position: true, templateVersion: true }, orderBy: { position: { name: "asc" } } }),
   ]);
   const positionById = new Map(positions.map((position) => [position.id, position]));
@@ -122,6 +143,40 @@ export async function savePeriodTemplateSelections(
     include: { position: true, templateVersion: true },
     orderBy: { position: { name: "asc" } },
   });
+  if (isOpen) {
+    const versionById = new Map(versions.map((version) => [version.id, version]));
+    const selectionByPosition = new Map(normalized.map((selection) => [selection.positionId, versionById.get(selection.templateVersionId)]));
+    const monthlyKpiItems = monthlyKpis.flatMap((monthlyKpi) => {
+      const version = selectionByPosition.get(monthlyKpi.positionIdSnapshot);
+      if (!version) throw new Error("Versi template untuk seluruh KPI periode belum dipilih.");
+      return version.indicators.map((indicator) => ({
+        monthlyKpiId: monthlyKpi.id,
+        codeSnapshot: indicator.code,
+        nameSnapshot: indicator.name,
+        descriptionSnapshot: indicator.description,
+        kindSnapshot: indicator.kind,
+        unitSnapshot: indicator.unit,
+        aggregationSnapshot: indicator.aggregation,
+        directionSnapshot: indicator.direction,
+        targetSnapshot: indicator.target,
+        failureLimitSnapshot: indicator.failureLimit,
+        weightSnapshot: indicator.weight,
+        sortOrderSnapshot: indicator.sortOrder,
+        categoryOptionsSnapshot: indicator.categoryOptions.map((option) => ({
+          id: option.id,
+          label: option.label,
+          threshold: option.threshold?.toString() ?? null,
+          sortOrder: option.sortOrder,
+        })),
+      }));
+    });
+    await tx.monthlyKpiItem.deleteMany({ where: { monthlyKpiId: { in: monthlyKpis.map((monthlyKpi) => monthlyKpi.id) } } });
+    await tx.monthlyKpi.updateMany({
+      where: { id: { in: monthlyKpis.map((monthlyKpi) => monthlyKpi.id) } },
+      data: { finalScore: null, ratingCode: null, ratingLabel: null, noScoreReason: null, status: "IN_PROGRESS", rowVersion: { increment: 1 } },
+    });
+    await tx.monthlyKpiItem.createMany({ data: monthlyKpiItems });
+  }
   await tx.auditEvent.create({
     data: {
       actorId: actor.userId,
@@ -129,7 +184,7 @@ export async function savePeriodTemplateSelections(
       subjectType: "KpiPeriod",
       subjectId: periodId,
       beforeJson: { selections: selectionJson(before) },
-      afterJson: { selections: selectionJson(saved) },
+      afterJson: { selections: selectionJson(saved), snapshotRefreshed: isOpen },
     },
   });
   return saved;

@@ -44,4 +44,4 @@ Aplikasi operasional KPI dengan bahasa visual **signal console**: gelap, fokus, 
 - Motion 140-180 ms hanya untuk hover, pressed, drawer, disclosure, pilihan, loading, dan perubahan state.
 - `prefers-reduced-motion`, target sentuh 44 px, skip-link, focus ring, serta status teks+ikon dipertahankan.
 
-Tema dark-only dipilih mengikuti arah visual klien dan konteks console kerja yang ditunjukkan pada referensi.
+Tema dark tetap menjadi default untuk konteks console kerja. Tema light memakai kanvas off-white kehijauan, surface putih bertingkat, emerald kontras tinggi, dan lime untuk identitas brand; seluruh tema dikendalikan dari token global agar layout, form, tabel, overlay, dan state tetap konsisten.

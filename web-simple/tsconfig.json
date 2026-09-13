@@ -36,7 +36,9 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next-codex-qa/types/**/*.ts",
-    ".next-codex-qa/dev/types/**/*.ts"
+    ".next-codex-qa/dev/types/**/*.ts",
+    ".next-pagination-check/types/**/*.ts",
+    ".next-pagination-check/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

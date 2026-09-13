@@ -294,7 +294,7 @@ export async function savePeriodTemplateSelectionsAction(_: SettingsState, formD
   const selections = [...formData.entries()]
     .filter(([name]) => name.startsWith("templateVersion:"))
     .map(([name, value]) => ({ positionId: name.slice("templateVersion:".length), templateVersionId: String(value) }));
-  try { await prisma.$transaction((tx) => savePeriodTemplateSelections(tx, user, periodId.data, selections)); }
+  try { await prisma.$transaction((tx) => savePeriodTemplateSelections(tx, user, periodId.data, selections), { timeout: 15_000 }); }
   catch (error) { return { error: errorMessage(error) }; }
   refreshSettings();
   return { success: "Versi template periode tersimpan." };

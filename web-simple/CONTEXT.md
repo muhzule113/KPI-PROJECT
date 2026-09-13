@@ -26,7 +26,7 @@ Nilai koreksi Manager bila tersedia, atau nilai awal bila tidak dikoreksi.
 ## Rekap
 
 **KPI bulanan**:
-Snapshot template, assignment penilai, dan hasil seorang pegawai untuk satu periode kalender.
+Snapshot template, assignment penilai, dan hasil seorang pegawai untuk satu periode kalender. Template dapat dipilih pada periode DRAFT atau periode OPEN selama belum ada nilai penilaian tersimpan; setelah itu snapshot terkunci.
 _Avoid_: mengubah histori melalui edit template
 
 **Aktual bulanan**:

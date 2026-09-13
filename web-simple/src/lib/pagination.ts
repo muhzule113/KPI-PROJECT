@@ -1,4 +1,4 @@
-export const PAGINATION_PAGE_SIZE = 25;
+export const PAGINATION_PAGE_SIZE = 10;
 
 export function parsePage(value?: string) {
   const page = Number(value);

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
+import { ThemeBootstrap } from "@/components/theme-bootstrap";
 import { ToastProvider } from "@/components/toast-provider";
+import { THEME_META_COLORS } from "@/lib/theme";
 import "@daypicker/react/style.css";
 import "./globals.css";
 
@@ -17,8 +19,11 @@ export const metadata: Metadata = {
   description: "Penilaian KPI harian dan rekap bulanan toko.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#020806" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: THEME_META_COLORS.dark };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="id"><body className={bricolageGrotesque.variable}><ToastProvider>{children}</ToastProvider></body></html>;
+  return <html lang="id" data-theme="dark" suppressHydrationWarning>
+    <head><ThemeBootstrap /></head>
+    <body className={bricolageGrotesque.variable}><ToastProvider>{children}</ToastProvider></body>
+  </html>;
 }

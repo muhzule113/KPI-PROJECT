@@ -75,7 +75,8 @@ try {
 
     const revision = await startTemplateDraft(tx, admin, initial.template!.id);
     const revisionItem = await tx.kpiIndicator.findFirstOrThrow({ where: { templateVersionId: revision.id } });
-    await saveIndicator(tx, admin, { versionId: revision.id, id: revisionItem.id, code: revisionItem.code, name: "Hasil kerja revisi", description: revisionItem.description ?? undefined, kind: revisionItem.kind, unit: revisionItem.unit, aggregation: revisionItem.aggregation, direction: revisionItem.direction, target: revisionItem.target.toNumber(), failureLimit: revisionItem.failureLimit?.toNumber(), weight: revisionItem.weight.toNumber(), sortOrder: revisionItem.sortOrder });
+    const revisionName = "Hasil kerja revisi";
+    await saveIndicator(tx, admin, { versionId: revision.id, id: revisionItem.id, code: revisionItem.code, name: revisionName, description: revisionItem.description ?? undefined, kind: revisionItem.kind, unit: revisionItem.unit, aggregation: revisionItem.aggregation, direction: revisionItem.direction, target: revisionItem.target.toNumber(), failureLimit: revisionItem.failureLimit?.toNumber(), weight: revisionItem.weight.toNumber(), sortOrder: revisionItem.sortOrder });
     await activateTemplate(tx, admin, revision.id);
     assert.equal((await tx.kpiTemplateVersion.findUniqueOrThrow({ where: { id: firstDraft.id } })).status, "RETIRED");
     assert.equal((await tx.kpiTemplateVersion.findUniqueOrThrow({ where: { id: revision.id } })).status, "ACTIVE");
@@ -120,12 +121,13 @@ try {
     assert.equal((await tx.monthlyKpiItem.findFirstOrThrow({ where: { monthlyKpiId: oldKpi.id }, orderBy: { sortOrderSnapshot: "asc" } })).nameSnapshot, oldItemName);
     assert.equal(newKpi.items[0].nameSnapshot, firstIndicator.name);
     assert.equal(newPelayanKpi.items[0].nameSnapshot, revisedName);
-    await assert.rejects(savePeriodTemplateSelections(tx, admin, period.id, defaults.map((selection) => ({ positionId: selection.positionId, templateVersionId: selection.templateVersionId }))), /DRAFT/i);
+    await savePeriodTemplateSelections(tx, admin, period.id, defaults.map((selection) => ({ positionId: selection.positionId, templateVersionId: selection.templateVersionId })));
+    assert.equal((await tx.monthlyKpiItem.findFirstOrThrow({ where: { monthlyKpiId: newKpi.id }, orderBy: { sortOrderSnapshot: "asc" } })).nameSnapshot, revisionName);
     assert.equal(ratingBandsFromSnapshot(oldKpi.ratingBandsSnapshot).some((band) => band.label === "Istimewa Verifikasi"), false);
     assert.equal(ratingBandsFromSnapshot(newKpi.ratingBandsSnapshot).find((band) => band.code === "STAR")?.label, "Istimewa Verifikasi");
 
     throw rollback;
-  });
+  }, { timeout: 15_000 });
 } catch (error) {
   if (error !== rollback) throw error;
 } finally {

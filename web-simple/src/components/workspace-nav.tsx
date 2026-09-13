@@ -25,6 +25,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { UserRole } from "@/modules/access/policy";
 
 type NavItem = {
@@ -116,6 +117,7 @@ export function WorkspaceShell({ role, unread, userName, branchName, children }:
               </summary>
               <div className="account-panel">
                 <div className="account-panel-copy"><strong>{userName}</strong><span>{roleContext}</span></div>
+                <ThemeToggle />
                 <button className="nav-link account-signout" type="button" onClick={signOut} disabled={signingOut}>
                   <SignOutIcon size={20} aria-hidden="true" /><span>{signingOut ? "Keluar..." : "Keluar"}</span>
                 </button>

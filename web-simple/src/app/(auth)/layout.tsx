@@ -1,6 +1,7 @@
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ReactNode } from "react";
 import { AuthWorkbenchIllustration } from "@/components/illustrations";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const proofPoints = [
   "Supervisor mengisi nilai pegawai setiap hari.",
@@ -11,7 +12,7 @@ const proofPoints = [
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return <div className="auth-shell">
     <a className="skip-link" href="#main-content">Lewati ke konten utama</a>
-    <section className="auth-stage"><main className="auth-card" id="main-content">{children}</main></section>
+    <section className="auth-stage"><main className="auth-card" id="main-content"><div className="auth-card-toolbar"><ThemeToggle /></div>{children}</main></section>
     <aside className="auth-aside" aria-label="Tentang KPI Harian">
       <div className="auth-aside-brand"><span className="brand-mark">K</span><span><strong>KPI Harian</strong><small>Penilaian manual</small></span></div>
       <div className="auth-aside-content">
