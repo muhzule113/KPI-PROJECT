@@ -59,13 +59,11 @@
   --shadow-card-mobile: 0 18px 52px rgb(0 15 10 / 38%), inset 0 1px rgb(255 255 255 / 4%);
   --shadow-brand: inset 0 1px rgb(255 255 255 / 38%), 0 8px 22px rgb(140 184 19 / 12%);
   --shadow-brand-hover: inset 0 1px rgb(255 255 255 / 38%), 0 10px 26px rgb(140 184 19 / 18%);
-  --shadow-header: 0 12px 36px rgb(0 10 7 / 24%);
   --shadow-inset: inset 0 1px rgb(255 255 255 / 3%);
   --shadow-active: inset 0 1px rgb(255 255 255 / 5%);
   --shadow-floating: 0 22px 52px rgb(0 10 7 / 48%), inset 0 1px rgb(255 255 255 / 4%);
   --shadow-hero: 0 20px 55px rgb(0 15 10 / 24%), inset 0 1px rgb(255 255 255 / 4%);
   --shadow-hero-hover: 0 24px 62px rgb(0 15 10 / 34%), inset 0 1px rgb(255 255 255 / 5%);
-  --shadow-panel: 0 18px 48px rgb(0 15 10 / 16%), inset 0 1px rgb(255 255 255 / 3%);
   --shadow-select: 0 20px 56px rgb(0 8 5 / 58%);
   --shadow-dialog: 0 32px 90px rgb(0 8 5 / 70%);
   --shadow-toast: 0 16px 45px rgb(0 8 5 / 55%);
@@ -134,13 +132,11 @@ html[data-theme="light"] {
   --shadow-card-mobile: 0 18px 52px rgb(27 72 48 / 14%), inset 0 1px rgb(255 255 255 / 90%);
   --shadow-brand: inset 0 1px rgb(255 255 255 / 60%), 0 8px 22px rgb(74 123 33 / 18%);
   --shadow-brand-hover: inset 0 1px rgb(255 255 255 / 60%), 0 10px 26px rgb(74 123 33 / 24%);
-  --shadow-header: 0 12px 36px rgb(27 72 48 / 12%);
   --shadow-inset: inset 0 1px rgb(255 255 255 / 72%);
   --shadow-active: inset 0 1px rgb(255 255 255 / 70%);
   --shadow-floating: 0 22px 52px rgb(27 72 48 / 18%), inset 0 1px rgb(255 255 255 / 90%);
   --shadow-hero: 0 20px 55px rgb(27 72 48 / 14%), inset 0 1px rgb(255 255 255 / 85%);
   --shadow-hero-hover: 0 24px 62px rgb(27 72 48 / 20%), inset 0 1px rgb(255 255 255 / 90%);
-  --shadow-panel: 0 18px 48px rgb(27 72 48 / 10%), inset 0 1px rgb(255 255 255 / 80%);
   --shadow-select: 0 20px 56px rgb(27 72 48 / 22%);
   --shadow-dialog: 0 32px 90px rgb(27 72 48 / 24%);
   --shadow-toast: 0 16px 45px rgb(27 72 48 / 22%);
@@ -230,6 +226,12 @@ dd {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
   box-shadow: var(--focus-shadow);
+}
+
+.dialog-header h2:focus-visible,
+.wizard-step > h3:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .skip-link {
@@ -695,56 +697,57 @@ textarea.control {
 
 .choice-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.choice-grid.decision {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.choice-grid.single {
   grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 
 .choice-card {
   position: relative;
   display: grid;
-  min-height: 108px;
-  align-content: start;
-  gap: 7px;
-  padding: 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 11px;
+  min-height: 56px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-areas: "control title" "control description";
+  align-content: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--surface);
-  transition: border-color var(--duration-fast) ease, background-color var(--duration-fast) ease, transform var(--duration-fast) ease;
+  transition: border-color var(--duration-fast) ease, background-color var(--duration-fast) ease;
 }
 
 .choice-card:hover {
   border-color: var(--muted);
-  transform: translateY(-1px);
+  background: var(--surface-soft);
 }
 
 .choice-card:has(input:checked) {
   border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-soft);
 }
 
 .choice-card:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  box-shadow: inset 3px 0 0 var(--accent), var(--choice-focus-shadow);
+  box-shadow: none;
+}
+
+.choice-card input {
+  grid-area: control;
+  margin: 0;
 }
 
 .choice-card strong {
   color: var(--ink);
   font-size: 0.9rem;
+  grid-area: title;
 }
 
 .choice-card span {
   color: var(--muted);
   font-size: 0.78rem;
+  grid-area: description;
   line-height: 1.4;
 }
 
@@ -773,7 +776,6 @@ textarea.control {
   top: 0;
   border-bottom: 1px solid var(--line);
   background: var(--chrome-surface);
-  box-shadow: var(--shadow-header);
 }
 
 .workbench-primary {
@@ -1509,7 +1511,6 @@ textarea.control {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-surface);
-  box-shadow: var(--shadow-panel);
   overflow: clip;
 }
 
@@ -3077,23 +3078,22 @@ textarea.control {
     white-space: normal;
   }
 
-  .form-grid,
-  .choice-grid.decision {
+  .form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .choice-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 
   .choice-card {
-    min-height: 80px;
-    padding: 10px;
+    min-height: 56px;
+    padding: 10px 12px;
   }
 
   .choice-grid.decision .choice-card {
-    min-height: 64px;
+    min-height: 56px;
   }
 
   .field {
@@ -3348,18 +3348,12 @@ textarea.control {
   }
 
   .work-status-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .work-status-grid .choice-card {
-    min-height: 64px;
-    gap: 3px;
-    padding: 9px;
-  }
-
-  .work-status-grid .choice-card span {
-    font-size: 0.7rem;
-    line-height: 1.25;
+    min-height: 56px;
+    padding: 10px 12px;
   }
 
   .daily-sheet-closing[data-mobile-visible="false"] {
@@ -3682,7 +3676,7 @@ textarea.control {
   }
 
   .work-status-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .workspace-content {
